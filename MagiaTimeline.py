@@ -2,6 +2,9 @@ import numpy as np
 import cv2 as cv
 import datetime
 
+blackBoarderUpDownRatio = 0.09
+blackBoarderLeftRightRatio = 0.0
+
 dialogBgUpRatio    = 0.7264
 dialogBgDownRatio  = 0.8784
 dialogBgLeftRatio  = 0.3125
@@ -38,24 +41,29 @@ def formatTimeline(begin: float, end: float, count: int) -> str:
     return template.format(sBegin, sEnd, count)
 
 def main():
-    src = cv.VideoCapture("sample.mp4")
+    src = cv.VideoCapture("JanShizuka.mp4")
 
     width = int(src.get(cv.CAP_PROP_FRAME_WIDTH))
     height = int(src.get(cv.CAP_PROP_FRAME_HEIGHT))
     size = (width, height)
 
-    dialogBgUp    = int(height * dialogBgUpRatio)
-    dialogBgDown  = int(height * dialogBgDownRatio)
-    dialogBgLeft  = int(width  * dialogBgLeftRatio)
-    dialogBgRight = int(width  * dialogBgRightRatio)
-    dialogOutlineUp    = int(height * dialogOutlineUpRatio)
-    dialogOutlineDown  = int(height * dialogOutlineDownRatio)
-    dialogOutlineLeft  = int(width  * dialogOutlineLeftRatio)
-    dialogOutlineRight = int(width  * dialogOutlineRightRatio)
-    blackscreenUp    = int(height * blackscreenUpRatio)
-    blackscreenDown  = int(height * blackscreenDownRatio)
-    blackscreenLeft  = int(width  * blackscreenLeftRatio)
-    blackscreenRight = int(width  * blackscreenRightRatio)
+    blackBoarderUpDown = height * blackBoarderUpDownRatio
+    blackBoarderLeftRight = height * blackBoarderLeftRightRatio
+    heightAdj = height - 2 * blackBoarderUpDown
+    widthAdj = width - 2 * blackBoarderLeftRight
+
+    dialogBgUp    = int(blackBoarderUpDown + heightAdj * dialogBgUpRatio)
+    dialogBgDown  = int(blackBoarderUpDown + heightAdj * dialogBgDownRatio)
+    dialogBgLeft  = int(blackBoarderLeftRight + widthAdj  * dialogBgLeftRatio)
+    dialogBgRight = int(blackBoarderLeftRight + widthAdj  * dialogBgRightRatio)
+    dialogOutlineUp    = int(blackBoarderUpDown + heightAdj * dialogOutlineUpRatio)
+    dialogOutlineDown  = int(blackBoarderUpDown + heightAdj * dialogOutlineDownRatio)
+    dialogOutlineLeft  = int(blackBoarderLeftRight + widthAdj  * dialogOutlineLeftRatio)
+    dialogOutlineRight = int(blackBoarderLeftRight + widthAdj  * dialogOutlineRightRatio)
+    blackscreenUp    = int(blackBoarderUpDown + heightAdj * blackscreenUpRatio)
+    blackscreenDown  = int(blackBoarderUpDown + heightAdj * blackscreenDownRatio)
+    blackscreenLeft  = int(blackBoarderLeftRight + widthAdj  * blackscreenLeftRatio)
+    blackscreenRight = int(blackBoarderLeftRight + widthAdj  * blackscreenRightRatio)
 
     # dst = cv.VideoWriter('out.mp4', cv.VideoWriter_fourcc('m','p','4','v'), 29, size)
     timelineFile = open("MagiaTimelineOutput.txt", "w")
@@ -155,7 +163,7 @@ def main():
         #     frameOut = cv.putText(frameOut, "has blackscreen bg", (50, 200), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         # if hasBlackscreenText:
         #     frameOut = cv.putText(frameOut, "has blackscreen text", (50, 225), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        # cv.imshow("show", frameOut)
+        # cv.imshow("show", roiDialogBgTextBin)
         # if cv.waitKey(1) == ord('q'):
         #     break
         # dst.write(frameOut)
