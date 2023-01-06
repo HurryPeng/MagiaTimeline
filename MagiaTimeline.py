@@ -123,7 +123,7 @@ def main():
         isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
 
         hasBlackscreenBg = meanBlackscreenBin < 10
-        hasBlackscreenText = meanBlackscreenTextBin > 0.2 and meanBlackscreenTextBin < 16
+        hasBlackscreenText = meanBlackscreenTextBin > 0.1 and meanBlackscreenTextBin < 16
         isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
 
         isValidSubtitle = isValidDialog or isValidBlackscreen
