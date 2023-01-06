@@ -66,7 +66,10 @@ def main():
     blackscreenRight = int(blackBoarderLeftRight + widthAdj  * blackscreenRightRatio)
 
     # dst = cv.VideoWriter('out.mp4', cv.VideoWriter_fourcc('m','p','4','v'), 29, size)
-    timelineFile = open("MagiaTimelineOutput.txt", "w")
+    templateFile = open("template.ass", "r")
+    timelineFile = open("MagiaTimelineOutput.ass", "w")
+    timelineFile.writelines(templateFile.readlines())
+    templateFile.close()
     
     frameCount = 0
     subtitleCount = 0
