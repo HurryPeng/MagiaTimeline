@@ -15,10 +15,10 @@ dialogOutlineDownRatio  = 0.95
 dialogOutlineLeftRatio  = 0.25
 dialogOutlineRightRatio = 0.75
 
-blackscreenUpRatio    = 0.1
-blackscreenDownRatio  = 0.9
-blackscreenLeftRatio  = 0.2
-blackscreenRightRatio = 0.8
+blackscreenUpRatio    = 0.00
+blackscreenDownRatio  = 1.00
+blackscreenLeftRatio  = 0.15
+blackscreenRightRatio = 0.85
 
 def dialogBgHSVThreshold(frame: cv.Mat) -> cv.Mat:
     lower = np.array([0,   0,  160])
