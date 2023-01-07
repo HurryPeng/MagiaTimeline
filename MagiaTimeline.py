@@ -1,24 +1,53 @@
+from __future__ import annotations
+import abc
+import typing
 import numpy as np
 import cv2 as cv
 import datetime
 
-blackBoarderUpDownRatio = 0.09
-blackBoarderLeftRightRatio = 0.0
+class AbstractRectangle(abc.ABC):
+    def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
+        # returns: height, width, topOffset, leftOffset, verticalCompressRate, horizontalCompressRate
+        pass
 
-dialogBgUpRatio    = 0.7264
-dialogBgDownRatio  = 0.8784
-dialogBgLeftRatio  = 0.3125
-dialogBgRightRatio = 0.6797
+    def cutRoi(self, frame: cv.Mat) -> cv.Mat:
+        pass
 
-dialogOutlineUpRatio    = 0.60
-dialogOutlineDownRatio  = 0.95
-dialogOutlineLeftRatio  = 0.25
-dialogOutlineRightRatio = 0.75
+class RatioRectangle(AbstractRectangle):
+    def __init__(self, parent: AbstractRectangle, topRatio: float, bottomRatio: float, leftRatio: float, rightRatio: float) -> None:
+        self.parent: AbstractRectangle = parent
+        self.topRatio: float = topRatio
+        self.bottomRatio: float = bottomRatio
+        self.leftRatio: float = leftRatio
+        self.rightRatio: float = rightRatio
 
-blackscreenUpRatio    = 0.00
-blackscreenDownRatio  = 1.00
-blackscreenLeftRatio  = 0.15
-blackscreenRightRatio = 0.85
+        # Precalculate offsets
+        height, width, topOffset, leftOffset, verticalCompressRate, horizontalCompressRate = self.parent.getNest()
+        self.height: int = height
+        self.width: int = width
+        self.topOffset: float = topOffset + self.height * verticalCompressRate * self.topRatio
+        self.bottomOffset: float = topOffset + self.height * verticalCompressRate * self.bottomRatio
+        self.leftOffset: float = leftOffset + self.width * horizontalCompressRate * self.leftRatio
+        self.rightOffset: float = leftOffset + self.width * horizontalCompressRate * self.rightRatio
+        self.verticalCompressRate: float = verticalCompressRate * (self.bottomRatio - self.topRatio)
+        self.horizontalCompressRate: float = horizontalCompressRate * (self.rightRatio - self.leftRatio)
+
+    def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
+        return self.height, self.width, self.topOffset, self.leftOffset, self.verticalCompressRate, self.horizontalCompressRate
+
+    def cutRoi(self, frame: cv.Mat) -> cv.Mat:
+        return frame[int(self.topOffset):int(self.bottomOffset), int(self.leftOffset):int(self.rightOffset)]
+
+class FullscreenRectangle(AbstractRectangle):
+    def __init__(self, src: cv.VideoCapture):
+        self.height: int = int(src.get(cv.CAP_PROP_FRAME_HEIGHT))
+        self.width: int = int(src.get(cv.CAP_PROP_FRAME_WIDTH))
+
+    def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
+        return self.height, self.width, 0.0, 0.0, 1.0, 1.0
+
+    def cutRoi(self, frame: cv.Mat) -> cv.Mat:
+        return frame
 
 def dialogBgHSVThreshold(frame: cv.Mat) -> cv.Mat:
     lower = np.array([0,   0,  160])
@@ -47,23 +76,11 @@ def main():
     height = int(src.get(cv.CAP_PROP_FRAME_HEIGHT))
     size = (width, height)
 
-    blackBoarderUpDown = height * blackBoarderUpDownRatio
-    blackBoarderLeftRight = height * blackBoarderLeftRightRatio
-    heightAdj = height - 2 * blackBoarderUpDown
-    widthAdj = width - 2 * blackBoarderLeftRight
-
-    dialogBgUp    = int(blackBoarderUpDown + heightAdj * dialogBgUpRatio)
-    dialogBgDown  = int(blackBoarderUpDown + heightAdj * dialogBgDownRatio)
-    dialogBgLeft  = int(blackBoarderLeftRight + widthAdj  * dialogBgLeftRatio)
-    dialogBgRight = int(blackBoarderLeftRight + widthAdj  * dialogBgRightRatio)
-    dialogOutlineUp    = int(blackBoarderUpDown + heightAdj * dialogOutlineUpRatio)
-    dialogOutlineDown  = int(blackBoarderUpDown + heightAdj * dialogOutlineDownRatio)
-    dialogOutlineLeft  = int(blackBoarderLeftRight + widthAdj  * dialogOutlineLeftRatio)
-    dialogOutlineRight = int(blackBoarderLeftRight + widthAdj  * dialogOutlineRightRatio)
-    blackscreenUp    = int(blackBoarderUpDown + heightAdj * blackscreenUpRatio)
-    blackscreenDown  = int(blackBoarderUpDown + heightAdj * blackscreenDownRatio)
-    blackscreenLeft  = int(blackBoarderLeftRight + widthAdj  * blackscreenLeftRatio)
-    blackscreenRight = int(blackBoarderLeftRight + widthAdj  * blackscreenRightRatio)
+    fullscreenRectangle = FullscreenRectangle(src)
+    contentRectangle = RatioRectangle(fullscreenRectangle, 0.09, 0.91, 0.0, 1.0) # cuts black boarders
+    dialogOutlineRectangle = RatioRectangle(contentRectangle, 0.60, 0.95, 0.25, 0.75)
+    dialogBgRectangle = RatioRectangle(contentRectangle, 0.7264, 0.8784, 0.3125, 0.6797)
+    blackscreenRectangle = RatioRectangle(contentRectangle, 0.00, 1.00, 0.15, 0.85)
 
     # dst = cv.VideoWriter('out.mp4', cv.VideoWriter_fourcc('m','p','4','v'), 29, size)
     templateFile = open("template.ass", "r")
@@ -89,14 +106,14 @@ def main():
         
         # ROI selection and transformation
 
-        roiDialogBg = frame[dialogBgUp : dialogBgDown, dialogBgLeft : dialogBgRight]
+        roiDialogBg = dialogBgRectangle.cutRoi(frame)
         roiDialogBgHSV = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2HSV)
         roiDialogBgGray = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2GRAY)
 
-        roiDialogOutline = frame[dialogOutlineUp : dialogOutlineDown, dialogOutlineLeft : dialogOutlineRight]
+        roiDialogOutline = dialogOutlineRectangle.cutRoi(frame)
         roiDialogOutlineHSV = cv.cvtColor(roiDialogOutline, cv.COLOR_BGR2HSV)
 
-        roiBlackscreen = frame[blackscreenUp : blackscreenDown, blackscreenLeft : blackscreenRight]
+        roiBlackscreen = blackscreenRectangle.cutRoi(frame)
         roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
 
         # Thresholding
