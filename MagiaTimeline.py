@@ -5,7 +5,7 @@ import numpy as np
 import cv2 as cv
 import datetime
 
-class AbstractRectangle(abc.ABC):
+class AbstractRect(abc.ABC):
     def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
         # returns: height, width, topOffset, leftOffset, verticalCompressRate, horizontalCompressRate
         pass
@@ -13,9 +13,9 @@ class AbstractRectangle(abc.ABC):
     def cutRoi(self, frame: cv.Mat) -> cv.Mat:
         pass
 
-class RatioRectangle(AbstractRectangle):
-    def __init__(self, parent: AbstractRectangle, topRatio: float, bottomRatio: float, leftRatio: float, rightRatio: float) -> None:
-        self.parent: AbstractRectangle = parent
+class RatioRect(AbstractRect):
+    def __init__(self, parent: AbstractRect, topRatio: float, bottomRatio: float, leftRatio: float, rightRatio: float) -> None:
+        self.parent: AbstractRect = parent
         self.topRatio: float = topRatio
         self.bottomRatio: float = bottomRatio
         self.leftRatio: float = leftRatio
@@ -38,7 +38,7 @@ class RatioRectangle(AbstractRectangle):
     def cutRoi(self, frame: cv.Mat) -> cv.Mat:
         return frame[int(self.topOffset):int(self.bottomOffset), int(self.leftOffset):int(self.rightOffset)]
 
-class FullscreenRectangle(AbstractRectangle):
+class SrcRect(AbstractRect):
     def __init__(self, src: cv.VideoCapture):
         self.height: int = int(src.get(cv.CAP_PROP_FRAME_HEIGHT))
         self.width: int = int(src.get(cv.CAP_PROP_FRAME_WIDTH))
@@ -49,15 +49,8 @@ class FullscreenRectangle(AbstractRectangle):
     def cutRoi(self, frame: cv.Mat) -> cv.Mat:
         return frame
 
-def dialogBgHSVThreshold(frame: cv.Mat) -> cv.Mat:
-    lower = np.array([0,   0,  160])
-    upper = np.array([255, 32, 255])
-    return cv.inRange(frame, lower, upper)
-
-def dialogOutlineHSVThreshold(frame: cv.Mat) -> cv.Mat:
-    lower = np.array([10,  40, 90 ])
-    upper = np.array([30, 130, 190])
-    return cv.inRange(frame, lower, upper)
+    def getSize(self) -> typing.Tuple[int, int]:
+        return self.width, self.height # notice this order!
 
 def formatTimestamp(timestamp: float) -> str:
     dTimestamp = datetime.datetime.fromtimestamp(timestamp / 1000, datetime.timezone(datetime.timedelta()))
@@ -69,20 +62,19 @@ def formatTimeline(begin: float, end: float, count: int) -> str:
     sEnd = formatTimestamp(end)
     return template.format(sBegin, sEnd, count)
 
+def inRange(frame: cv.Mat, lower: typing.List[int], upper: typing.List[int]):
+    return cv.inRange(frame, np.array(lower), np.array(upper))
+
 def main():
-    src = cv.VideoCapture("JanShizuka.mp4")
+    src = cv.VideoCapture("NewYearLogin2023.mp4")
 
-    width = int(src.get(cv.CAP_PROP_FRAME_WIDTH))
-    height = int(src.get(cv.CAP_PROP_FRAME_HEIGHT))
-    size = (width, height)
+    srcRect = SrcRect(src)
+    contentRect = RatioRect(srcRect, 0.09, 0.91, 0.0, 1.0) # cuts black boarders
+    dialogOutlineRect = RatioRect(contentRect, 0.60, 0.95, 0.25, 0.75)
+    dialogBgRect = RatioRect(contentRect, 0.7264, 0.8784, 0.3125, 0.6797)
+    blackscreenRect = RatioRect(contentRect, 0.00, 1.00, 0.15, 0.85)
 
-    fullscreenRectangle = FullscreenRectangle(src)
-    contentRectangle = RatioRectangle(fullscreenRectangle, 0.09, 0.91, 0.0, 1.0) # cuts black boarders
-    dialogOutlineRectangle = RatioRectangle(contentRectangle, 0.60, 0.95, 0.25, 0.75)
-    dialogBgRectangle = RatioRectangle(contentRectangle, 0.7264, 0.8784, 0.3125, 0.6797)
-    blackscreenRectangle = RatioRectangle(contentRectangle, 0.00, 1.00, 0.15, 0.85)
-
-    # dst = cv.VideoWriter('out.mp4', cv.VideoWriter_fourcc('m','p','4','v'), 29, size)
+    # dst = cv.VideoWriter('out.mp4', cv.VideoWriter_fourcc('m','p','4','v'), 29, srcRect.getSize())
     templateFile = open("template.ass", "r")
     timelineFile = open("MagiaTimelineOutput.ass", "w")
     timelineFile.writelines(templateFile.readlines())
@@ -103,46 +95,34 @@ def main():
         if not valid:
             break
         timestamp: float = src.get(cv.CAP_PROP_POS_MSEC)
-        
-        # ROI selection and transformation
 
-        roiDialogBg = dialogBgRectangle.cutRoi(frame)
-        roiDialogBgHSV = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2HSV)
+        roiDialogBg = dialogBgRect.cutRoi(frame)
         roiDialogBgGray = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2GRAY)
-
-        roiDialogOutline = dialogOutlineRectangle.cutRoi(frame)
-        roiDialogOutlineHSV = cv.cvtColor(roiDialogOutline, cv.COLOR_BGR2HSV)
-
-        roiBlackscreen = blackscreenRectangle.cutRoi(frame)
-        roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
-
-        # Thresholding
-
+        roiDialogBgHSV = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2HSV)
+        roiDialogBgBin = inRange(roiDialogBgHSV, [0, 0, 160], [255, 32, 255])
         _, roiDialogBgTextBin = cv.threshold(roiDialogBgGray, 192, 255, cv.THRESH_BINARY)
-        roiDialogBgBin = dialogBgHSVThreshold(roiDialogBgHSV)
-        roiDialogOutlineBin = dialogOutlineHSVThreshold(roiDialogOutlineHSV)
-        _, roiBlackscreenBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
-        _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 160, 255, cv.THRESH_BINARY)
-
-        # Scalarize
-
         meanDialogTextBin: float = cv.mean(roiDialogBgTextBin)[0]
         meanDialogBgBin: float = cv.mean(roiDialogBgBin)[0]
-        meanDialogOutlineBin: float = cv.mean(roiDialogOutlineBin)[0]
-        meanBlackscreenBin: float = cv.mean(roiBlackscreenBin)[0]
-        meanBlackscreenTextBin: float = cv.mean(roiBlackscreenTextBin)[0]
-
-        # Binarize
-
         hasDialogBg = meanDialogBgBin > 160
         hasDialogText = meanDialogTextBin < 254 and meanDialogTextBin > 200
-        hasDialogOutline = meanDialogOutlineBin > 3
-        isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
 
+        roiDialogOutline = dialogOutlineRect.cutRoi(frame)
+        roiDialogOutlineHSV = cv.cvtColor(roiDialogOutline, cv.COLOR_BGR2HSV)
+        roiDialogOutlineBin = inRange(roiDialogOutlineHSV, [10, 40, 90], [30, 130, 190])
+        meanDialogOutlineBin: float = cv.mean(roiDialogOutlineBin)[0]
+        hasDialogOutline = meanDialogOutlineBin > 3
+
+        roiBlackscreen = blackscreenRect.cutRoi(frame)
+        roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
+        _, roiBlackscreenBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
+        _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 160, 255, cv.THRESH_BINARY)
+        meanBlackscreenBin: float = cv.mean(roiBlackscreenBin)[0]
+        meanBlackscreenTextBin: float = cv.mean(roiBlackscreenTextBin)[0]
         hasBlackscreenBg = meanBlackscreenBin < 10
         hasBlackscreenText = meanBlackscreenTextBin > 0.1 and meanBlackscreenTextBin < 16
-        isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
 
+        isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
+        isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
         isValidSubtitle = isValidDialog or isValidBlackscreen
 
         # State machine
