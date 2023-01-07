@@ -4,6 +4,7 @@ import typing
 import numpy as np
 import cv2 as cv
 import datetime
+import argparse
 
 class AbstractRect(abc.ABC):
     def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
@@ -63,23 +64,34 @@ def formatTimeline(begin: float, end: float, count: int) -> str:
     return template.format(sBegin, sEnd, count)
 
 def inRange(frame: cv.Mat, lower: typing.List[int], upper: typing.List[int]):
+    # just a syntactic sugar
     return cv.inRange(frame, np.array(lower), np.array(upper))
 
 def main():
-    src = cv.VideoCapture("NewYearLogin2023.mp4")
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--src", type=str, default="src.mp4", help="source video file")
+    parser.add_argument("--ass", type=str, default="template.ass", help="source ass template file")
+    parser.add_argument("--dst", type=str, default="MagiaTimelineOutput.ass", help="destination ass subtitle file")
+    parser.add_argument("--debug", default=False, action="store_true", help="for debugging only, show frames with debug info and save to debug.mp4")
+    args = parser.parse_args()
 
-    srcRect = SrcRect(src)
+    if True: # path validity test
+        srcMp4Test = open(args.src, "rb")
+        srcMp4Test.close()
+    srcMp4 = cv.VideoCapture(args.src)
+    srcRect = SrcRect(srcMp4)
+    if args.debug:
+        debugMp4 = cv.VideoWriter('debug.mp4', cv.VideoWriter_fourcc('m','p','4','v'), 29, srcRect.getSize())
+    templateAss = open(args.ass, "r")
+    dstAss = open(args.dst, "w")
+    dstAss.writelines(templateAss.readlines())
+    templateAss.close()
+
     contentRect = RatioRect(srcRect, 0.09, 0.91, 0.0, 1.0) # cuts black boarders
     dialogOutlineRect = RatioRect(contentRect, 0.60, 0.95, 0.25, 0.75)
     dialogBgRect = RatioRect(contentRect, 0.7264, 0.8784, 0.3125, 0.6797)
     blackscreenRect = RatioRect(contentRect, 0.00, 1.00, 0.15, 0.85)
 
-    # dst = cv.VideoWriter('out.mp4', cv.VideoWriter_fourcc('m','p','4','v'), 29, srcRect.getSize())
-    templateFile = open("template.ass", "r")
-    timelineFile = open("MagiaTimelineOutput.ass", "w")
-    timelineFile.writelines(templateFile.readlines())
-    templateFile.close()
-    
     frameCount = 0
     subtitleCount = 0
     saturatedCounter = 0 # -1: switch to invalid subtitle, 1: switch to valid subtitle
@@ -90,11 +102,13 @@ def main():
 
         # Frame reading
 
-        valid, frame = src.read()
+        validFrame, frame = srcMp4.read()
         frameCount += 1
-        if not valid:
+        if not validFrame:
             break
-        timestamp: float = src.get(cv.CAP_PROP_POS_MSEC)
+        timestamp: float = srcMp4.get(cv.CAP_PROP_POS_MSEC)
+
+        # Subtitle recognizing
 
         roiDialogBg = dialogBgRect.cutRoi(frame)
         roiDialogBgGray = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2GRAY)
@@ -142,35 +156,37 @@ def main():
             if validSubtitleState == True: # flipped on
                 lastBeginTimestamp = timestamp
             else: # flipped off
-                timelineFile.write(formatTimeline(lastBeginTimestamp, timestamp, subtitleCount))
+                dstAss.write(formatTimeline(lastBeginTimestamp, timestamp, subtitleCount))
                 subtitleCount += 1
 
         if frameCount % 1000 == 0:
             print("frame", frameCount, formatTimestamp(timestamp))
 
-        # frameOut = frame
-        # if isValidDialog:
-        #     frameOut = cv.putText(frameOut, "VALID DIALOG", (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
-        # if hasDialogBg:
-        #     frameOut = cv.putText(frameOut, "has dialog bg", (50, 75), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        # if hasDialogOutline:
-        #     frameOut = cv.putText(frameOut, "has dialog outline", (50, 100), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        # if hasDialogText:
-        #     frameOut = cv.putText(frameOut, "has dialog text", (50, 125), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        # if isValidBlackscreen:
-        #     frameOut = cv.putText(frameOut, "VALID BLACKSCREEN", (50, 175), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
-        # if hasBlackscreenBg:
-        #     frameOut = cv.putText(frameOut, "has blackscreen bg", (50, 200), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        # if hasBlackscreenText:
-        #     frameOut = cv.putText(frameOut, "has blackscreen text", (50, 225), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        # cv.imshow("show", roiDialogBgTextBin)
-        # if cv.waitKey(1) == ord('q'):
-        #     break
-        # dst.write(frameOut)
+        if args.debug:
+            frameOut = frame
+            if isValidDialog:
+                frameOut = cv.putText(frameOut, "VALID DIALOG", (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+            if hasDialogBg:
+                frameOut = cv.putText(frameOut, "has dialog bg", (50, 75), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            if hasDialogOutline:
+                frameOut = cv.putText(frameOut, "has dialog outline", (50, 100), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            if hasDialogText:
+                frameOut = cv.putText(frameOut, "has dialog text", (50, 125), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            if isValidBlackscreen:
+                frameOut = cv.putText(frameOut, "VALID BLACKSCREEN", (50, 175), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+            if hasBlackscreenBg:
+                frameOut = cv.putText(frameOut, "has blackscreen bg", (50, 200), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            if hasBlackscreenText:
+                frameOut = cv.putText(frameOut, "has blackscreen text", (50, 225), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            cv.imshow("show", frameOut)
+            if cv.waitKey(1) == ord('q'):
+                break
+            debugMp4.write(frameOut)
     
-    src.release()
-    # dst.release()
-    timelineFile.close()
+    srcMp4.release()
+    if args.debug:
+        debugMp4.release()
+    dstAss.close()
 
 if __name__ == "__main__":
     main()
