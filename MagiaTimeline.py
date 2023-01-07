@@ -132,11 +132,11 @@ def main():
 
         roiBlackscreen = blackscreenRect.cutRoi(frame)
         roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
-        _, roiBlackscreenBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
+        _, roiBlackscreenBgBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
         _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 160, 255, cv.THRESH_BINARY)
-        meanBlackscreenBin: float = cv.mean(roiBlackscreenBin)[0]
+        meanBlackscreenBgBin: float = cv.mean(roiBlackscreenBgBin)[0]
         meanBlackscreenTextBin: float = cv.mean(roiBlackscreenTextBin)[0]
-        hasBlackscreenBg = meanBlackscreenBin < 10
+        hasBlackscreenBg = meanBlackscreenBgBin < 20
         hasBlackscreenText = meanBlackscreenTextBin > 0.1 and meanBlackscreenTextBin < 16
 
         isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
@@ -185,6 +185,7 @@ def main():
             cv.imshow("show", frameOut)
             if cv.waitKey(1) == ord('q'):
                 break
+            print("debug frame", frameCount, formatTimestamp(timestamp), meanBlackscreenBgBin)
             debugMp4.write(frameOut)
     
     srcMp4.release()
