@@ -71,13 +71,17 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--src", type=str, default="src.mp4", help="source video file")
     parser.add_argument("--ass", type=str, default="template.ass", help="source ass template file")
+    parser.add_argument("--topblackbar", type=float, default=0.0, help="height ratio of black bar on the top of canvas, bottom is assumed symmetric")
+    parser.add_argument("--leftblackbar", type=float, default=0.0, help="width ratio of black bar on the left of canvas, right is assumed symmetric")
     parser.add_argument("--dst", type=str, default="MagiaTimelineOutput.ass", help="destination ass subtitle file")
     parser.add_argument("--debug", default=False, action="store_true", help="for debugging only, show frames with debug info and save to debug.mp4")
     args = parser.parse_args()
-
-    if True: # path validity test
+    if True: # data validity test
         srcMp4Test = open(args.src, "rb")
         srcMp4Test.close()
+        if not (args.topblackbar >= 0.0 and args.topblackbar <= 1.0 and args.leftblackbar >= 0.0 and args.leftblackbar <= 1.0):
+            raise Exception("Invalid black bar ratio! ")
+    
     srcMp4 = cv.VideoCapture(args.src)
     srcRect = SrcRect(srcMp4)
     if args.debug:
@@ -87,7 +91,7 @@ def main():
     dstAss.writelines(templateAss.readlines())
     templateAss.close()
 
-    contentRect = RatioRect(srcRect, 0.09, 0.91, 0.0, 1.0) # cuts black boarders
+    contentRect = RatioRect(srcRect, args.topblackbar, 1.0 - args.topblackbar, args.topblackbar, 1.0 - args.topblackbar)
     dialogOutlineRect = RatioRect(contentRect, 0.60, 0.95, 0.25, 0.75)
     dialogBgRect = RatioRect(contentRect, 0.7264, 0.8784, 0.3125, 0.6797)
     blackscreenRect = RatioRect(contentRect, 0.00, 1.00, 0.15, 0.85)
