@@ -8,10 +8,15 @@ import argparse
 
 class AbstractRect(abc.ABC):
     def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
-        # returns: height, width, topOffset, leftOffset, verticalCompressRate, horizontalCompressRate
+        # returns: fullHeight, fullWidth, topOffset, leftOffset, verticalCompressRate, horizontalCompressRate
         pass
 
     def cutRoi(self, frame: cv.Mat) -> cv.Mat:
+        pass
+
+    def getSize(self) -> typing.Tuple[int, int]:
+        # returns: width, height
+        # notice this order!
         pass
 
 class RatioRect(AbstractRect):
@@ -23,21 +28,26 @@ class RatioRect(AbstractRect):
         self.rightRatio: float = rightRatio
 
         # Precalculate offsets
-        height, width, topOffset, leftOffset, verticalCompressRate, horizontalCompressRate = self.parent.getNest()
-        self.height: int = height
-        self.width: int = width
-        self.topOffset: float = topOffset + self.height * verticalCompressRate * self.topRatio
-        self.bottomOffset: float = topOffset + self.height * verticalCompressRate * self.bottomRatio
-        self.leftOffset: float = leftOffset + self.width * horizontalCompressRate * self.leftRatio
-        self.rightOffset: float = leftOffset + self.width * horizontalCompressRate * self.rightRatio
+        fullHeight, fullWidth, topOffset, leftOffset, verticalCompressRate, horizontalCompressRate = self.parent.getNest()
+        self.fullHeight: int = fullHeight
+        self.fullWidth: int = fullWidth
+        self.topOffset: float = topOffset + self.fullHeight * verticalCompressRate * self.topRatio
+        self.bottomOffset: float = topOffset + self.fullHeight * verticalCompressRate * self.bottomRatio
+        self.leftOffset: float = leftOffset + self.fullWidth * horizontalCompressRate * self.leftRatio
+        self.rightOffset: float = leftOffset + self.fullWidth * horizontalCompressRate * self.rightRatio
         self.verticalCompressRate: float = verticalCompressRate * (self.bottomRatio - self.topRatio)
         self.horizontalCompressRate: float = horizontalCompressRate * (self.rightRatio - self.leftRatio)
+        self.localHeight: int = int(self.fullHeight * self.verticalCompressRate)
+        self.localWidth: int = int(self.fullWidth * self.horizontalCompressRate)
 
     def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
-        return self.height, self.width, self.topOffset, self.leftOffset, self.verticalCompressRate, self.horizontalCompressRate
+        return self.fullHeight, self.fullWidth, self.topOffset, self.leftOffset, self.verticalCompressRate, self.horizontalCompressRate
 
     def cutRoi(self, frame: cv.Mat) -> cv.Mat:
         return frame[int(self.topOffset):int(self.bottomOffset), int(self.leftOffset):int(self.rightOffset)]
+
+    def getSize(self) -> typing.Tuple[int, int]:
+        return self.localWidth, self.localHeight
 
 class SrcRect(AbstractRect):
     def __init__(self, src: cv.VideoCapture):
@@ -84,14 +94,15 @@ def main():
     
     srcMp4 = cv.VideoCapture(args.src)
     srcRect = SrcRect(srcMp4)
+    contentRect = RatioRect(srcRect, args.topblackbar, 1.0 - args.topblackbar, args.leftblackbar, 1.0 - args.leftblackbar)
+
     if args.debug:
-        debugMp4 = cv.VideoWriter('debug.mp4', cv.VideoWriter_fourcc('m','p','4','v'), 29, srcRect.getSize())
+        debugMp4 = cv.VideoWriter('debug.mp4', cv.VideoWriter_fourcc('m','p','4','v'), 29, contentRect.getSize())
     templateAss = open(args.ass, "r")
     dstAss = open(args.dst, "w")
     dstAss.writelines(templateAss.readlines())
     templateAss.close()
 
-    contentRect = RatioRect(srcRect, args.topblackbar, 1.0 - args.topblackbar, args.topblackbar, 1.0 - args.topblackbar)
     dialogOutlineRect = RatioRect(contentRect, 0.60, 0.95, 0.25, 0.75)
     dialogBgRect = RatioRect(contentRect, 0.7264, 0.8784, 0.3125, 0.6797)
     blackscreenRect = RatioRect(contentRect, 0.00, 1.00, 0.15, 0.85)
@@ -167,7 +178,7 @@ def main():
             print("frame", frameCount, formatTimestamp(timestamp))
 
         if args.debug:
-            frameOut = frame
+            frameOut = contentRect.cutRoi(frame)
             if isValidDialog:
                 frameOut = cv.putText(frameOut, "VALID DIALOG", (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
             if hasDialogBg:
