@@ -47,7 +47,7 @@ class RatioRect(AbstractRect):
         return frame[int(self.topOffset):int(self.bottomOffset), int(self.leftOffset):int(self.rightOffset)]
 
     def getSize(self) -> typing.Tuple[int, int]:
-        return self.localWidth, self.localHeight
+        return self.localWidth, self.localHeight # notice this order!
 
 class SrcRect(AbstractRect):
     def __init__(self, src: cv.VideoCapture):
@@ -95,9 +95,11 @@ def main():
     srcMp4 = cv.VideoCapture(args.src)
     srcRect = SrcRect(srcMp4)
     contentRect = RatioRect(srcRect, args.topblackbar, 1.0 - args.topblackbar, args.leftblackbar, 1.0 - args.leftblackbar)
+    fps: float = srcMp4.get(cv.CAP_PROP_FPS)
+    size: typing.Tuple[int, int] = contentRect.getSize()
 
     if args.debug:
-        debugMp4 = cv.VideoWriter('debug.mp4', cv.VideoWriter_fourcc('m','p','4','v'), 29, contentRect.getSize())
+        debugMp4 = cv.VideoWriter('debug.mp4', cv.VideoWriter_fourcc('m','p','4','v'), fps, size)
     templateAss = open(args.ass, "r")
     dstAss = open(args.dst, "w")
     dstAss.writelines(templateAss.readlines())
