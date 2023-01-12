@@ -107,6 +107,29 @@ class FPIRPass(abc.ABC):
         # returns anything
         pass
 
+class FPIRPassRemoveNoises(FPIRPass):
+    def __init__(self, type: SubtitleTypes, minLength: int = 2):
+        self.type: SubtitleTypes = type
+        self.minLength: int = minLength
+
+    def apply(self, fpir: FPIR):
+        for id, framePoint in enumerate(fpir.framePoints):
+            l = id - self.minLength
+            r = id + self.minLength
+            if l < 0 or r > len(fpir.framePoints) - 1:
+                continue
+            length = 0
+            for i in range(id - 1, l - 1, -1):
+                if fpir.framePoints[i].flags[self.type] != framePoint.flags[self.type]:
+                    break
+                length += 1
+            for i in range(id + 1, r + 1):
+                if fpir.framePoints[i].flags[self.type] != framePoint.flags[self.type]:
+                    break
+                length += 1
+            if length < self.minLength: # flip
+                framePoint.flags[self.type] = not framePoint.flags[self.type]
+
 class FPIRPassBuildIntervals(FPIRPass):
     def __init__(self, type: SubtitleTypes):
         self.type: SubtitleTypes = type
@@ -273,16 +296,20 @@ def main():
         debugMp4.release()
 
     print("==== FPIR Passes ====")
+    print("fpirPassRemoveNoisesDialog")
+    fpirPassRemoveNoisesDialog = FPIRPassRemoveNoises(SubtitleTypes.DIALOG)
+    fpir.accept(fpirPassRemoveNoisesDialog)
+    print("fpirPassRemoveNoisesBlackscreen")
+    fpirPassRemoveNoisesBlackscreen = FPIRPassRemoveNoises(SubtitleTypes.BLACKSCREEN)
+    fpir.accept(fpirPassRemoveNoisesBlackscreen)
 
     print("==== FPIR to IIR ====")
-
     iir = IIR(fpir)
 
     print("==== IIR Passes ====")
 
 
     print("==== IIR to ASS ====")
-
     dstAss.write(iir.toAss())
     dstAss.close()
 
