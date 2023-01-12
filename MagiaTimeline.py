@@ -5,6 +5,7 @@ import numpy as np
 import cv2 as cv
 import datetime
 import argparse
+import enum
 
 class AbstractRect(abc.ABC):
     def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
@@ -63,15 +64,100 @@ class SrcRect(AbstractRect):
     def getSize(self) -> typing.Tuple[int, int]:
         return self.width, self.height # notice this order!
 
+class SubtitleTypes(enum.IntEnum):
+    DIALOG = 0
+    BLACKSCREEN = 1
+
+    def num() -> int:
+        return len(SubtitleTypes.__members__)
+
+class FramePoint:
+    def __init__(self, index: int, timestamp: int, flags: typing.List[bool]):
+        self.index: int = index
+        self.timestamp: int = timestamp
+        if len(flags) != SubtitleTypes.num():
+            raise Exception("len(flags) != SubtitleTypes.num()")
+        self.flags: typing.List[bool] = flags
+
+    def toString(self) -> str:
+        return "frame {} {}".format(self.index, formatTimestamp(self.timestamp))
+
+    def toStringFull(self) -> str:
+        return "frame {} {} {}".format(self.index, formatTimestamp(self.timestamp), self.flags)
+
+class FPIR: # Frame Point Intermediate Representation
+    def __init__(self):
+        self.framePoints: typing.List[FramePoint] = []
+
+    def accept(self, pazz: FPIRPass):
+        # returns anything
+        return pazz.apply(self)
+
+    def genVirtualEnd(self) -> FramePoint:
+        index: int = len(self.framePoints)
+        timestamp: int = self.framePoints[-1].timestamp
+        flags = [False] * SubtitleTypes.num()
+        return FramePoint(index, timestamp, flags)
+
+    def getFramePointsWithVirtualEnd(self) -> typing.List[FramePoint]:
+        return self.framePoints + [self.genVirtualEnd()]
+
+class FPIRPass(abc.ABC):
+    def apply(fpir: FPIR):
+        # returns anything
+        pass
+
+class FPIRPassBuildIntervals(FPIRPass):
+    def __init__(self, type: SubtitleTypes):
+        self.type: SubtitleTypes = type
+
+    def apply(self, fpir: FPIR) -> typing.List[Interval]:
+        intervals: typing.List[Interval] = []
+        lastBegin: int = 0
+        state: bool = False
+        for framePoint in fpir.getFramePointsWithVirtualEnd():
+            if not state: # off -> on
+                if framePoint.flags[self.type]:
+                    state = True
+                    lastBegin = framePoint.timestamp
+            else: # on - > off
+                if not framePoint.flags[self.type]:
+                    state = False
+                    intervals.append(Interval(lastBegin, framePoint.timestamp, self.type))
+        return intervals
+
+class Interval:
+    def __init__(self, begin: int, end: int, type: SubtitleTypes):
+        self.begin: int = begin # timestamp
+        self.end: int = end # timestamp
+        self.type: SubtitleTypes = type
+
+    def toAss(self, tag: str = "unknown") -> str:
+        template = "Dialogue: 0,{},{},Default,,0,0,0,,VALID_SUBTITLE_{}_{}"
+        sBegin = formatTimestamp(self.begin)
+        sEnd = formatTimestamp(self.end)
+        return template.format(sBegin, sEnd, self.type.name, tag)
+
+class IIR: # Interval Intermediate Representation
+    def __init__(self, fpir: FPIR) -> None:
+        self.intervals: typing.List[Interval] = []
+        for type in SubtitleTypes:
+            fpirPass = FPIRPassBuildIntervals(type)
+            self.intervals.extend(fpir.accept(fpirPass))
+        self.sort()
+
+    def sort(self):
+        self.intervals.sort(key=lambda interval: interval.begin)
+        
+    def toAss(self) -> str:
+        ass = ""
+        for id, interval in enumerate(self.intervals):
+            ass += interval.toAss(str(id)) + "\n"
+        return ass
+
 def formatTimestamp(timestamp: float) -> str:
     dTimestamp = datetime.datetime.fromtimestamp(timestamp / 1000, datetime.timezone(datetime.timedelta()))
     return dTimestamp.strftime("%H:%M:%S.%f")[:-4]
-
-def formatTimeline(begin: float, end: float, count: int) -> str:
-    template = "Dialogue: 0,{},{},Default,,0,0,0,,VALID_SUBTITLE_{}\n"
-    sBegin = formatTimestamp(begin)
-    sEnd = formatTimestamp(end)
-    return template.format(sBegin, sEnd, count)
 
 def inRange(frame: cv.Mat, lower: typing.List[int], upper: typing.List[int]):
     # just a syntactic sugar
@@ -109,23 +195,19 @@ def main():
     dialogBgRect = RatioRect(contentRect, 0.7264, 0.8784, 0.3125, 0.6797)
     blackscreenRect = RatioRect(contentRect, 0.00, 1.00, 0.15, 0.85)
 
-    frameCount = 0
-    subtitleCount = 0
-    saturatedCounter = 0 # -1: switch to invalid subtitle, 1: switch to valid subtitle
-    validSubtitleState = False
-    lastBeginTimestamp = 0.0
-
-    while True:
+    fpir = FPIR()
+    print("==== FPIR Building ====")
+    while True: # Process each frame to build FPIR
 
         # Frame reading
 
+        frameIndex: int = int(srcMp4.get(cv.CAP_PROP_POS_FRAMES))
+        timestamp: float = srcMp4.get(cv.CAP_PROP_POS_MSEC)
         validFrame, frame = srcMp4.read()
-        frameCount += 1
         if not validFrame:
             break
-        timestamp: float = srcMp4.get(cv.CAP_PROP_POS_MSEC)
 
-        # Subtitle recognizing
+        # CV ananysis
 
         roiDialogBg = dialogBgRect.cutRoi(frame)
         roiDialogBgGray = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2GRAY)
@@ -152,32 +234,18 @@ def main():
         hasBlackscreenBg = meanBlackscreenBgBin < 20
         hasBlackscreenText = meanBlackscreenTextBin > 0.1 and meanBlackscreenTextBin < 16
 
+        # Frame point building
+
         isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
         isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
-        isValidSubtitle = isValidDialog or isValidBlackscreen
 
-        # State machine
+        framePoint = FramePoint(frameIndex, timestamp, [isValidDialog, isValidBlackscreen])
+        fpir.framePoints.append(framePoint)
 
-        if isValidSubtitle and saturatedCounter < 1:
-            saturatedCounter += 1
-        if not isValidSubtitle and saturatedCounter > -1:
-            saturatedCounter -= 1
-        
-        lastValidSubtitleState = validSubtitleState
-        if saturatedCounter == 1:
-            validSubtitleState = True
-        if saturatedCounter == -1:
-            validSubtitleState = False
-        
-        if lastValidSubtitleState != validSubtitleState: # state changed
-            if validSubtitleState == True: # flipped on
-                lastBeginTimestamp = timestamp
-            else: # flipped off
-                dstAss.write(formatTimeline(lastBeginTimestamp, timestamp, subtitleCount))
-                subtitleCount += 1
+        # Outputs
 
-        if frameCount % 1000 == 0:
-            print("frame", frameCount, formatTimestamp(timestamp))
+        if frameIndex % 1000 == 0:
+            print(framePoint.toString())
 
         if args.debug:
             frameOut = contentRect.cutRoi(frame)
@@ -198,12 +266,24 @@ def main():
             cv.imshow("show", frameOut)
             if cv.waitKey(1) == ord('q'):
                 break
-            print("debug frame", frameCount, formatTimestamp(timestamp), meanBlackscreenBgBin)
+            print("debug frame", frameIndex, formatTimestamp(timestamp), meanBlackscreenBgBin)
             debugMp4.write(frameOut)
-    
     srcMp4.release()
     if args.debug:
         debugMp4.release()
+
+    print("==== FPIR Passes ====")
+
+    print("==== FPIR to IIR ====")
+
+    iir = IIR(fpir)
+
+    print("==== IIR Passes ====")
+
+
+    print("==== IIR to ASS ====")
+
+    dstAss.write(iir.toAss())
     dstAss.close()
 
 if __name__ == "__main__":
