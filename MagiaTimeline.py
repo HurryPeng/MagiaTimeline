@@ -64,18 +64,18 @@ class SrcRect(AbstractRect):
     def getSize(self) -> typing.Tuple[int, int]:
         return self.width, self.height # notice this order!
 
-class SubtitleTypes(enum.IntEnum):
+class SubtitleType(enum.IntEnum):
     DIALOG = 0
     BLACKSCREEN = 1
 
     def num() -> int:
-        return len(SubtitleTypes.__members__)
+        return len(SubtitleType.__members__)
 
 class FramePoint:
     def __init__(self, index: int, timestamp: int, flags: typing.List[bool]):
         self.index: int = index
         self.timestamp: int = timestamp
-        if len(flags) != SubtitleTypes.num():
+        if len(flags) != SubtitleType.num():
             raise Exception("len(flags) != SubtitleTypes.num()")
         self.flags: typing.List[bool] = flags
 
@@ -96,20 +96,20 @@ class FPIR: # Frame Point Intermediate Representation
     def genVirtualEnd(self) -> FramePoint:
         index: int = len(self.framePoints)
         timestamp: int = self.framePoints[-1].timestamp
-        flags = [False] * SubtitleTypes.num()
+        flags = [False] * SubtitleType.num()
         return FramePoint(index, timestamp, flags)
 
     def getFramePointsWithVirtualEnd(self) -> typing.List[FramePoint]:
         return self.framePoints + [self.genVirtualEnd()]
 
 class FPIRPass(abc.ABC):
-    def apply(fpir: FPIR):
+    def apply(self, fpir: FPIR):
         # returns anything
         pass
 
-class FPIRPassRemoveNoises(FPIRPass):
-    def __init__(self, type: SubtitleTypes, minLength: int = 2):
-        self.type: SubtitleTypes = type
+class FPIRPassRemoveNoise(FPIRPass):
+    def __init__(self, type: SubtitleType, minLength: int = 2):
+        self.type: SubtitleType = type
         self.minLength: int = minLength
 
     def apply(self, fpir: FPIR):
@@ -131,8 +131,8 @@ class FPIRPassRemoveNoises(FPIRPass):
                 framePoint.flags[self.type] = not framePoint.flags[self.type]
 
 class FPIRPassBuildIntervals(FPIRPass):
-    def __init__(self, type: SubtitleTypes):
-        self.type: SubtitleTypes = type
+    def __init__(self, type: SubtitleType):
+        self.type: SubtitleType = type
 
     def apply(self, fpir: FPIR) -> typing.List[Interval]:
         intervals: typing.List[Interval] = []
@@ -150,24 +150,42 @@ class FPIRPassBuildIntervals(FPIRPass):
         return intervals
 
 class Interval:
-    def __init__(self, begin: int, end: int, type: SubtitleTypes):
+    def __init__(self, begin: int, end: int, type: SubtitleType):
         self.begin: int = begin # timestamp
         self.end: int = end # timestamp
-        self.type: SubtitleTypes = type
+        self.type: SubtitleType = type
 
     def toAss(self, tag: str = "unknown") -> str:
-        template = "Dialogue: 0,{},{},Default,,0,0,0,,VALID_SUBTITLE_{}_{}"
+        template = "Dialogue: 0,{},{},Default,,0,0,0,,SUBTITLE_{}_{}"
         sBegin = formatTimestamp(self.begin)
         sEnd = formatTimestamp(self.end)
         return template.format(sBegin, sEnd, self.type.name, tag)
 
+    def dist(self, other: Interval) -> int:
+        l = self
+        r = other
+        if self.begin > other.begin:
+            l = other
+            r = self
+        return r.begin - l.end
+
+    def intersects(self, other: Interval) -> bool:
+        return self.dist(other) < 0
+
+    def touches(self, other: Interval) -> bool:
+        return self.dist(other) == 0
+
 class IIR: # Interval Intermediate Representation
-    def __init__(self, fpir: FPIR) -> None:
+    def __init__(self, fpir: FPIR):
         self.intervals: typing.List[Interval] = []
-        for type in SubtitleTypes:
+        for type in SubtitleType:
             fpirPass = FPIRPassBuildIntervals(type)
             self.intervals.extend(fpir.accept(fpirPass))
         self.sort()
+
+    def accept(self, pazz: IIRPass):
+        # returns anything
+        return pazz.apply(self)
 
     def sort(self):
         self.intervals.sort(key=lambda interval: interval.begin)
@@ -177,6 +195,37 @@ class IIR: # Interval Intermediate Representation
         for id, interval in enumerate(self.intervals):
             ass += interval.toAss(str(id)) + "\n"
         return ass
+
+class IIRPass(abc.ABC):
+    def apply(self, iir: IIR):
+        # returns anything
+        pass
+
+class IIRPassFillFlashBlank(IIRPass):
+    def __init__(self, type: SubtitleType, maxBlank: int = 300):
+        self.type: SubtitleType = type
+        self.maxBlank: int = maxBlank # in millisecs
+    
+    def apply(self, iir: IIR):
+        for id, interval in enumerate(iir.intervals):
+            if interval.type != self.type:
+                continue
+            otherId = id + 1
+            while otherId < len(iir.intervals):
+                otherInterval = iir.intervals[otherId]
+                if otherInterval.type != self.type:
+                    otherId += 1
+                    continue
+                if interval.dist(otherInterval) > self.maxBlank:
+                    break
+                if interval.dist(otherInterval) <= 0:
+                    otherId += 1
+                    continue
+                mid = (interval.end + otherInterval.begin) // 2
+                interval.end = mid
+                otherInterval.begin = mid
+                break
+        iir.sort()
 
 def formatTimestamp(timestamp: float) -> str:
     dTimestamp = datetime.datetime.fromtimestamp(timestamp / 1000, datetime.timezone(datetime.timedelta()))
@@ -218,8 +267,8 @@ def main():
     dialogBgRect = RatioRect(contentRect, 0.7264, 0.8784, 0.3125, 0.6797)
     blackscreenRect = RatioRect(contentRect, 0.00, 1.00, 0.15, 0.85)
 
-    fpir = FPIR()
     print("==== FPIR Building ====")
+    fpir = FPIR()
     while True: # Process each frame to build FPIR
 
         # Frame reading
@@ -296,18 +345,23 @@ def main():
         debugMp4.release()
 
     print("==== FPIR Passes ====")
-    print("fpirPassRemoveNoisesDialog")
-    fpirPassRemoveNoisesDialog = FPIRPassRemoveNoises(SubtitleTypes.DIALOG)
-    fpir.accept(fpirPassRemoveNoisesDialog)
-    print("fpirPassRemoveNoisesBlackscreen")
-    fpirPassRemoveNoisesBlackscreen = FPIRPassRemoveNoises(SubtitleTypes.BLACKSCREEN)
-    fpir.accept(fpirPassRemoveNoisesBlackscreen)
+    print("fpirPassRemoveNoiseDialog")
+    fpirPassRemoveNoiseDialog = FPIRPassRemoveNoise(SubtitleType.DIALOG)
+    fpir.accept(fpirPassRemoveNoiseDialog)
+    print("fpirPassRemoveNoiseBlackscreen")
+    fpirPassRemoveNoiseBlackscreen = FPIRPassRemoveNoise(SubtitleType.BLACKSCREEN)
+    fpir.accept(fpirPassRemoveNoiseBlackscreen)
 
     print("==== FPIR to IIR ====")
     iir = IIR(fpir)
 
     print("==== IIR Passes ====")
-
+    print("iirPassFillFlashBlankDialog")
+    iirPassFillFlashBlankDialog = IIRPassFillFlashBlank(SubtitleType.DIALOG, 300)
+    iir.accept(iirPassFillFlashBlankDialog)
+    print("iirPassFillFlashBlankBlackscreen")
+    iirPassFillFlashBlankBlackscreen = IIRPassFillFlashBlank(SubtitleType.BLACKSCREEN, 1200)
+    iir.accept(iirPassFillFlashBlankBlackscreen)
 
     print("==== IIR to ASS ====")
     dstAss.write(iir.toAss())
