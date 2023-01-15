@@ -2,9 +2,15 @@
 
 Automatic subtitle timeline marking tool for [Magia Record 「マギアレコード」 《魔法纪录》](https://magireco.com/)
 
-## Purpose
+## Introduction
+
+### Purpose
 
 Fans from outside Japan are recording videos of Magia Record's quests and translating the subtitles into local languages, in which marking and aligning the subtitles' timeline is a time-consuming job. This tool automatically generates a timeline file by scanning and analyzing such a video with basic CV methods. This is possible because most Magia Record's subtitles are shown at the same place with the same format. Though not all subtitles can be successfully identified, this tool can still save video makers' time. 
+
+### Limitations
+
+The layout of Magia Record is different on mobile, pad and PC. Currently MagiaTimeline only supports the mobile layout. If you have need for other platforms, please raise an issue and provide some video clips for testing. 
 
 ## Getting Started
 
@@ -46,6 +52,28 @@ python MagiaTimeline.py --src ./src.mp4 --dst MagiaTimelineOutput.ass --topblack
 - The input video is renamed to `src.mp4` and put under the same folder as `MagiaTimeline.py`. 
 - There is no black bar around the canvas in the input video. 
 - The output file will be named `MagiaTimelineOutput.ass` and overwrite any existing file of this name. 
+
+## Architecture
+
+MagiaTimeline adopts a compiler-like architecture. The source video is analyzed and transformed into intermediate representations (IR). Optimization passes are then applied on IRs for better timeline generation. 
+
+- Frame-wise computer vision analysis
+    - Generates tags for each frame according to its content
+- Frame Point Intermediate Representation (FPIR)
+    - Each frame is represented by a Frame Point (FP) with  attributes
+        - Frame index
+        - Timestamp
+        - Tags
+    - Passes
+        - Noise filtering
+        - Interval building
+- Interval Intermediate Representation (IIR)
+    - Each subtitle is represented by an Interval with attributes
+        - Time range
+        - Tags
+    - Passes
+        - Flashing blank filling
+        - ASS format generation
 
 ## Acknowledgements
 
