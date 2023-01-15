@@ -67,6 +67,7 @@ class SrcRect(AbstractRect):
 class SubtitleType(enum.IntEnum):
     DIALOG = 0
     BLACKSCREEN = 1
+    CGSUB = 2
 
     def num() -> int:
         return len(SubtitleType.__members__)
@@ -266,6 +267,10 @@ def main():
     dialogOutlineRect = RatioRect(contentRect, 0.60, 0.95, 0.25, 0.75)
     dialogBgRect = RatioRect(contentRect, 0.7264, 0.8784, 0.3125, 0.6797)
     blackscreenRect = RatioRect(contentRect, 0.00, 1.00, 0.15, 0.85)
+    cgSubAboveRect = RatioRect(contentRect, 0.60, 0.65, 0.0, 1.0)
+    cgSubBorderRect = RatioRect(contentRect, 0.65, 0.70, 0.0, 1.0)
+    cgSubBelowRect = RatioRect(contentRect, 0.70, 0.75, 0.0, 1.0)
+    cgSubTextRect = RatioRect(contentRect, 0.70, 1.00, 0.3, 0.7)
 
     print("==== FPIR Building ====")
     fpir = FPIR()
@@ -306,12 +311,29 @@ def main():
         hasBlackscreenBg = meanBlackscreenBgBin < 20
         hasBlackscreenText = meanBlackscreenTextBin > 0.1 and meanBlackscreenTextBin < 16
 
+        roiCgSubAbove = cgSubAboveRect.cutRoi(frame)
+        roiCgSubAboveGray = cv.cvtColor(roiCgSubAbove, cv.COLOR_BGR2GRAY)
+        meanCgSubAboveGray = cv.mean(roiCgSubAboveGray)[0]
+        roiCgSubBelow = cgSubBelowRect.cutRoi(frame)
+        roiCgSubBelowGray = cv.cvtColor(roiCgSubBelow, cv.COLOR_BGR2GRAY)
+        meanCgSubBelowGray = cv.mean(roiCgSubBelowGray)[0]
+        cgSubBrightnessDecrVal = meanCgSubAboveGray - meanCgSubBelowGray
+        cgSubBrightnessDecrRate = 1 - meanCgSubBelowGray / meanCgSubAboveGray
+        hasCgSubBg = cgSubBrightnessDecrVal > 15.0 and cgSubBrightnessDecrRate > 0.30
+
+        roiCgSubText = cgSubTextRect.cutRoi(frame)
+        roiCgSubTextGray = cv.cvtColor(roiCgSubText, cv.COLOR_BGR2GRAY)
+        _, roiCgSubTextBin = cv.threshold(roiCgSubTextGray, 160, 255, cv.THRESH_BINARY)
+        meanCgSubTextBin: float = cv.mean(roiCgSubTextBin)[0]
+        hasCgSubText = meanCgSubTextBin > 0.5 and meanCgSubTextBin < 30
+
         # Frame point building
 
         isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
         isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
+        isValidCgSub = hasCgSubBg and hasCgSubText
 
-        framePoint = FramePoint(frameIndex, timestamp, [isValidDialog, isValidBlackscreen])
+        framePoint = FramePoint(frameIndex, timestamp, [isValidDialog, isValidBlackscreen, isValidCgSub])
         fpir.framePoints.append(framePoint)
 
         # Outputs
@@ -335,10 +357,16 @@ def main():
                 frameOut = cv.putText(frameOut, "has blackscreen bg", (50, 200), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
             if hasBlackscreenText:
                 frameOut = cv.putText(frameOut, "has blackscreen text", (50, 225), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            if isValidCgSub:
+                frameOut = cv.putText(frameOut, "VALID CGSUB", (50, 275), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
+            if hasCgSubBg:
+                frameOut = cv.putText(frameOut, "has cgsub bg", (50, 300), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            if hasCgSubText:
+                frameOut = cv.putText(frameOut, "has cgsub text", (50, 325), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
             cv.imshow("show", frameOut)
             if cv.waitKey(1) == ord('q'):
                 break
-            print("debug frame", frameIndex, formatTimestamp(timestamp), meanBlackscreenBgBin)
+            print("debug frame", frameIndex, formatTimestamp(timestamp), cgSubBrightnessDecrVal, cgSubBrightnessDecrRate, meanCgSubTextBin)
             debugMp4.write(frameOut)
     srcMp4.release()
     if args.debug:
@@ -351,6 +379,9 @@ def main():
     print("fpirPassRemoveNoiseBlackscreen")
     fpirPassRemoveNoiseBlackscreen = FPIRPassRemoveNoise(SubtitleType.BLACKSCREEN)
     fpir.accept(fpirPassRemoveNoiseBlackscreen)
+    print("fpirPassRemoveNoiseCgSub")
+    fpirPassRemoveNoiseCgSub = FPIRPassRemoveNoise(SubtitleType.CGSUB)
+    fpir.accept(fpirPassRemoveNoiseCgSub)
 
     print("==== FPIR to IIR ====")
     iir = IIR(fpir)
@@ -362,6 +393,9 @@ def main():
     print("iirPassFillFlashBlankBlackscreen")
     iirPassFillFlashBlankBlackscreen = IIRPassFillFlashBlank(SubtitleType.BLACKSCREEN, 1200)
     iir.accept(iirPassFillFlashBlankBlackscreen)
+    print("iirPassFillFlashBlankCgSub")
+    iirPassFillFlashBlankCgSub = IIRPassFillFlashBlank(SubtitleType.CGSUB, 1200)
+    iir.accept(iirPassFillFlashBlankCgSub)
 
     print("==== IIR to ASS ====")
     dstAss.write(iir.toAss())
