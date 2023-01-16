@@ -20,6 +20,12 @@ class AbstractRect(abc.ABC):
         # notice this order!
         pass
 
+    def getWidth(self) -> int:
+        return self.getSize()[0]
+
+    def getHeight(self) -> int:
+        return self.getSize()[1]
+
 class RatioRect(AbstractRect):
     def __init__(self, parent: AbstractRect, topRatio: float, bottomRatio: float, leftRatio: float, rightRatio: float) -> None:
         self.parent: AbstractRect = parent
@@ -293,14 +299,14 @@ def main():
         _, roiDialogBgTextBin = cv.threshold(roiDialogBgGray, 192, 255, cv.THRESH_BINARY)
         meanDialogTextBin: float = cv.mean(roiDialogBgTextBin)[0]
         meanDialogBgBin: float = cv.mean(roiDialogBgBin)[0]
-        hasDialogBg = meanDialogBgBin > 160
-        hasDialogText = meanDialogTextBin < 254 and meanDialogTextBin > 200
+        hasDialogBg: bool = meanDialogBgBin > 160
+        hasDialogText: bool = meanDialogTextBin < 254 and meanDialogTextBin > 200
 
         roiDialogOutline = dialogOutlineRect.cutRoi(frame)
         roiDialogOutlineHSV = cv.cvtColor(roiDialogOutline, cv.COLOR_BGR2HSV)
         roiDialogOutlineBin = inRange(roiDialogOutlineHSV, [10, 40, 90], [30, 130, 190])
         meanDialogOutlineBin: float = cv.mean(roiDialogOutlineBin)[0]
-        hasDialogOutline = meanDialogOutlineBin > 3
+        hasDialogOutline: bool = meanDialogOutlineBin > 3
 
         roiBlackscreen = blackscreenRect.cutRoi(frame)
         roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
@@ -308,18 +314,26 @@ def main():
         _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 160, 255, cv.THRESH_BINARY)
         meanBlackscreenBgBin: float = cv.mean(roiBlackscreenBgBin)[0]
         meanBlackscreenTextBin: float = cv.mean(roiBlackscreenTextBin)[0]
-        hasBlackscreenBg = meanBlackscreenBgBin < 20
-        hasBlackscreenText = meanBlackscreenTextBin > 0.1 and meanBlackscreenTextBin < 16
+        hasBlackscreenBg: bool = meanBlackscreenBgBin < 20
+        hasBlackscreenText: bool = meanBlackscreenTextBin > 0.1 and meanBlackscreenTextBin < 16
 
         roiCgSubAbove = cgSubAboveRect.cutRoi(frame)
         roiCgSubAboveGray = cv.cvtColor(roiCgSubAbove, cv.COLOR_BGR2GRAY)
         meanCgSubAboveGray = cv.mean(roiCgSubAboveGray)[0]
         roiCgSubBelow = cgSubBelowRect.cutRoi(frame)
         roiCgSubBelowGray = cv.cvtColor(roiCgSubBelow, cv.COLOR_BGR2GRAY)
-        meanCgSubBelowGray = cv.mean(roiCgSubBelowGray)[0]
-        cgSubBrightnessDecrVal = meanCgSubAboveGray - meanCgSubBelowGray
-        cgSubBrightnessDecrRate = 1 - meanCgSubBelowGray / meanCgSubAboveGray
-        hasCgSubBg = cgSubBrightnessDecrVal > 15.0 and cgSubBrightnessDecrRate > 0.30
+        meanCgSubBelowGray: float = cv.mean(roiCgSubBelowGray)[0]
+        cgSubBrightnessDecrVal: float = meanCgSubAboveGray - meanCgSubBelowGray
+        cgSubBrightnessDecrRate: float = 1 - meanCgSubBelowGray / meanCgSubAboveGray
+        hasCgSubContrast: bool = cgSubBrightnessDecrVal > 15.0 and cgSubBrightnessDecrRate > 0.30
+
+        roiCgSubBorder = cgSubBorderRect.cutRoi(frame)
+        roiCgSubBorderGray = cv.cvtColor(roiCgSubBorder, cv.COLOR_BGR2GRAY)
+        roiCgSubBorderEdge = cv.convertScaleAbs(cv.Sobel(roiCgSubBorderGray, cv.CV_16S, 0, 1, ksize=3))
+        roiCgSubBorderErode = cv.morphologyEx(roiCgSubBorderEdge, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (51, 1)))
+        roiCgSubBorderRowReduce = cv.reduce(roiCgSubBorderErode, 1, cv.REDUCE_AVG, dtype=cv.CV_32F)
+        maxCgSubBorderRowReduce: float = cv.minMaxLoc(roiCgSubBorderRowReduce)[1]
+        hasCgSubBorder: bool = maxCgSubBorderRowReduce > 25.0
 
         roiCgSubText = cgSubTextRect.cutRoi(frame)
         roiCgSubTextGray = cv.cvtColor(roiCgSubText, cv.COLOR_BGR2GRAY)
@@ -331,7 +345,7 @@ def main():
 
         isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
         isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
-        isValidCgSub = hasCgSubBg and hasCgSubText
+        isValidCgSub = hasCgSubContrast and hasCgSubBorder and hasCgSubText
 
         framePoint = FramePoint(frameIndex, timestamp, [isValidDialog, isValidBlackscreen, isValidCgSub])
         fpir.framePoints.append(framePoint)
@@ -359,14 +373,16 @@ def main():
                 frameOut = cv.putText(frameOut, "has blackscreen text", (50, 225), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
             if isValidCgSub:
                 frameOut = cv.putText(frameOut, "VALID CGSUB", (50, 275), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
-            if hasCgSubBg:
-                frameOut = cv.putText(frameOut, "has cgsub bg", (50, 300), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            if hasCgSubContrast:
+                frameOut = cv.putText(frameOut, "has cgsub contrast", (50, 300), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            if hasCgSubBorder:
+                frameOut = cv.putText(frameOut, "has cgsub border", (50, 325), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
             if hasCgSubText:
-                frameOut = cv.putText(frameOut, "has cgsub text", (50, 325), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+                frameOut = cv.putText(frameOut, "has cgsub text", (50, 350), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
             cv.imshow("show", frameOut)
             if cv.waitKey(1) == ord('q'):
                 break
-            print("debug frame", frameIndex, formatTimestamp(timestamp), cgSubBrightnessDecrVal, cgSubBrightnessDecrRate, meanCgSubTextBin)
+            print("debug frame", frameIndex, formatTimestamp(timestamp), maxCgSubBorderRowReduce)
             debugMp4.write(frameOut)
     srcMp4.release()
     if args.debug:
