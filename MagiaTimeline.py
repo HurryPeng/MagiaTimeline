@@ -324,7 +324,7 @@ def main():
         roiCgSubBelowGray = cv.cvtColor(roiCgSubBelow, cv.COLOR_BGR2GRAY)
         meanCgSubBelowGray: float = cv.mean(roiCgSubBelowGray)[0]
         cgSubBrightnessDecrVal: float = meanCgSubAboveGray - meanCgSubBelowGray
-        cgSubBrightnessDecrRate: float = 1 - meanCgSubBelowGray / meanCgSubAboveGray
+        cgSubBrightnessDecrRate: float = 1 - meanCgSubBelowGray / max(meanCgSubAboveGray, 1.0)
         hasCgSubContrast: bool = cgSubBrightnessDecrVal > 15.0 and cgSubBrightnessDecrRate > 0.30
 
         roiCgSubBorder = cgSubBorderRect.cutRoi(frame)
