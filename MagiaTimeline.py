@@ -250,12 +250,15 @@ def main():
     parser.add_argument("--leftblackbar", type=float, default=0.0, help="width ratio of black bar on the left of canvas, right is assumed symmetric")
     parser.add_argument("--dst", type=str, default="MagiaTimelineOutput.ass", help="destination ass subtitle file")
     parser.add_argument("--debug", default=False, action="store_true", help="for debugging only, show frames with debug info and save to debug.mp4")
+    parser.add_argument("--shortcircuit", default=False, action="store_true", help="skip detecting other types of subtitles when one is already identified for performance, available only when debug mode is off")
     args = parser.parse_args()
     if True: # data validity test
         srcMp4Test = open(args.src, "rb")
         srcMp4Test.close()
         if not (args.topblackbar >= 0.0 and args.topblackbar <= 1.0 and args.leftblackbar >= 0.0 and args.leftblackbar <= 1.0):
             raise Exception("Invalid black bar ratio! ")
+        if args.debug and args.shortcircuit:
+            raise Exception("Debug mode is not compatible with short circuit mode! ")
     
     srcMp4 = cv.VideoCapture(args.src)
     srcRect = SrcRect(srcMp4)
@@ -290,62 +293,82 @@ def main():
         if not validFrame:
             break
 
-        # CV ananysis
+        isValidDialog = False
+        isValidBlackscreen = False
+        isValidCgSub = False
 
-        roiDialogBg = dialogBgRect.cutRoi(frame)
-        roiDialogBgGray = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2GRAY)
-        roiDialogBgHSV = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2HSV)
-        roiDialogBgBin = inRange(roiDialogBgHSV, [0, 0, 160], [255, 32, 255])
-        _, roiDialogBgTextBin = cv.threshold(roiDialogBgGray, 192, 255, cv.THRESH_BINARY)
-        meanDialogTextBin: float = cv.mean(roiDialogBgTextBin)[0]
-        meanDialogBgBin: float = cv.mean(roiDialogBgBin)[0]
-        hasDialogBg: bool = meanDialogBgBin > 160
-        hasDialogText: bool = meanDialogTextBin < 254 and meanDialogTextBin > 200
+        while True: # For short circuit breaking
 
-        roiDialogOutline = dialogOutlineRect.cutRoi(frame)
-        roiDialogOutlineHSV = cv.cvtColor(roiDialogOutline, cv.COLOR_BGR2HSV)
-        roiDialogOutlineBin = inRange(roiDialogOutlineHSV, [10, 40, 90], [30, 130, 190])
-        meanDialogOutlineBin: float = cv.mean(roiDialogOutlineBin)[0]
-        hasDialogOutline: bool = meanDialogOutlineBin > 3
+            # Dialog detection
 
-        roiBlackscreen = blackscreenRect.cutRoi(frame)
-        roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
-        _, roiBlackscreenBgBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
-        _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 160, 255, cv.THRESH_BINARY)
-        meanBlackscreenBgBin: float = cv.mean(roiBlackscreenBgBin)[0]
-        meanBlackscreenTextBin: float = cv.mean(roiBlackscreenTextBin)[0]
-        hasBlackscreenBg: bool = meanBlackscreenBgBin < 20
-        hasBlackscreenText: bool = meanBlackscreenTextBin > 0.1 and meanBlackscreenTextBin < 16
+            roiDialogBg = dialogBgRect.cutRoi(frame)
+            roiDialogBgGray = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2GRAY)
+            roiDialogBgHSV = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2HSV)
+            roiDialogBgBin = inRange(roiDialogBgHSV, [0, 0, 160], [255, 32, 255])
+            _, roiDialogBgTextBin = cv.threshold(roiDialogBgGray, 192, 255, cv.THRESH_BINARY)
+            meanDialogTextBin: float = cv.mean(roiDialogBgTextBin)[0]
+            meanDialogBgBin: float = cv.mean(roiDialogBgBin)[0]
+            hasDialogBg: bool = meanDialogBgBin > 160
+            hasDialogText: bool = meanDialogTextBin < 254 and meanDialogTextBin > 200
 
-        roiCgSubAbove = cgSubAboveRect.cutRoi(frame)
-        roiCgSubAboveGray = cv.cvtColor(roiCgSubAbove, cv.COLOR_BGR2GRAY)
-        meanCgSubAboveGray = cv.mean(roiCgSubAboveGray)[0]
-        roiCgSubBelow = cgSubBelowRect.cutRoi(frame)
-        roiCgSubBelowGray = cv.cvtColor(roiCgSubBelow, cv.COLOR_BGR2GRAY)
-        meanCgSubBelowGray: float = cv.mean(roiCgSubBelowGray)[0]
-        cgSubBrightnessDecrVal: float = meanCgSubAboveGray - meanCgSubBelowGray
-        cgSubBrightnessDecrRate: float = 1 - meanCgSubBelowGray / max(meanCgSubAboveGray, 1.0)
-        hasCgSubContrast: bool = cgSubBrightnessDecrVal > 15.0 and cgSubBrightnessDecrRate > 0.30
+            roiDialogOutline = dialogOutlineRect.cutRoi(frame)
+            roiDialogOutlineHSV = cv.cvtColor(roiDialogOutline, cv.COLOR_BGR2HSV)
+            roiDialogOutlineBin = inRange(roiDialogOutlineHSV, [10, 40, 90], [30, 130, 190])
+            meanDialogOutlineBin: float = cv.mean(roiDialogOutlineBin)[0]
+            hasDialogOutline: bool = meanDialogOutlineBin > 3
 
-        roiCgSubBorder = cgSubBorderRect.cutRoi(frame)
-        roiCgSubBorderGray = cv.cvtColor(roiCgSubBorder, cv.COLOR_BGR2GRAY)
-        roiCgSubBorderEdge = cv.convertScaleAbs(cv.Sobel(roiCgSubBorderGray, cv.CV_16S, 0, 1, ksize=3))
-        roiCgSubBorderErode = cv.morphologyEx(roiCgSubBorderEdge, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (51, 1)))
-        roiCgSubBorderRowReduce = cv.reduce(roiCgSubBorderErode, 1, cv.REDUCE_AVG, dtype=cv.CV_32F)
-        maxCgSubBorderRowReduce: float = cv.minMaxLoc(roiCgSubBorderRowReduce)[1]
-        hasCgSubBorder: bool = maxCgSubBorderRowReduce > 25.0
+            isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
 
-        roiCgSubText = cgSubTextRect.cutRoi(frame)
-        roiCgSubTextGray = cv.cvtColor(roiCgSubText, cv.COLOR_BGR2GRAY)
-        _, roiCgSubTextBin = cv.threshold(roiCgSubTextGray, 160, 255, cv.THRESH_BINARY)
-        meanCgSubTextBin: float = cv.mean(roiCgSubTextBin)[0]
-        hasCgSubText = meanCgSubTextBin > 0.5 and meanCgSubTextBin < 30
+            if isValidDialog and not args.shortcircuit:
+                break
+
+            # Blackscreen detection
+
+            roiBlackscreen = blackscreenRect.cutRoi(frame)
+            roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
+            _, roiBlackscreenBgBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
+            _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 160, 255, cv.THRESH_BINARY)
+            meanBlackscreenBgBin: float = cv.mean(roiBlackscreenBgBin)[0]
+            meanBlackscreenTextBin: float = cv.mean(roiBlackscreenTextBin)[0]
+            hasBlackscreenBg: bool = meanBlackscreenBgBin < 20
+            hasBlackscreenText: bool = meanBlackscreenTextBin > 0.1 and meanBlackscreenTextBin < 16
+
+            isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
+
+            if isValidBlackscreen and not args.shortcircuit:
+                break
+
+            # CGSub detection
+
+            roiCgSubAbove = cgSubAboveRect.cutRoi(frame)
+            roiCgSubAboveGray = cv.cvtColor(roiCgSubAbove, cv.COLOR_BGR2GRAY)
+            meanCgSubAboveGray = cv.mean(roiCgSubAboveGray)[0]
+            roiCgSubBelow = cgSubBelowRect.cutRoi(frame)
+            roiCgSubBelowGray = cv.cvtColor(roiCgSubBelow, cv.COLOR_BGR2GRAY)
+            meanCgSubBelowGray: float = cv.mean(roiCgSubBelowGray)[0]
+            cgSubBrightnessDecrVal: float = meanCgSubAboveGray - meanCgSubBelowGray
+            cgSubBrightnessDecrRate: float = 1 - meanCgSubBelowGray / max(meanCgSubAboveGray, 1.0)
+            hasCgSubContrast: bool = cgSubBrightnessDecrVal > 15.0 and cgSubBrightnessDecrRate > 0.30
+
+            roiCgSubBorder = cgSubBorderRect.cutRoi(frame)
+            roiCgSubBorderGray = cv.cvtColor(roiCgSubBorder, cv.COLOR_BGR2GRAY)
+            roiCgSubBorderEdge = cv.convertScaleAbs(cv.Sobel(roiCgSubBorderGray, cv.CV_16S, 0, 1, ksize=3))
+            roiCgSubBorderErode = cv.morphologyEx(roiCgSubBorderEdge, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (51, 1)))
+            roiCgSubBorderRowReduce = cv.reduce(roiCgSubBorderErode, 1, cv.REDUCE_AVG, dtype=cv.CV_32F)
+            maxCgSubBorderRowReduce: float = cv.minMaxLoc(roiCgSubBorderRowReduce)[1]
+            hasCgSubBorder: bool = maxCgSubBorderRowReduce > 25.0
+
+            roiCgSubText = cgSubTextRect.cutRoi(frame)
+            roiCgSubTextGray = cv.cvtColor(roiCgSubText, cv.COLOR_BGR2GRAY)
+            _, roiCgSubTextBin = cv.threshold(roiCgSubTextGray, 160, 255, cv.THRESH_BINARY)
+            meanCgSubTextBin: float = cv.mean(roiCgSubTextBin)[0]
+            hasCgSubText = meanCgSubTextBin > 0.5 and meanCgSubTextBin < 30
+
+            isValidCgSub = hasCgSubContrast and hasCgSubBorder and hasCgSubText
+
+            break
 
         # Frame point building
-
-        isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
-        isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
-        isValidCgSub = hasCgSubContrast and hasCgSubBorder and hasCgSubText
 
         framePoint = FramePoint(frameIndex, timestamp, [isValidDialog, isValidBlackscreen, isValidCgSub])
         fpir.framePoints.append(framePoint)
