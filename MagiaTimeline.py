@@ -319,7 +319,7 @@ def main():
 
             isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
 
-            if isValidDialog and not args.shortcircuit:
+            if isValidDialog and args.shortcircuit:
                 break
 
             # Blackscreen detection
@@ -335,7 +335,7 @@ def main():
 
             isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
 
-            if isValidBlackscreen and not args.shortcircuit:
+            if isValidBlackscreen and args.shortcircuit:
                 break
 
             # CGSub detection
