@@ -354,7 +354,7 @@ def main():
             meanWhitescreenBgBin: float = cv.mean(roiWhitescreenBgBin)[0]
             meanWhitescreenTextBin: float = cv.mean(roiWhitescreenTextBin)[0]
             hasWhitescreenBg: bool = meanWhitescreenBgBin > 230
-            hasWhitescreenText: bool = meanWhitescreenTextBin > 0.5 and meanWhitescreenTextBin < 16
+            hasWhitescreenText: bool = meanWhitescreenTextBin > 0.8 and meanWhitescreenTextBin < 16
 
             isValidWhitescreen = hasWhitescreenBg and hasWhitescreenText
 
@@ -442,7 +442,7 @@ def main():
     fpirPassRemoveNoiseBlackscreen = FPIRPassRemoveNoise(SubtitleType.BLACKSCREEN)
     fpir.accept(fpirPassRemoveNoiseBlackscreen)
     print("fpirPassRemoveNoiseWhitescreen")
-    fpirPassRemoveNoiseWhitescreen = FPIRPassRemoveNoise(SubtitleType.WHITESCREEN)
+    fpirPassRemoveNoiseWhitescreen = FPIRPassRemoveNoise(SubtitleType.WHITESCREEN, minNegativeLength=0)
     fpir.accept(fpirPassRemoveNoiseWhitescreen)
     print("fpirPassRemoveNoiseCgSub")
     fpirPassRemoveNoiseCgSub = FPIRPassRemoveNoise(SubtitleType.CGSUB)
