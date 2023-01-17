@@ -73,7 +73,8 @@ class SrcRect(AbstractRect):
 class SubtitleType(enum.IntEnum):
     DIALOG = 0
     BLACKSCREEN = 1
-    CGSUB = 2
+    WHITESCREEN = 2
+    CGSUB = 3
 
     def num() -> int:
         return len(SubtitleType.__members__)
@@ -115,14 +116,18 @@ class FPIRPass(abc.ABC):
         pass
 
 class FPIRPassRemoveNoise(FPIRPass):
-    def __init__(self, type: SubtitleType, minLength: int = 2):
+    def __init__(self, type: SubtitleType, minPositiveLength: int = 10, minNegativeLength: int = 2):
         self.type: SubtitleType = type
-        self.minLength: int = minLength
+        self.minPositiveLength: int = minPositiveLength # set to 0 to disable removing positive noises
+        self.minNegativeLength: int = minNegativeLength # set to 0 to disable removing negative noises
 
     def apply(self, fpir: FPIR):
         for id, framePoint in enumerate(fpir.framePoints):
-            l = id - self.minLength
-            r = id + self.minLength
+            minLength: int = self.minNegativeLength
+            if framePoint.flags[self.type]:
+                minLength = self.minPositiveLength
+            l = id - minLength
+            r = id + minLength
             if l < 0 or r > len(fpir.framePoints) - 1:
                 continue
             length = 0
@@ -134,7 +139,7 @@ class FPIRPassRemoveNoise(FPIRPass):
                 if fpir.framePoints[i].flags[self.type] != framePoint.flags[self.type]:
                     break
                 length += 1
-            if length < self.minLength: # flip
+            if length < minLength: # flip
                 framePoint.flags[self.type] = not framePoint.flags[self.type]
 
 class FPIRPassBuildIntervals(FPIRPass):
@@ -276,6 +281,7 @@ def main():
     dialogOutlineRect = RatioRect(contentRect, 0.60, 0.95, 0.25, 0.75)
     dialogBgRect = RatioRect(contentRect, 0.7264, 0.8784, 0.3125, 0.6797)
     blackscreenRect = RatioRect(contentRect, 0.00, 1.00, 0.15, 0.85)
+    whitescreenRect = RatioRect(contentRect, 0.00, 1.00, 0.15, 0.65)
     cgSubAboveRect = RatioRect(contentRect, 0.60, 0.65, 0.0, 1.0)
     cgSubBorderRect = RatioRect(contentRect, 0.65, 0.70, 0.0, 1.0)
     cgSubBelowRect = RatioRect(contentRect, 0.70, 0.75, 0.0, 1.0)
@@ -295,6 +301,7 @@ def main():
 
         isValidDialog = False
         isValidBlackscreen = False
+        isValidWhitescreen = False
         isValidCgSub = False
 
         while True: # For short circuit breaking
@@ -338,6 +345,22 @@ def main():
             if isValidBlackscreen and args.shortcircuit:
                 break
 
+            # Whitescreen detection
+
+            roiWhitescreen = whitescreenRect.cutRoi(frame)
+            roiWhitescreenGray = cv.cvtColor(roiWhitescreen, cv.COLOR_BGR2GRAY)
+            _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 160, 255, cv.THRESH_BINARY)
+            _, roiWhitescreenTextBin = cv.threshold(roiWhitescreenGray, 160, 255, cv.THRESH_BINARY_INV)
+            meanWhitescreenBgBin: float = cv.mean(roiWhitescreenBgBin)[0]
+            meanWhitescreenTextBin: float = cv.mean(roiWhitescreenTextBin)[0]
+            hasWhitescreenBg: bool = meanWhitescreenBgBin > 230
+            hasWhitescreenText: bool = meanWhitescreenTextBin > 0.5 and meanWhitescreenTextBin < 16
+
+            isValidWhitescreen = hasWhitescreenBg and hasWhitescreenText
+
+            if isValidWhitescreen and args.shortcircuit:
+                break
+
             # CGSub detection
 
             roiCgSubAbove = cgSubAboveRect.cutRoi(frame)
@@ -370,7 +393,7 @@ def main():
 
         # Frame point building
 
-        framePoint = FramePoint(frameIndex, timestamp, [isValidDialog, isValidBlackscreen, isValidCgSub])
+        framePoint = FramePoint(frameIndex, timestamp, [isValidDialog, isValidBlackscreen, isValidWhitescreen, isValidCgSub])
         fpir.framePoints.append(framePoint)
 
         # Outputs
@@ -405,7 +428,7 @@ def main():
             cv.imshow("show", frameOut)
             if cv.waitKey(1) == ord('q'):
                 break
-            print("debug frame", frameIndex, formatTimestamp(timestamp), maxCgSubBorderRowReduce)
+            print("debug frame", frameIndex, formatTimestamp(timestamp), meanWhitescreenBgBin, meanWhitescreenTextBin)
             debugMp4.write(frameOut)
     srcMp4.release()
     if args.debug:
@@ -418,6 +441,9 @@ def main():
     print("fpirPassRemoveNoiseBlackscreen")
     fpirPassRemoveNoiseBlackscreen = FPIRPassRemoveNoise(SubtitleType.BLACKSCREEN)
     fpir.accept(fpirPassRemoveNoiseBlackscreen)
+    print("fpirPassRemoveNoiseWhitescreen")
+    fpirPassRemoveNoiseWhitescreen = FPIRPassRemoveNoise(SubtitleType.WHITESCREEN)
+    fpir.accept(fpirPassRemoveNoiseWhitescreen)
     print("fpirPassRemoveNoiseCgSub")
     fpirPassRemoveNoiseCgSub = FPIRPassRemoveNoise(SubtitleType.CGSUB)
     fpir.accept(fpirPassRemoveNoiseCgSub)
@@ -432,6 +458,9 @@ def main():
     print("iirPassFillFlashBlankBlackscreen")
     iirPassFillFlashBlankBlackscreen = IIRPassFillFlashBlank(SubtitleType.BLACKSCREEN, 1200)
     iir.accept(iirPassFillFlashBlankBlackscreen)
+    print("iirPassFillFlashBlankWhitescreen")
+    iirPassFillFlashBlankWhitescreen = IIRPassFillFlashBlank(SubtitleType.WHITESCREEN, 1200)
+    iir.accept(iirPassFillFlashBlankWhitescreen)
     print("iirPassFillFlashBlankCgSub")
     iirPassFillFlashBlankCgSub = IIRPassFillFlashBlank(SubtitleType.CGSUB, 1200)
     iir.accept(iirPassFillFlashBlankCgSub)
