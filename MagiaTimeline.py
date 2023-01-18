@@ -255,7 +255,7 @@ def main():
     parser.add_argument("--leftblackbar", type=float, default=0.0, help="width ratio of black bar on the left of canvas, right is assumed symmetric")
     parser.add_argument("--dst", type=str, default="MagiaTimelineOutput.ass", help="destination ass subtitle file")
     parser.add_argument("--debug", default=False, action="store_true", help="for debugging only, show frames with debug info and save to debug.mp4")
-    parser.add_argument("--shortcircuit", default=False, action="store_true", help="skip detecting other types of subtitles when one is already identified for performance, available only when debug mode is off")
+    parser.add_argument("--shortcircuit", default=False, action="store_true", help="accelerates the program by skipping detecting other types of subtitles once one type has been confirmed, not compatible with debug mode")
     args = parser.parse_args()
     if True: # data validity test
         srcMp4Test = open(args.src, "rb")

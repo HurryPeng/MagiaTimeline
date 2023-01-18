@@ -29,22 +29,28 @@ Should also work on other versions, but not tested.
 python MagiaTimeline.py --help
 ```
 
-**Basics.** In most common cases:
+**Source and Destination.** Specify source video file after `--src` and destination subtitle file after `--dst`. If you do not specify them, they will be `src.mp4` and `MagiaTimelineOutput.ass` by default. 
 
 ```
-python MagiaTimeline.py --src ./src.mp4 --dst MagiaTimelineOutput.ass
+python MagiaTimeline.py --src src.mp4 --dst MagiaTimelineOutput.ass
 ```
 
 **Black Bar Cutting.** If your video has black bars around the canvas, you should specify its ratio to the whole frame. It is enough to specify top and bottom because the black bars are assumed symmetric.  
 
 ```
-python MagiaTimeline.py --src ./src.mp4 --dst MagiaTimelineOutput.ass --topblackbar 0.09 --leftblackbar 0.0
+python MagiaTimeline.py --topblackbar 0.09 --leftblackbar 0.0
 ```
 
 **Debug Mode.** You can run in debug mode to preview the cutting of black bars and intermediate identification results. It is recommended to do such a quick check before processing the whole video. However, debug mode slows down the program significantly, so you should turn it off after the quick check. 
 
 ```
-python MagiaTimeline.py --src ./src.mp4 --dst MagiaTimelineOutput.ass --topblackbar 0.09 --leftblackbar 0.0 --debug
+python MagiaTimeline.py --debug
+```
+
+**Short Circuit Mode.** Short circuit mode accelerates the program by skipping detecting other types of subtitles once one type has been confirmed. This should have no side-effect in theory because different kinds of subtitle should not appear at the same time, and may become a default option in the future. This mode is not compatible with debug mode which aims to print all intermediate information. 
+
+```
+python MagiaTimeline.py --shortcircuit
 ```
 
 **Without Command Line**. If you have totally no idea how to use a command line to run anything above, you can still run this program from GUI. Before running, you should check that:
@@ -58,9 +64,13 @@ python MagiaTimeline.py --src ./src.mp4 --dst MagiaTimelineOutput.ass --topblack
 MagiaTimeline adopts a compiler-like architecture. The source video is analyzed and transformed into intermediate representations (IR). Optimization passes are then applied on IRs for better timeline generation. 
 
 - Frame-wise computer vision analysis
-    - Generates tags for each frame according to its content
+    - Detect subtitles in each frame and tag them
+        - Dialog
+        - Blackscreen
+        - Whitescreen
+        - CG Sub
 - Frame Point Intermediate Representation (FPIR)
-    - Each frame is represented by a Frame Point (FP) with  attributes
+    - Each frame is represented by a Frame Point (FP) with attributes
         - Frame index
         - Timestamp
         - Tags
@@ -72,8 +82,8 @@ MagiaTimeline adopts a compiler-like architecture. The source video is analyzed 
         - Time range
         - Tags
     - Passes
-        - Flashing blank filling
-        - ASS format generation
+        - Gap filling
+        - ASS formatting
 
 ## Acknowledgements
 
