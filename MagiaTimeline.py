@@ -213,10 +213,10 @@ class IIRPass(abc.ABC):
         # returns anything
         pass
 
-class IIRPassFillFlashBlank(IIRPass):
-    def __init__(self, type: SubtitleType, maxBlank: int = 300):
+class IIRPassFillGap(IIRPass):
+    def __init__(self, type: SubtitleType, maxGap: int = 300):
         self.type: SubtitleType = type
-        self.maxBlank: int = maxBlank # in millisecs
+        self.maxGap: int = maxGap # in millisecs
     
     def apply(self, iir: IIR):
         for id, interval in enumerate(iir.intervals):
@@ -228,7 +228,7 @@ class IIRPassFillFlashBlank(IIRPass):
                 if otherInterval.type != self.type:
                     otherId += 1
                     continue
-                if interval.dist(otherInterval) > self.maxBlank:
+                if interval.dist(otherInterval) > self.maxGap:
                     break
                 if interval.dist(otherInterval) <= 0:
                     otherId += 1
@@ -452,18 +452,18 @@ def main():
     iir = IIR(fpir)
 
     print("==== IIR Passes ====")
-    print("iirPassFillFlashBlankDialog")
-    iirPassFillFlashBlankDialog = IIRPassFillFlashBlank(SubtitleType.DIALOG, 300)
-    iir.accept(iirPassFillFlashBlankDialog)
-    print("iirPassFillFlashBlankBlackscreen")
-    iirPassFillFlashBlankBlackscreen = IIRPassFillFlashBlank(SubtitleType.BLACKSCREEN, 1200)
-    iir.accept(iirPassFillFlashBlankBlackscreen)
-    print("iirPassFillFlashBlankWhitescreen")
-    iirPassFillFlashBlankWhitescreen = IIRPassFillFlashBlank(SubtitleType.WHITESCREEN, 1200)
-    iir.accept(iirPassFillFlashBlankWhitescreen)
-    print("iirPassFillFlashBlankCgSub")
-    iirPassFillFlashBlankCgSub = IIRPassFillFlashBlank(SubtitleType.CGSUB, 1200)
-    iir.accept(iirPassFillFlashBlankCgSub)
+    print("iirPassFillGapDialog")
+    iirPassFillGapDialog = IIRPassFillGap(SubtitleType.DIALOG, 300)
+    iir.accept(iirPassFillGapDialog)
+    print("iirPassFillGapBlackscreen")
+    iirPassFillGapBlackscreen = IIRPassFillGap(SubtitleType.BLACKSCREEN, 1200)
+    iir.accept(iirPassFillGapBlackscreen)
+    print("iirPassFillGapWhitescreen")
+    iirPassFillGapWhitescreen = IIRPassFillGap(SubtitleType.WHITESCREEN, 1200)
+    iir.accept(iirPassFillGapWhitescreen)
+    print("iirPassFillGapCgSub")
+    iirPassFillGapCgSub = IIRPassFillGap(SubtitleType.CGSUB, 1200)
+    iir.accept(iirPassFillGapCgSub)
 
     print("==== IIR to ASS ====")
     dstAss.write(iir.toAss())
