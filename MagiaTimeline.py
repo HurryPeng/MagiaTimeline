@@ -368,9 +368,10 @@ def main():
             meanCgSubAboveGray = cv.mean(roiCgSubAboveGray)[0]
             roiCgSubBelow = cgSubBelowRect.cutRoi(frame)
             roiCgSubBelowGray = cv.cvtColor(roiCgSubBelow, cv.COLOR_BGR2GRAY)
-            meanCgSubBelowGray: float = cv.mean(roiCgSubBelowGray)[0]
-            cgSubBrightnessDecrVal: float = meanCgSubAboveGray - meanCgSubBelowGray
-            cgSubBrightnessDecrRate: float = 1 - meanCgSubBelowGray / max(meanCgSubAboveGray, 1.0)
+            _, roiCgSubBelowGrayNoText = cv.threshold(roiCgSubBelowGray, 160, 255, cv.THRESH_TOZERO_INV)
+            meanCgSubBelowGrayNoText: float = cv.mean(roiCgSubBelowGrayNoText)[0]
+            cgSubBrightnessDecrVal: float = meanCgSubAboveGray - meanCgSubBelowGrayNoText
+            cgSubBrightnessDecrRate: float = 1 - meanCgSubBelowGrayNoText / max(meanCgSubAboveGray, 1.0)
             hasCgSubContrast: bool = cgSubBrightnessDecrVal > 15.0 and cgSubBrightnessDecrRate > 0.30
 
             roiCgSubBorder = cgSubBorderRect.cutRoi(frame)
@@ -428,7 +429,7 @@ def main():
             cv.imshow("show", frameOut)
             if cv.waitKey(1) == ord('q'):
                 break
-            print("debug frame", frameIndex, formatTimestamp(timestamp), meanWhitescreenBgBin, meanWhitescreenTextBin)
+            print("debug frame", frameIndex, formatTimestamp(timestamp), meanDialogTextBin)
             debugMp4.write(frameOut)
     srcMp4.release()
     if args.debug:
