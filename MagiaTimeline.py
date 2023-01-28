@@ -316,7 +316,7 @@ def main():
             meanDialogTextBin: float = cv.mean(roiDialogBgTextBin)[0]
             meanDialogBgBin: float = cv.mean(roiDialogBgBin)[0]
             hasDialogBg: bool = meanDialogBgBin > 160
-            hasDialogText: bool = meanDialogTextBin < 254 and meanDialogTextBin > 200
+            hasDialogText: bool = meanDialogTextBin < 254 and meanDialogTextBin > 192
 
             roiDialogOutline = dialogOutlineRect.cutRoi(frame)
             roiDialogOutlineHSV = cv.cvtColor(roiDialogOutline, cv.COLOR_BGR2HSV)
