@@ -10,15 +10,15 @@ import enum
 class AbstractRect(abc.ABC):
     def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
         # returns: fullHeight, fullWidth, topOffset, leftOffset, verticalCompressRate, horizontalCompressRate
-        pass
+        return 0, 0, 0.0, 0.0, 0.0, 0.0
 
     def cutRoi(self, frame: cv.Mat) -> cv.Mat:
-        pass
+        return cv.Mat((1, 1))
 
     def getSize(self) -> typing.Tuple[int, int]:
         # returns: width, height
         # notice this order!
-        pass
+        return 0, 0
 
     def getWidth(self) -> int:
         return self.getSize()[0]
@@ -76,6 +76,7 @@ class SubtitleType(enum.IntEnum):
     WHITESCREEN = 2
     CGSUB = 3
 
+    @staticmethod
     def num() -> int:
         return len(SubtitleType.__members__)
 
@@ -97,7 +98,7 @@ class FPIR: # Frame Point Intermediate Representation
     def __init__(self):
         self.framePoints: typing.List[FramePoint] = []
 
-    def accept(self, pazz: FPIRPass):
+    def accept(self, pazz: FPIRPass) -> typing.Any:
         # returns anything
         return pazz.apply(self)
 
@@ -209,9 +210,9 @@ class IIR: # Interval Intermediate Representation
         return ass
 
 class IIRPass(abc.ABC):
-    def apply(self, iir: IIR):
+    def apply(self, iir: IIR) -> typing.Any:
         # returns anything
-        pass
+        return 0
 
 class IIRPassFillGap(IIRPass):
     def __init__(self, type: SubtitleType, maxGap: int = 300):
@@ -271,6 +272,7 @@ def main():
     fps: float = srcMp4.get(cv.CAP_PROP_FPS)
     size: typing.Tuple[int, int] = contentRect.getSize()
 
+    debugMp4: typing.Any = None
     if args.debug:
         debugMp4 = cv.VideoWriter('debug.mp4', cv.VideoWriter_fourcc('m','p','4','v'), fps, size)
     templateAss = open(args.ass, "r")
@@ -294,15 +296,25 @@ def main():
         # Frame reading
 
         frameIndex: int = int(srcMp4.get(cv.CAP_PROP_POS_FRAMES))
-        timestamp: float = srcMp4.get(cv.CAP_PROP_POS_MSEC)
+        timestamp: int = int(srcMp4.get(cv.CAP_PROP_POS_MSEC))
         validFrame, frame = srcMp4.read()
         if not validFrame:
             break
 
-        isValidDialog = False
-        isValidBlackscreen = False
-        isValidWhitescreen = False
-        isValidCgSub = False
+        isValidDialog: bool = False
+        hasDialogBg: bool = False
+        hasDialogText: bool = False
+        hasDialogOutline: bool = False
+        isValidBlackscreen: bool = False
+        hasBlackscreenBg: bool = False
+        hasBlackscreenText: bool = False
+        isValidWhitescreen: bool = False
+        hasWhitescreenBg: bool = False
+        hasWhitescreenText: bool = False
+        isValidCgSub: bool = False
+        hasCgSubContrast: bool = False
+        hasCgSubBorder: bool = False
+        hasCgSubText: bool = False
 
         while True: # For short circuit breaking
 
@@ -386,7 +398,7 @@ def main():
             roiCgSubTextGray = cv.cvtColor(roiCgSubText, cv.COLOR_BGR2GRAY)
             _, roiCgSubTextBin = cv.threshold(roiCgSubTextGray, 160, 255, cv.THRESH_BINARY)
             meanCgSubTextBin: float = cv.mean(roiCgSubTextBin)[0]
-            hasCgSubText = meanCgSubTextBin > 0.5 and meanCgSubTextBin < 30
+            hasCgSubText: bool = meanCgSubTextBin > 0.5 and meanCgSubTextBin < 30
 
             isValidCgSub = hasCgSubContrast and hasCgSubBorder and hasCgSubText
 
