@@ -271,8 +271,10 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--src", type=str, default="src.mp4", help="source video file")
     parser.add_argument("--ass", type=str, default="template.ass", help="source ass template file")
-    parser.add_argument("--leftblackbar", type=float, default=0.0, help="width ratio of black bar on the left of canvas, right is assumed symmetric")
-    parser.add_argument("--topblackbar", type=float, default=0.0, help="height ratio of black bar on the top of canvas, bottom is assumed symmetric")
+    parser.add_argument("--leftblackbar", type=float, default=0.0, help="width ratio of black bar on the left of canvas, right is assumed symmetric if it is not set")
+    parser.add_argument("--rightblackbar", type=float, default=None, help="width ratio of black bar on the right of canvas, assumed symmetric with left if not set")
+    parser.add_argument("--topblackbar", type=float, default=0.0, help="height ratio of black bar on the top of canvas, bottom is assumed symmetric if it is not set")
+    parser.add_argument("--bottomblackbar", type=float, default=None, help="height ratio of black bar on the bottom of canvas, assumed symmetric with top if not set")
     parser.add_argument("--dst", type=str, default="MagiaTimelineOutput.ass", help="destination ass subtitle file")
     parser.add_argument("--debug", default=False, action="store_true", help="for debugging only, show frames with debug info and save to debug.mp4")
     parser.add_argument("--shortcircuit", default=False, action="store_true", help="accelerates the program by skipping detecting other types of subtitles once one type has been confirmed, not compatible with debug mode")
@@ -280,8 +282,18 @@ def main():
     if True: # data validity test
         srcMp4Test = open(args.src, "rb")
         srcMp4Test.close()
-        if not (args.topblackbar >= 0.0 and args.topblackbar <= 1.0 and args.leftblackbar >= 0.0 and args.leftblackbar <= 1.0):
-            raise Exception("Invalid black bar ratio! ")
+        if not (args.leftblackbar >= 0.0 and args.leftblackbar <= 1.0):
+            raise Exception("Invalid left black bar ratio! ")
+        if not (args.topblackbar >= 0.0 and args.topblackbar <= 1.0):
+            raise Exception("Invalid top black bar ratio! ")
+        if args.rightblackbar is None:
+            args.rightblackbar = args.leftblackbar
+        if args.bottomblackbar is None:
+            args.bottomblackbar = args.topblackbar
+        if not (args.rightblackbar >= 0.0 and args.rightblackbar <= 1.0):
+            raise Exception("Invalid right black bar ratio! ")
+        if not (args.bottomblackbar >= 0.0 and args.bottomblackbar <= 1.0):
+            raise Exception("Invalid bottom black bar ratio! ")
         if args.debug and args.shortcircuit:
             raise Exception("Debug mode is not compatible with short circuit mode! ")
     
@@ -298,7 +310,7 @@ def main():
     dstAss.writelines(templateAss.readlines())
     templateAss.close()
 
-    contentRect = RatioRect(srcRect, args.leftblackbar, 1.0 - args.leftblackbar, args.topblackbar, 1.0 - args.topblackbar)
+    contentRect = RatioRect(srcRect, args.leftblackbar, 1 - args.rightblackbar, args.topblackbar, 1 - args.bottomblackbar)
     dialogOutlineRect = RatioRect(contentRect, 0.25, 0.75, 0.60, 0.95)
     dialogBgRect = RatioRect(contentRect, 0.3125, 0.6797, 0.7264, 0.8784)
     blackscreenRect = RatioRect(contentRect, 0.15, 0.85, 0.00, 1.00)
