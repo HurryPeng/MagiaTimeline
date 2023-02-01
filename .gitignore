@@ -1,4 +1,6 @@
 .vscode
 *.mp4
 *.txt
+*.ass
+!template.ass
 *Output*.*

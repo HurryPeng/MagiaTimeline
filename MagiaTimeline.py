@@ -8,67 +8,86 @@ import argparse
 import enum
 
 class AbstractRect(abc.ABC):
-    def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
-        # returns: fullHeight, fullWidth, topOffset, leftOffset, verticalCompressRate, horizontalCompressRate
-        return 0, 0, 0.0, 0.0, 0.0, 0.0
-
-    def cutRoi(self, frame: cv.Mat) -> cv.Mat:
-        return cv.Mat((1, 1))
-
-    def getSize(self) -> typing.Tuple[int, int]:
+    def getSizeFloat(self) -> typing.Tuple[float, float]:
         # returns: width, height
-        # notice this order!
-        return 0, 0
+        return 0.0, 0.0
 
-    def getWidth(self) -> int:
-        return self.getSize()[0]
+    def getOffsetsFloat(self) -> typing.Tuple[float, float]:
+        # returns: leftOffset, topOffset
+        return 0.0, 0.0
 
-    def getHeight(self) -> int:
-        return self.getSize()[1]
+    # concrete method
+    def getSizeInt(self) -> typing.Tuple[int, int]:
+        # returns: width, height
+        return tuple([int(x) for x in self.getSizeFloat()])
+    
+    # concrete method
+    def getOffsetsInt(self) -> typing.Tuple[int, int]:
+        # returns: leftOffset, topOffset
+        return tuple([int(x) for x in self.getOffsetsFloat()])
+
+    # concrete method
+    def getBottomRightOffsetsFloat(self) -> typing.Tuple[float, float]:
+        # returns: rightOffset, bottomOffset
+        return tuple([i + j for i, j in zip(self.getOffsetsFloat(), self.getSizeFloat())])
+
+    # concrete method
+    def getBottomRightOffsetsInt(self) -> typing.Tuple[int, int]:
+        # returns: rightOffset, bottomOffset
+        return tuple([int(x) for x in self.getBottomRightOffsetsFloat()])
+
+    # concrete method
+    def getWidthInt(self) -> int:
+        return self.getSizeInt()[0]
+
+    # concrete method
+    def getHeightInt(self) -> int:
+        return self.getSizeInt()[1]
+
+    # concrete method
+    def cutRoi(self, frame: cv.Mat) -> cv.Mat:
+        leftOffset, topOffset = self.getOffsetsInt()
+        rightOffset, bottomOffset = self.getBottomRightOffsetsInt()
+        return frame[topOffset:bottomOffset, leftOffset:rightOffset]
+
+    # concrete method
+    def draw(self, frame: cv.Mat) -> cv.Mat:
+        return cv.rectangle(frame, self.getOffsetsInt(), self.getBottomRightOffsetsInt(), (0, 0, 255), 1)
 
 class RatioRect(AbstractRect):
-    def __init__(self, parent: AbstractRect, topRatio: float, bottomRatio: float, leftRatio: float, rightRatio: float) -> None:
+    def __init__(self, parent: AbstractRect, leftRatio: float, rightRatio: float, topRatio: float, bottomRatio: float) -> None:
         self.parent: AbstractRect = parent
-        self.topRatio: float = topRatio
-        self.bottomRatio: float = bottomRatio
         self.leftRatio: float = leftRatio
         self.rightRatio: float = rightRatio
+        self.topRatio: float = topRatio
+        self.bottomRatio: float = bottomRatio
 
-        # Precalculate offsets
-        fullHeight, fullWidth, topOffset, leftOffset, verticalCompressRate, horizontalCompressRate = self.parent.getNest()
-        self.fullHeight: int = fullHeight
-        self.fullWidth: int = fullWidth
-        self.topOffset: float = topOffset + self.fullHeight * verticalCompressRate * self.topRatio
-        self.bottomOffset: float = topOffset + self.fullHeight * verticalCompressRate * self.bottomRatio
-        self.leftOffset: float = leftOffset + self.fullWidth * horizontalCompressRate * self.leftRatio
-        self.rightOffset: float = leftOffset + self.fullWidth * horizontalCompressRate * self.rightRatio
-        self.verticalCompressRate: float = verticalCompressRate * (self.bottomRatio - self.topRatio)
-        self.horizontalCompressRate: float = horizontalCompressRate * (self.rightRatio - self.leftRatio)
-        self.localHeight: int = int(self.fullHeight * self.verticalCompressRate)
-        self.localWidth: int = int(self.fullWidth * self.horizontalCompressRate)
+        parentLeftOffset, parentTopOffset = self.parent.getOffsetsFloat()
+        parentWidth, parentHeight = self.parent.getSizeFloat()
 
-    def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
-        return self.fullHeight, self.fullWidth, self.topOffset, self.leftOffset, self.verticalCompressRate, self.horizontalCompressRate
+        self.leftOffset: float = parentLeftOffset + parentWidth * self.leftRatio
+        self.rightOffset: float = parentLeftOffset + parentWidth * self.rightRatio
+        self.topOffset: float = parentTopOffset + parentHeight * self.topRatio
+        self.bottomOffset: float = parentTopOffset + parentHeight * self.bottomRatio
+        self.width: float = self.rightOffset - self.leftOffset
+        self.height: float = self.bottomOffset - self.topOffset
 
-    def cutRoi(self, frame: cv.Mat) -> cv.Mat:
-        return frame[int(self.topOffset):int(self.bottomOffset), int(self.leftOffset):int(self.rightOffset)]
+    def getSizeFloat(self) -> typing.Tuple[float, float]:
+        return self.width, self.height
 
-    def getSize(self) -> typing.Tuple[int, int]:
-        return self.localWidth, self.localHeight # notice this order!
+    def getOffsetsFloat(self) -> typing.Tuple[float, float]:
+        return self.leftOffset, self.topOffset
 
 class SrcRect(AbstractRect):
     def __init__(self, src: cv.VideoCapture):
-        self.height: int = int(src.get(cv.CAP_PROP_FRAME_HEIGHT))
-        self.width: int = int(src.get(cv.CAP_PROP_FRAME_WIDTH))
+        self.width: float = float(src.get(cv.CAP_PROP_FRAME_WIDTH))
+        self.height: float = float(src.get(cv.CAP_PROP_FRAME_HEIGHT))
 
-    def getNest(self) -> typing.Tuple[int, int, float, float, float, float]:
-        return self.height, self.width, 0.0, 0.0, 1.0, 1.0
+    def getSizeFloat(self) -> typing.Tuple[float, float]:
+        return self.width, self.height
 
-    def cutRoi(self, frame: cv.Mat) -> cv.Mat:
-        return frame
-
-    def getSize(self) -> typing.Tuple[int, int]:
-        return self.width, self.height # notice this order!
+    def getOffsetsFloat(self) -> typing.Tuple[float, float]:
+        return 0.0, 0.0
 
 class SubtitleType(enum.IntEnum):
     DIALOG = 0
@@ -249,8 +268,8 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--src", type=str, default="src.mp4", help="source video file")
     parser.add_argument("--ass", type=str, default="template.ass", help="source ass template file")
-    parser.add_argument("--topblackbar", type=float, default=0.0, help="height ratio of black bar on the top of canvas, bottom is assumed symmetric")
     parser.add_argument("--leftblackbar", type=float, default=0.0, help="width ratio of black bar on the left of canvas, right is assumed symmetric")
+    parser.add_argument("--topblackbar", type=float, default=0.0, help="height ratio of black bar on the top of canvas, bottom is assumed symmetric")
     parser.add_argument("--dst", type=str, default="MagiaTimelineOutput.ass", help="destination ass subtitle file")
     parser.add_argument("--debug", default=False, action="store_true", help="for debugging only, show frames with debug info and save to debug.mp4")
     parser.add_argument("--shortcircuit", default=False, action="store_true", help="accelerates the program by skipping detecting other types of subtitles once one type has been confirmed, not compatible with debug mode")
@@ -265,9 +284,8 @@ def main():
     
     srcMp4 = cv.VideoCapture(args.src)
     srcRect = SrcRect(srcMp4)
-    contentRect = RatioRect(srcRect, args.topblackbar, 1.0 - args.topblackbar, args.leftblackbar, 1.0 - args.leftblackbar)
     fps: float = srcMp4.get(cv.CAP_PROP_FPS)
-    size: typing.Tuple[int, int] = contentRect.getSize()
+    size: typing.Tuple[int, int] = srcRect.getSizeInt()
 
     debugMp4: typing.Any = None
     if args.debug:
@@ -277,7 +295,10 @@ def main():
     dstAss.writelines(templateAss.readlines())
     templateAss.close()
 
-    dialogRect = RatioRect(contentRect, 0.68, 0.83, 0.18, 0.82)
+    contentRect = RatioRect(srcRect, args.topblackbar, 1.0 - args.topblackbar, args.leftblackbar, 1.0 - args.leftblackbar)
+    dialogRect = RatioRect(contentRect, 0.18, 0.82, 0.68, 0.83)
+
+    rectsToDraw = [contentRect, dialogRect]
 
     print("==== FPIR Building ====")
     fpir = FPIR()
@@ -327,7 +348,9 @@ def main():
             print(framePoint.toString())
 
         if args.debug:
-            frameOut = contentRect.cutRoi(frame)
+            frameOut = frame
+            for rect in rectsToDraw:
+                frameOut = rect.draw(frameOut)
             if isValidDialog:
                 frameOut = cv.putText(frameOut, "VALID DIALOG", (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
             if hasDialogBgColour:
