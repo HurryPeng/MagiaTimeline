@@ -295,8 +295,8 @@ def main():
     dstAss.writelines(templateAss.readlines())
     templateAss.close()
 
-    contentRect = RatioRect(srcRect, args.topblackbar, 1.0 - args.topblackbar, args.leftblackbar, 1.0 - args.leftblackbar)
-    dialogRect = RatioRect(contentRect, 0.18, 0.82, 0.68, 0.83)
+    contentRect = RatioRect(srcRect, args.leftblackbar, 1.0 - args.leftblackbar, args.topblackbar, 1.0 - args.topblackbar)
+    dialogRect = RatioRect(contentRect, 0.18, 0.82, 0.75, 0.95)
 
     rectsToDraw = [contentRect, dialogRect]
 
