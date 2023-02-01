@@ -50,6 +50,10 @@ class AbstractRect(abc.ABC):
         rightOffset, bottomOffset = self.getBottomRightOffsetsInt()
         return frame[topOffset:bottomOffset, leftOffset:rightOffset]
 
+    # concrete method
+    def draw(self, frame: cv.Mat) -> cv.Mat:
+        return cv.rectangle(frame, self.getOffsetsInt(), self.getBottomRightOffsetsInt(), (0, 0, 255), 1)
+
 class RatioRect(AbstractRect):
     def __init__(self, parent: AbstractRect, leftRatio: float, rightRatio: float, topRatio: float, bottomRatio: float) -> None:
         self.parent: AbstractRect = parent
@@ -283,9 +287,8 @@ def main():
     
     srcMp4 = cv.VideoCapture(args.src)
     srcRect = SrcRect(srcMp4)
-    contentRect = RatioRect(srcRect, args.leftblackbar, 1.0 - args.leftblackbar, args.topblackbar, 1.0 - args.topblackbar)
     fps: float = srcMp4.get(cv.CAP_PROP_FPS)
-    size: typing.Tuple[int, int] = contentRect.getSizeInt()
+    size: typing.Tuple[int, int] = srcRect.getSizeInt()
 
     debugMp4: typing.Any = None
     if args.debug:
@@ -295,6 +298,7 @@ def main():
     dstAss.writelines(templateAss.readlines())
     templateAss.close()
 
+    contentRect = RatioRect(srcRect, args.leftblackbar, 1.0 - args.leftblackbar, args.topblackbar, 1.0 - args.topblackbar)
     dialogOutlineRect = RatioRect(contentRect, 0.25, 0.75, 0.60, 0.95)
     dialogBgRect = RatioRect(contentRect, 0.3125, 0.6797, 0.7264, 0.8784)
     blackscreenRect = RatioRect(contentRect, 0.15, 0.85, 0.00, 1.00)
@@ -303,6 +307,8 @@ def main():
     cgSubBorderRect = RatioRect(contentRect, 0.0, 1.0, 0.65, 0.70)
     cgSubBelowRect = RatioRect(contentRect, 0.0, 1.0, 0.70, 0.75)
     cgSubTextRect = RatioRect(contentRect, 0.3, 0.7, 0.70, 1.00)
+
+    rectsToDraw = [contentRect, dialogOutlineRect, dialogBgRect, cgSubBorderRect]
 
     print("==== FPIR Building ====")
     fpir = FPIR()
@@ -430,7 +436,9 @@ def main():
             print(framePoint.toString())
 
         if args.debug:
-            frameOut = contentRect.cutRoi(frame)
+            frameOut = frame
+            for rect in rectsToDraw:
+                frameOut = rect.draw(frameOut)
             if isValidDialog:
                 frameOut = cv.putText(frameOut, "VALID DIALOG", (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
             if hasDialogBg:
