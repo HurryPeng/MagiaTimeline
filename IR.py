@@ -47,6 +47,7 @@ class FPIR: # Frame Point Intermediate Representation
         return self.framePoints + [self.genVirtualEnd()]
 
 class FPIRPass(abc.ABC):
+    @abc.abstractmethod
     def apply(self, fpir: FPIR):
         # returns anything
         pass
@@ -145,9 +146,10 @@ class IIR: # Interval Intermediate Representation
         return ass
 
 class IIRPass(abc.ABC):
+    @abc.abstractmethod
     def apply(self, iir: IIR) -> typing.Any:
         # returns anything
-        return 0
+        pass
 
 class IIRPassFillGap(IIRPass):
     def __init__(self, type: SubtitleType, maxGap: int = 300):
