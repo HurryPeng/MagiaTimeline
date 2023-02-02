@@ -1,4 +1,5 @@
 .vscode
+__pycache__
 *.mp4
 *.txt
 *.ass
