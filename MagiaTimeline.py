@@ -6,6 +6,7 @@ import argparse
 from Rectangle import *
 from IR import *
 from Util import *
+from Strategies.MagirecoStrategy import *
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -38,7 +39,7 @@ def main():
             raise Exception("Debug mode is not compatible with short circuit mode! ")
     
     srcMp4 = cv.VideoCapture(args.src)
-    srcRect = SrcRect(srcMp4)
+    srcRect = SrcRectangle(srcMp4)
     fps: float = srcMp4.get(cv.CAP_PROP_FPS)
     size: typing.Tuple[int, int] = srcRect.getSizeInt()
 
@@ -50,20 +51,13 @@ def main():
     dstAss.writelines(templateAss.readlines())
     templateAss.close()
 
-    contentRect = RatioRect(srcRect, args.leftblackbar, 1 - args.rightblackbar, args.topblackbar, 1 - args.bottomblackbar)
-    dialogOutlineRect = RatioRect(contentRect, 0.25, 0.75, 0.60, 0.95)
-    dialogBgRect = RatioRect(contentRect, 0.3125, 0.6797, 0.7264, 0.8784)
-    blackscreenRect = RatioRect(contentRect, 0.15, 0.85, 0.00, 1.00)
-    whitescreenRect = RatioRect(contentRect, 0.15, 0.65, 0.00, 1.00)
-    cgSubAboveRect = RatioRect(contentRect, 0.0, 1.0, 0.60, 0.65)
-    cgSubBorderRect = RatioRect(contentRect, 0.0, 1.0, 0.65, 0.70)
-    cgSubBelowRect = RatioRect(contentRect, 0.0, 1.0, 0.70, 0.75)
-    cgSubTextRect = RatioRect(contentRect, 0.3, 0.7, 0.70, 1.00)
+    contentRect = RatioRectangle(srcRect, args.leftblackbar, 1 - args.rightblackbar, args.topblackbar, 1 - args.bottomblackbar)
 
-    rectsToDraw = [contentRect, dialogOutlineRect, dialogBgRect, cgSubBorderRect]
+    strategy = MagirecoStrategy(None, contentRect)
+    flagIndexType = strategy.getFlagIndexType()
 
     print("==== FPIR Building ====")
-    fpir = FPIR()
+    fpir = FPIR(flagIndexType)
     while True: # Process each frame to build FPIR
 
         # Frame reading
@@ -74,112 +68,14 @@ def main():
         if not validFrame:
             break
 
-        isValidDialog: bool = False
-        hasDialogBg: bool = False
-        hasDialogText: bool = False
-        hasDialogOutline: bool = False
-        isValidBlackscreen: bool = False
-        hasBlackscreenBg: bool = False
-        hasBlackscreenText: bool = False
-        isValidWhitescreen: bool = False
-        hasWhitescreenBg: bool = False
-        hasWhitescreenText: bool = False
-        isValidCgSub: bool = False
-        hasCgSubContrast: bool = False
-        hasCgSubBorder: bool = False
-        hasCgSubText: bool = False
+        # CV and frame point building
 
-        while True: # For short circuit breaking
-
-            # Dialog detection
-
-            roiDialogBg = dialogBgRect.cutRoi(frame)
-            roiDialogBgGray = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2GRAY)
-            roiDialogBgHSV = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2HSV)
-            roiDialogBgBin = inRange(roiDialogBgHSV, [0, 0, 160], [255, 32, 255])
-            _, roiDialogBgTextBin = cv.threshold(roiDialogBgGray, 192, 255, cv.THRESH_BINARY)
-            meanDialogTextBin: float = cv.mean(roiDialogBgTextBin)[0]
-            meanDialogBgBin: float = cv.mean(roiDialogBgBin)[0]
-            hasDialogBg: bool = meanDialogBgBin > 160
-            hasDialogText: bool = meanDialogTextBin < 254 and meanDialogTextBin > 192
-
-            roiDialogOutline = dialogOutlineRect.cutRoi(frame)
-            roiDialogOutlineHSV = cv.cvtColor(roiDialogOutline, cv.COLOR_BGR2HSV)
-            roiDialogOutlineBin = inRange(roiDialogOutlineHSV, [10, 40, 90], [30, 130, 190])
-            meanDialogOutlineBin: float = cv.mean(roiDialogOutlineBin)[0]
-            hasDialogOutline: bool = meanDialogOutlineBin > 3
-
-            isValidDialog = hasDialogBg and hasDialogText and hasDialogOutline
-
-            if isValidDialog and args.shortcircuit:
+        framePoint = FramePoint(flagIndexType, frameIndex, timestamp)
+        for cvPass in strategy.getCvPasses():
+            flagsToSet, mayShortcircuit = cvPass(frame)
+            framePoint.setFlags(flagsToSet)
+            if mayShortcircuit and args.shortcircuit:
                 break
-
-            # Blackscreen detection
-
-            roiBlackscreen = blackscreenRect.cutRoi(frame)
-            roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
-            _, roiBlackscreenBgBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
-            _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 160, 255, cv.THRESH_BINARY)
-            meanBlackscreenBgBin: float = cv.mean(roiBlackscreenBgBin)[0]
-            meanBlackscreenTextBin: float = cv.mean(roiBlackscreenTextBin)[0]
-            hasBlackscreenBg: bool = meanBlackscreenBgBin < 20
-            hasBlackscreenText: bool = meanBlackscreenTextBin > 0.1 and meanBlackscreenTextBin < 16
-
-            isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
-
-            if isValidBlackscreen and args.shortcircuit:
-                break
-
-            # Whitescreen detection
-
-            roiWhitescreen = whitescreenRect.cutRoi(frame)
-            roiWhitescreenGray = cv.cvtColor(roiWhitescreen, cv.COLOR_BGR2GRAY)
-            _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 160, 255, cv.THRESH_BINARY)
-            _, roiWhitescreenTextBin = cv.threshold(roiWhitescreenGray, 160, 255, cv.THRESH_BINARY_INV)
-            meanWhitescreenBgBin: float = cv.mean(roiWhitescreenBgBin)[0]
-            meanWhitescreenTextBin: float = cv.mean(roiWhitescreenTextBin)[0]
-            hasWhitescreenBg: bool = meanWhitescreenBgBin > 230
-            hasWhitescreenText: bool = meanWhitescreenTextBin > 0.8 and meanWhitescreenTextBin < 16
-
-            isValidWhitescreen = hasWhitescreenBg and hasWhitescreenText
-
-            if isValidWhitescreen and args.shortcircuit:
-                break
-
-            # CGSub detection
-
-            roiCgSubAbove = cgSubAboveRect.cutRoi(frame)
-            roiCgSubAboveGray = cv.cvtColor(roiCgSubAbove, cv.COLOR_BGR2GRAY)
-            meanCgSubAboveGray = cv.mean(roiCgSubAboveGray)[0]
-            roiCgSubBelow = cgSubBelowRect.cutRoi(frame)
-            roiCgSubBelowGray = cv.cvtColor(roiCgSubBelow, cv.COLOR_BGR2GRAY)
-            _, roiCgSubBelowGrayNoText = cv.threshold(roiCgSubBelowGray, 160, 255, cv.THRESH_TOZERO_INV)
-            meanCgSubBelowGrayNoText: float = cv.mean(roiCgSubBelowGrayNoText)[0]
-            cgSubBrightnessDecrVal: float = meanCgSubAboveGray - meanCgSubBelowGrayNoText
-            cgSubBrightnessDecrRate: float = 1 - meanCgSubBelowGrayNoText / max(meanCgSubAboveGray, 1.0)
-            hasCgSubContrast: bool = cgSubBrightnessDecrVal > 15.0 and cgSubBrightnessDecrRate > 0.30
-
-            roiCgSubBorder = cgSubBorderRect.cutRoi(frame)
-            roiCgSubBorderGray = cv.cvtColor(roiCgSubBorder, cv.COLOR_BGR2GRAY)
-            roiCgSubBorderEdge = cv.convertScaleAbs(cv.Sobel(roiCgSubBorderGray, cv.CV_16S, 0, 1, ksize=3))
-            roiCgSubBorderErode = cv.morphologyEx(roiCgSubBorderEdge, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (51, 1)))
-            roiCgSubBorderRowReduce = cv.reduce(roiCgSubBorderErode, 1, cv.REDUCE_AVG, dtype=cv.CV_32F)
-            maxCgSubBorderRowReduce: float = cv.minMaxLoc(roiCgSubBorderRowReduce)[1]
-            hasCgSubBorder: bool = maxCgSubBorderRowReduce > 25.0
-
-            roiCgSubText = cgSubTextRect.cutRoi(frame)
-            roiCgSubTextGray = cv.cvtColor(roiCgSubText, cv.COLOR_BGR2GRAY)
-            _, roiCgSubTextBin = cv.threshold(roiCgSubTextGray, 160, 255, cv.THRESH_BINARY)
-            meanCgSubTextBin: float = cv.mean(roiCgSubTextBin)[0]
-            hasCgSubText: bool = meanCgSubTextBin > 0.5 and meanCgSubTextBin < 30
-
-            isValidCgSub = hasCgSubContrast and hasCgSubBorder and hasCgSubText
-
-            break
-
-        # Frame point building
-
-        framePoint = FramePoint(frameIndex, timestamp, [isValidDialog, isValidBlackscreen, isValidWhitescreen, isValidCgSub])
         fpir.framePoints.append(framePoint)
 
         # Outputs
@@ -189,34 +85,18 @@ def main():
 
         if args.debug:
             frameOut = frame
-            for rect in rectsToDraw:
+            for rect in strategy.getRectangles():
                 frameOut = rect.draw(frameOut)
-            if isValidDialog:
-                frameOut = cv.putText(frameOut, "VALID DIALOG", (50, 50), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
-            if hasDialogBg:
-                frameOut = cv.putText(frameOut, "has dialog bg", (50, 75), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-            if hasDialogOutline:
-                frameOut = cv.putText(frameOut, "has dialog outline", (50, 100), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-            if hasDialogText:
-                frameOut = cv.putText(frameOut, "has dialog text", (50, 125), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-            if isValidBlackscreen:
-                frameOut = cv.putText(frameOut, "VALID BLACKSCREEN", (50, 175), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
-            if hasBlackscreenBg:
-                frameOut = cv.putText(frameOut, "has blackscreen bg", (50, 200), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-            if hasBlackscreenText:
-                frameOut = cv.putText(frameOut, "has blackscreen text", (50, 225), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-            if isValidCgSub:
-                frameOut = cv.putText(frameOut, "VALID CGSUB", (50, 275), cv.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)
-            if hasCgSubContrast:
-                frameOut = cv.putText(frameOut, "has cgsub contrast", (50, 300), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-            if hasCgSubBorder:
-                frameOut = cv.putText(frameOut, "has cgsub border", (50, 325), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-            if hasCgSubText:
-                frameOut = cv.putText(frameOut, "has cgsub text", (50, 350), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            height = 50
+            for name, index in flagIndexType.__members__.items():
+                value = framePoint.flags[index]
+                frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 192, 0), 2)
+                height += 25
             cv.imshow("show", frameOut)
             if cv.waitKey(1) == ord('q'):
                 break
-            print("debug frame", frameIndex, formatTimestamp(timestamp), meanDialogTextBin)
+            # TODO: Pass out intermediate values
+            print("debug frame", frameIndex, formatTimestamp(timestamp))
             debugMp4.write(frameOut)
     srcMp4.release()
     if args.debug:
@@ -224,33 +104,33 @@ def main():
 
     print("==== FPIR Passes ====")
     print("fpirPassRemoveNoiseDialog")
-    fpirPassRemoveNoiseDialog = FPIRPassRemoveNoise(SubtitleType.DIALOG)
+    fpirPassRemoveNoiseDialog = FPIRPassRemoveNoise(MagirecoStrategy.FlagIndex.Dialog)
     fpir.accept(fpirPassRemoveNoiseDialog)
     print("fpirPassRemoveNoiseBlackscreen")
-    fpirPassRemoveNoiseBlackscreen = FPIRPassRemoveNoise(SubtitleType.BLACKSCREEN)
+    fpirPassRemoveNoiseBlackscreen = FPIRPassRemoveNoise(MagirecoStrategy.FlagIndex.Blackscreen)
     fpir.accept(fpirPassRemoveNoiseBlackscreen)
     print("fpirPassRemoveNoiseWhitescreen")
-    fpirPassRemoveNoiseWhitescreen = FPIRPassRemoveNoise(SubtitleType.WHITESCREEN, minNegativeLength=0)
+    fpirPassRemoveNoiseWhitescreen = FPIRPassRemoveNoise(MagirecoStrategy.FlagIndex.Whitescreen, minNegativeLength=0)
     fpir.accept(fpirPassRemoveNoiseWhitescreen)
     print("fpirPassRemoveNoiseCgSub")
-    fpirPassRemoveNoiseCgSub = FPIRPassRemoveNoise(SubtitleType.CGSUB)
+    fpirPassRemoveNoiseCgSub = FPIRPassRemoveNoise(MagirecoStrategy.FlagIndex.CgSub)
     fpir.accept(fpirPassRemoveNoiseCgSub)
 
     print("==== FPIR to IIR ====")
-    iir = IIR(fpir)
+    iir = IIR(fpir, [MagirecoStrategy.FlagIndex.Dialog, MagirecoStrategy.FlagIndex.Blackscreen, MagirecoStrategy.FlagIndex.Whitescreen, MagirecoStrategy.FlagIndex.CgSub])
 
     print("==== IIR Passes ====")
     print("iirPassFillGapDialog")
-    iirPassFillGapDialog = IIRPassFillGap(SubtitleType.DIALOG, 300)
+    iirPassFillGapDialog = IIRPassFillGap(MagirecoStrategy.FlagIndex.Dialog, 300)
     iir.accept(iirPassFillGapDialog)
     print("iirPassFillGapBlackscreen")
-    iirPassFillGapBlackscreen = IIRPassFillGap(SubtitleType.BLACKSCREEN, 1200)
+    iirPassFillGapBlackscreen = IIRPassFillGap(MagirecoStrategy.FlagIndex.Blackscreen, 1200)
     iir.accept(iirPassFillGapBlackscreen)
     print("iirPassFillGapWhitescreen")
-    iirPassFillGapWhitescreen = IIRPassFillGap(SubtitleType.WHITESCREEN, 1200)
+    iirPassFillGapWhitescreen = IIRPassFillGap(MagirecoStrategy.FlagIndex.Whitescreen, 1200)
     iir.accept(iirPassFillGapWhitescreen)
     print("iirPassFillGapCgSub")
-    iirPassFillGapCgSub = IIRPassFillGap(SubtitleType.CGSUB, 1200)
+    iirPassFillGapCgSub = IIRPassFillGap(MagirecoStrategy.FlagIndex.CgSub, 1200)
     iir.accept(iirPassFillGapCgSub)
 
     print("==== IIR to ASS ====")

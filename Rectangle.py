@@ -2,7 +2,7 @@ import abc
 import typing
 import cv2 as cv
 
-class AbstractRect(abc.ABC):
+class AbstractRectangle(abc.ABC):
     @abc.abstractmethod
     def getSizeFloat(self) -> typing.Tuple[float, float]:
         # returns: width, height
@@ -43,9 +43,9 @@ class AbstractRect(abc.ABC):
     def draw(self, frame: cv.Mat) -> cv.Mat:
         return cv.rectangle(frame, self.getOffsetsInt(), self.getBottomRightOffsetsInt(), (0, 0, 255), 1)
 
-class RatioRect(AbstractRect):
-    def __init__(self, parent: AbstractRect, leftRatio: float, rightRatio: float, topRatio: float, bottomRatio: float) -> None:
-        self.parent: AbstractRect = parent
+class RatioRectangle(AbstractRectangle):
+    def __init__(self, parent: AbstractRectangle, leftRatio: float, rightRatio: float, topRatio: float, bottomRatio: float) -> None:
+        self.parent: AbstractRectangle = parent
         self.leftRatio: float = leftRatio
         self.rightRatio: float = rightRatio
         self.topRatio: float = topRatio
@@ -67,7 +67,7 @@ class RatioRect(AbstractRect):
     def getOffsetsFloat(self) -> typing.Tuple[float, float]:
         return self.leftOffset, self.topOffset
 
-class SrcRect(AbstractRect):
+class SrcRectangle(AbstractRectangle):
     def __init__(self, src: cv.VideoCapture):
         self.width: float = float(src.get(cv.CAP_PROP_FRAME_WIDTH))
         self.height: float = float(src.get(cv.CAP_PROP_FRAME_HEIGHT))

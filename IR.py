@@ -1,27 +1,23 @@
 from __future__ import annotations
 import abc
 import typing
-import enum
 
 from Util import *
-
-class SubtitleType(enum.IntEnum):
-    DIALOG = 0
-    BLACKSCREEN = 1
-    WHITESCREEN = 2
-    CGSUB = 3
-
-    @staticmethod
-    def num() -> int:
-        return len(SubtitleType.__members__)
+from AbstractFlagIndex import *
 
 class FramePoint:
-    def __init__(self, index: int, timestamp: int, flags: typing.List[bool]):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], index: int, timestamp: int):
+        self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.index: int = index
         self.timestamp: int = timestamp
-        if len(flags) != SubtitleType.num():
-            raise Exception("len(flags) != SubtitleTypes.num()")
-        self.flags: typing.List[bool] = flags
+        self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
+
+    def setFlag(self, index: AbstractFlagIndex, val: typing.Any):
+        self.flags[index] = val
+
+    def setFlags(self, map: typing.Dict[AbstractFlagIndex, typing.Any]):
+        for k, v in map.items():
+            self.flags[k] = v
 
     def toString(self) -> str:
         return "frame {} {}".format(self.index, formatTimestamp(self.timestamp))
@@ -30,7 +26,8 @@ class FramePoint:
         return "frame {} {} {}".format(self.index, formatTimestamp(self.timestamp), self.flags)
 
 class FPIR: # Frame Point Intermediate Representation
-    def __init__(self):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex]):
+        self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.framePoints: typing.List[FramePoint] = []
 
     def accept(self, pazz: FPIRPass) -> typing.Any:
@@ -40,8 +37,7 @@ class FPIR: # Frame Point Intermediate Representation
     def genVirtualEnd(self) -> FramePoint:
         index: int = len(self.framePoints)
         timestamp: int = self.framePoints[-1].timestamp
-        flags = [False] * SubtitleType.num()
-        return FramePoint(index, timestamp, flags)
+        return FramePoint(self.flagIndexType, index, timestamp)
 
     def getFramePointsWithVirtualEnd(self) -> typing.List[FramePoint]:
         return self.framePoints + [self.genVirtualEnd()]
@@ -53,15 +49,15 @@ class FPIRPass(abc.ABC):
         pass
 
 class FPIRPassRemoveNoise(FPIRPass):
-    def __init__(self, type: SubtitleType, minPositiveLength: int = 10, minNegativeLength: int = 2):
-        self.type: SubtitleType = type
+    def __init__(self, flag: AbstractFlagIndex, minPositiveLength: int = 10, minNegativeLength: int = 2):
+        self.flag: AbstractFlagIndex = flag
         self.minPositiveLength: int = minPositiveLength # set to 0 to disable removing positive noises
         self.minNegativeLength: int = minNegativeLength # set to 0 to disable removing negative noises
 
     def apply(self, fpir: FPIR):
         for id, framePoint in enumerate(fpir.framePoints):
             minLength: int = self.minNegativeLength
-            if framePoint.flags[self.type]:
+            if framePoint.flags[self.flag]:
                 minLength = self.minPositiveLength
             l = id - minLength
             r = id + minLength
@@ -69,19 +65,19 @@ class FPIRPassRemoveNoise(FPIRPass):
                 continue
             length = 0
             for i in range(id - 1, l - 1, -1):
-                if fpir.framePoints[i].flags[self.type] != framePoint.flags[self.type]:
+                if fpir.framePoints[i].flags[self.flag] != framePoint.flags[self.flag]:
                     break
                 length += 1
             for i in range(id + 1, r + 1):
-                if fpir.framePoints[i].flags[self.type] != framePoint.flags[self.type]:
+                if fpir.framePoints[i].flags[self.flag] != framePoint.flags[self.flag]:
                     break
                 length += 1
             if length < minLength: # flip
-                framePoint.flags[self.type] = not framePoint.flags[self.type]
+                framePoint.flags[self.flag] = not framePoint.flags[self.flag]
 
 class FPIRPassBuildIntervals(FPIRPass):
-    def __init__(self, type: SubtitleType):
-        self.type: SubtitleType = type
+    def __init__(self, type: AbstractFlagIndex):
+        self.type: AbstractFlagIndex = type
 
     def apply(self, fpir: FPIR) -> typing.List[Interval]:
         intervals: typing.List[Interval] = []
@@ -99,16 +95,17 @@ class FPIRPassBuildIntervals(FPIRPass):
         return intervals
 
 class Interval:
-    def __init__(self, begin: int, end: int, type: SubtitleType):
+    def __init__(self, begin: int, end: int, type: AbstractFlagIndex):
+        # TODO: Ultimately an Interval should be also able to hold a full set of flags
         self.begin: int = begin # timestamp
         self.end: int = end # timestamp
-        self.type: SubtitleType = type
+        self.type: AbstractFlagIndex = type
 
-    def toAss(self, tag: str = "unknown") -> str:
+    def toAss(self, flag: str = "unknown") -> str:
         template = "Dialogue: 0,{},{},Default,,0,0,0,,SUBTITLE_{}_{}"
         sBegin = formatTimestamp(self.begin)
         sEnd = formatTimestamp(self.end)
-        return template.format(sBegin, sEnd, self.type.name, tag)
+        return template.format(sBegin, sEnd, self.type.name, flag)
 
     def dist(self, other: Interval) -> int:
         l = self
@@ -125,10 +122,10 @@ class Interval:
         return self.dist(other) == 0
 
 class IIR: # Interval Intermediate Representation
-    def __init__(self, fpir: FPIR):
+    def __init__(self, fpir: FPIR, flagsToScan: typing.List[AbstractFlagIndex]):
         self.intervals: typing.List[Interval] = []
-        for type in SubtitleType:
-            fpirPass = FPIRPassBuildIntervals(type)
+        for flag in flagsToScan:
+            fpirPass = FPIRPassBuildIntervals(flag)
             self.intervals.extend(fpir.accept(fpirPass))
         self.sort()
 
@@ -152,18 +149,18 @@ class IIRPass(abc.ABC):
         pass
 
 class IIRPassFillGap(IIRPass):
-    def __init__(self, type: SubtitleType, maxGap: int = 300):
-        self.type: SubtitleType = type
+    def __init__(self, flag: AbstractFlagIndex, maxGap: int = 300):
+        self.flag: AbstractFlagIndex = flag
         self.maxGap: int = maxGap # in millisecs
     
     def apply(self, iir: IIR):
         for id, interval in enumerate(iir.intervals):
-            if interval.type != self.type:
+            if interval.type != self.flag:
                 continue
             otherId = id + 1
             while otherId < len(iir.intervals):
                 otherInterval = iir.intervals[otherId]
-                if otherInterval.type != self.type:
+                if otherInterval.type != self.flag:
                     otherId += 1
                     continue
                 if interval.dist(otherInterval) > self.maxGap:
