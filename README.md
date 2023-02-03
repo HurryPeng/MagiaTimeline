@@ -34,7 +34,7 @@ Should also work on other versions, but not tested.
 python MagiaTimeline.py --help
 ```
 
-**Strategy** Specify which Strategy to use (which game). `mr` for Magia Record and `lcb` for Limbus Company. This is by default `mr`. 
+**Strategy.** Specify which Strategy to use (which game). `mr` for Magia Record and `lcb` for Limbus Company. This is by default `mr`. 
 
 ```
 python MagiaTimeline.py --strategy mr
