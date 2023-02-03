@@ -7,9 +7,11 @@ from Rectangle import *
 from IR import *
 from Util import *
 from Strategies.MagirecoStrategy import *
+from Strategies.LimbusCompanyStrategy import *
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("--strategy", type=str, default="mr", help="strategy type of different names, mr for MagiReco or lcb for LimbusCompany")
     parser.add_argument("--src", type=str, default="src.mp4", help="source video file")
     parser.add_argument("--ass", type=str, default="template.ass", help="source ass template file")
     parser.add_argument("--leftblackbar", type=float, default=0.0, help="width ratio of black bar on the left of canvas, right is assumed symmetric if it is not set")
@@ -21,6 +23,8 @@ def main():
     parser.add_argument("--shortcircuit", default=False, action="store_true", help="accelerates the program by skipping detecting other types of subtitles once one type has been confirmed, not compatible with debug mode")
     args = parser.parse_args()
     if True: # data validity test
+        if not args.strategy in ["mr", "lcb"]:
+            raise Exception("Invalid strategy! ")
         srcMp4Test = open(args.src, "rb")
         srcMp4Test.close()
         if not (args.leftblackbar >= 0.0 and args.leftblackbar <= 1.0):
@@ -51,9 +55,13 @@ def main():
     dstAss.writelines(templateAss.readlines())
     templateAss.close()
 
-    contentRect = RatioRectangle(srcRect, args.leftblackbar, 1 - args.rightblackbar, args.topblackbar, 1 - args.bottomblackbar)
+    contentRect = RatioRectangle(srcRect, args.leftblackbar, 1.0 - args.rightblackbar, args.topblackbar, 1.0 - args.bottomblackbar)
 
-    strategy = MagirecoStrategy(None, contentRect)
+    strategy = None
+    if args.strategy == "mr":
+        strategy = MagirecoStrategy(None, contentRect)
+    else:
+        strategy = LimbusCompanyStrategy(None, contentRect)
     flagIndexType = strategy.getFlagIndexType()
 
     print("==== FPIR Building ====")
@@ -84,6 +92,7 @@ def main():
 
         if args.debug:
             frameOut = frame
+            frameOut = contentRect.draw(frameOut)
             for name, rect in strategy.getRectangles().items():
                 frameOut = rect.draw(frameOut)
             height = 50
