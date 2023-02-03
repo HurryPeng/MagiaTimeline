@@ -19,6 +19,13 @@ class FramePoint:
         for k, v in map.items():
             self.flags[k] = v
 
+    def setDebugFlag(self, *val: typing.Any):
+        self.flags[self.flagIndexType.Debug] = val
+
+    def getDebugFlag(self) -> typing.Any:
+        return self.flags[self.flagIndexType.Debug]
+
+
     def toString(self) -> str:
         return "frame {} {}".format(self.index, formatTimestamp(self.timestamp))
 

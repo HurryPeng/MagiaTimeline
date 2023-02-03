@@ -94,8 +94,7 @@ def main():
             cv.imshow("show", frameOut)
             if cv.waitKey(1) == ord('q'):
                 break
-            # TODO: Pass out intermediate values
-            print("debug frame", frameIndex, formatTimestamp(timestamp))
+            print("debug frame", frameIndex, formatTimestamp(timestamp), framePoint.getDebugFlag())
             debugMp4.write(frameOut)
     srcMp4.release()
     if args.debug:
