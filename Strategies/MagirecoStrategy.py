@@ -52,12 +52,46 @@ class MagirecoStrategy(AbstractStrategy):
         self.rectangles["cgSubBelowRect"] = self.cgSubBelowRect
         self.rectangles["cgSubTextRect"] = self.cgSubTextRect
 
+        self.cvPasses = [self.cvPassDialog, self.cvPassBlackscreen, self.cvPassWhitescreen, self.cvPassCgSub]
+
+        self.fpirPasses = collections.OrderedDict()
+        self.fpirPasses["fpirPassRemoveNoiseDialog"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Dialog)
+        self.fpirPasses["fpirPassRemoveNoiseBlackscreen"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Blackscreen)
+        self.fpirPasses["fpirPassRemoveNoiseWhitescreen"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Whitescreen, minNegativeLength=0)
+        self.fpirPasses["fpirPassRemoveNoiseCgSub"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.CgSub)
+
+        self.fpirToIirPasses = collections.OrderedDict()
+        self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
+            MagirecoStrategy.FlagIndex.Dialog, 
+            MagirecoStrategy.FlagIndex.Blackscreen, 
+            MagirecoStrategy.FlagIndex.Whitescreen, 
+            MagirecoStrategy.FlagIndex.CgSub
+        )
+
+        self.iirPasses = collections.OrderedDict()
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.Dialog, 300)
+        self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.Blackscreen, 1200)
+        self.iirPasses["iirPassFillGapWhitescreen"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.Whitescreen, 1200)
+        self.iirPasses["iirPassFillGapCgSub"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.CgSub, 1200)
+
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
 
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
+
+    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
+        return self.cvPasses
+
+    def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
+        return self.fpirPasses
+
+    def getFpirToIirPasses(self) -> collections.OrderedDict[str, FPIRPassBuildIntervals]:
+        return self.fpirToIirPasses
+
+    def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
+        return self.iirPasses
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialogBg = self.dialogBgRect.cutRoi(frame)
@@ -151,6 +185,3 @@ class MagirecoStrategy(AbstractStrategy):
         framePoint.setFlag(MagirecoStrategy.FlagIndex.CgSubBorder, hasCgSubBorder)
         framePoint.setFlag(MagirecoStrategy.FlagIndex.CgSubText, hasCgSubText)
         return isValidCgSub
-
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
-        return [self.cvPassDialog, self.cvPassBlackscreen, self.cvPassWhitescreen, self.cvPassCgSub]

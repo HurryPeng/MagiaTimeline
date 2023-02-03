@@ -20,3 +20,15 @@ class AbstractStrategy(abc.ABC):
     @abc.abstractmethod
     def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
         pass
+
+    @abc.abstractmethod
+    def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
+        pass
+
+    @abc.abstractmethod
+    def getFpirToIirPasses(self) -> collections.OrderedDict[str, FPIRPassBuildIntervals]:
+        pass
+
+    @abc.abstractmethod
+    def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
+        pass
