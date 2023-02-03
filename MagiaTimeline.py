@@ -103,34 +103,44 @@ def main():
 
     print("==== FPIR Passes ====")
     print("fpirPassRemoveNoiseDialog")
-    fpirPassRemoveNoiseDialog = FPIRPassRemoveNoise(MagirecoStrategy.FlagIndex.Dialog)
-    fpir.accept(fpirPassRemoveNoiseDialog)
+    fpirPassRemoveNoiseDialog = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Dialog)
+    fpirPassRemoveNoiseDialog.apply(fpir)
     print("fpirPassRemoveNoiseBlackscreen")
-    fpirPassRemoveNoiseBlackscreen = FPIRPassRemoveNoise(MagirecoStrategy.FlagIndex.Blackscreen)
-    fpir.accept(fpirPassRemoveNoiseBlackscreen)
+    fpirPassRemoveNoiseBlackscreen = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Blackscreen)
+    fpirPassRemoveNoiseBlackscreen.apply(fpir)
     print("fpirPassRemoveNoiseWhitescreen")
-    fpirPassRemoveNoiseWhitescreen = FPIRPassRemoveNoise(MagirecoStrategy.FlagIndex.Whitescreen, minNegativeLength=0)
-    fpir.accept(fpirPassRemoveNoiseWhitescreen)
+    fpirPassRemoveNoiseWhitescreen = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Whitescreen, minNegativeLength=0)
+    fpirPassRemoveNoiseWhitescreen.apply(fpir)
     print("fpirPassRemoveNoiseCgSub")
-    fpirPassRemoveNoiseCgSub = FPIRPassRemoveNoise(MagirecoStrategy.FlagIndex.CgSub)
-    fpir.accept(fpirPassRemoveNoiseCgSub)
+    fpirPassRemoveNoiseCgSub = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.CgSub)
+    fpirPassRemoveNoiseCgSub.apply(fpir)
 
     print("==== FPIR to IIR ====")
-    iir = IIR(fpir, [MagirecoStrategy.FlagIndex.Dialog, MagirecoStrategy.FlagIndex.Blackscreen, MagirecoStrategy.FlagIndex.Whitescreen, MagirecoStrategy.FlagIndex.CgSub])
+    iir = IIR(flagIndexType)
+    print("fpirPassBuildIntervals")
+    fpirPassBuildIntervals = FPIRPassBooleanBuildIntervals(
+        MagirecoStrategy.FlagIndex.Dialog, 
+        MagirecoStrategy.FlagIndex.Blackscreen, 
+        MagirecoStrategy.FlagIndex.Whitescreen, 
+        MagirecoStrategy.FlagIndex.CgSub
+    )
+    iir.appendFromFpir(fpir, fpirPassBuildIntervals)
+
+    iir.sort()
 
     print("==== IIR Passes ====")
     print("iirPassFillGapDialog")
     iirPassFillGapDialog = IIRPassFillGap(MagirecoStrategy.FlagIndex.Dialog, 300)
-    iir.accept(iirPassFillGapDialog)
+    iirPassFillGapDialog.apply(iir)
     print("iirPassFillGapBlackscreen")
     iirPassFillGapBlackscreen = IIRPassFillGap(MagirecoStrategy.FlagIndex.Blackscreen, 1200)
-    iir.accept(iirPassFillGapBlackscreen)
+    iirPassFillGapBlackscreen.apply(iir)
     print("iirPassFillGapWhitescreen")
     iirPassFillGapWhitescreen = IIRPassFillGap(MagirecoStrategy.FlagIndex.Whitescreen, 1200)
-    iir.accept(iirPassFillGapWhitescreen)
+    iirPassFillGapWhitescreen.apply(iir)
     print("iirPassFillGapCgSub")
     iirPassFillGapCgSub = IIRPassFillGap(MagirecoStrategy.FlagIndex.CgSub, 1200)
-    iir.accept(iirPassFillGapCgSub)
+    iirPassFillGapCgSub.apply(iir)
 
     print("==== IIR to ASS ====")
     dstAss.write(iir.toAss())
