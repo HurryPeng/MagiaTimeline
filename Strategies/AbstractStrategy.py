@@ -4,6 +4,7 @@ import typing
 
 from Rectangle import *
 from AbstractFlagIndex import *
+from IR import *
 
 class AbstractStrategy(abc.ABC):
     @classmethod
@@ -16,5 +17,5 @@ class AbstractStrategy(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat], typing.Tuple[typing.Dict[AbstractFlagIndex, typing.Any], bool]]]:
+    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
         pass

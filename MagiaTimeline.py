@@ -72,8 +72,7 @@ def main():
 
         framePoint = FramePoint(flagIndexType, frameIndex, timestamp)
         for cvPass in strategy.getCvPasses():
-            flagsToSet, mayShortcircuit = cvPass(frame)
-            framePoint.setFlags(flagsToSet)
+            mayShortcircuit = cvPass(frame, framePoint)
             if mayShortcircuit and args.shortcircuit:
                 break
         fpir.framePoints.append(framePoint)
