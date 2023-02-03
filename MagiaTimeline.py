@@ -106,12 +106,13 @@ def main():
                 frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                 height += 20
             print("debug frame", frameIndex, formatTimestamp(timestamp), framePoint.getDebugFlag())
+            debugMp4.write(frameOut)
             if framePoint.getDebugFrame() is not None:
                 frameOut = framePoint.getDebugFrame()
+                framePoint.clearDebugFrame()
             if cv.waitKey(1) == ord('q'):
                 break
             cv.imshow("show", frameOut)
-            debugMp4.write(frameOut)
     srcMp4.release()
     if args.debug:
         debugMp4.release()

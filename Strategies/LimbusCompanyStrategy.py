@@ -90,7 +90,7 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
             return [False] * cls.getNum()
 
     def __init__(self, config, contentRect: AbstractRectangle) -> None:
-        self.dialogRect = RatioRectangle(contentRect, 0.18, 0.82, 0.88, 0.93)
+        self.dialogRect = RatioRectangle(contentRect, 0.18, 0.82, 0.875, 0.915)
 
         self.rectangles = collections.OrderedDict()
         self.rectangles["dialogRect"] = self.dialogRect
@@ -154,6 +154,4 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
         framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogBgColour, hasDialogBgColour)
         framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextMin, meanDialogTextBin > 10)
         framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFloat, meanDialogTextBin)
-        # framePoint.setDebugFrame(roiDialogGrayNoText)
-        framePoint.setDebugFlag(meanDialogGrayNoText, meanDialogTextBin)
         return False

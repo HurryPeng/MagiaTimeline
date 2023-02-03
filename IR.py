@@ -28,6 +28,9 @@ class FramePoint:
     
     def setDebugFrame(self, debugFrame: cv.Mat):
         self.debugFrame = debugFrame
+    
+    def clearDebugFrame(self):
+        self.debugFrame = None
 
     def getDebugFrame(self) -> cv.Mat | None:
         return self.debugFrame
