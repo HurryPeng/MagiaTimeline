@@ -1,6 +1,7 @@
 from __future__ import annotations
 import abc
 import typing
+import collections
 
 from Rectangle import *
 from AbstractFlagIndex import *
@@ -13,7 +14,7 @@ class AbstractStrategy(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def getRectangles(self) -> typing.List[AbstractRectangle]:
+    def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         pass
 
     @abc.abstractmethod

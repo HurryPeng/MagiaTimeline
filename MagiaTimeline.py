@@ -84,13 +84,14 @@ def main():
 
         if args.debug:
             frameOut = frame
-            for rect in strategy.getRectangles():
+            for name, rect in strategy.getRectangles().items():
                 frameOut = rect.draw(frameOut)
             height = 50
             for name, index in flagIndexType.__members__.items():
                 value = framePoint.flags[index]
-                frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 192, 0), 2)
-                height += 25
+                frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 3)
+                frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                height += 20
             cv.imshow("show", frameOut)
             if cv.waitKey(1) == ord('q'):
                 break

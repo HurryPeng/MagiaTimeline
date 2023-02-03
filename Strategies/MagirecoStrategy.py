@@ -1,5 +1,6 @@
 import typing
 import enum
+import collections
 
 from Util import *
 from Strategies.AbstractStrategy import *
@@ -41,13 +42,22 @@ class MagirecoStrategy(AbstractStrategy):
         self.cgSubBelowRect = RatioRectangle(contentRect, 0.0, 1.0, 0.70, 0.75)
         self.cgSubTextRect = RatioRectangle(contentRect, 0.3, 0.7, 0.70, 1.00)
 
+        self.rectangles = collections.OrderedDict()
+        self.rectangles["dialogOutlineRect"] = self.dialogOutlineRect
+        self.rectangles["dialogBgRect"] = self.dialogBgRect
+        self.rectangles["blackscreenRect"] = self.blackscreenRect
+        self.rectangles["whitescreenRect"] = self.whitescreenRect
+        self.rectangles["cgSubAboveRect"] = self.cgSubAboveRect
+        self.rectangles["cgSubBorderRect"] = self.cgSubBorderRect
+        self.rectangles["cgSubBelowRect"] = self.cgSubBelowRect
+        self.rectangles["cgSubTextRect"] = self.cgSubTextRect
+
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
 
-    def getRectangles(self) -> typing.List[AbstractRectangle]:
-        return [self.dialogOutlineRect, self.dialogBgRect, self.blackscreenRect, self.whitescreenRect, \
-            self.cgSubAboveRect, self.cgSubBorderRect, self.cgSubBelowRect, self.cgSubTextRect]
+    def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
+        return self.rectangles
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialogBg = self.dialogBgRect.cutRoi(frame)
