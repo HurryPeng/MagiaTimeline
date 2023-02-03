@@ -23,7 +23,7 @@ def main():
     parser.add_argument("--shortcircuit", default=False, action="store_true", help="accelerates the program by skipping detecting other types of subtitles once one type has been confirmed, not compatible with debug mode")
     args = parser.parse_args()
     if True: # data validity test
-        if not args.strategy in ["mr", "lcb"]:
+        if not args.strategy in ["mr", "lcb", "lcb-mech"]:
             raise Exception("Invalid strategy! ")
         srcMp4Test = open(args.src, "rb")
         srcMp4Test.close()
@@ -60,8 +60,12 @@ def main():
     strategy: AbstractStrategy | None = None
     if args.strategy == "mr":
         strategy = MagirecoStrategy(None, contentRect)
-    else:
+    elif args.strategy == "lcb":
         strategy = LimbusCompanyStrategy(None, contentRect)
+    elif args.strategy == "lcb-mech":
+        strategy = LimbusCompanyMechanicsStrategy(None, contentRect)
+    else:
+        raise Exception("Unknown strategy! ")
     flagIndexType = strategy.getFlagIndexType()
 
     print("==== FPIR Building ====")
