@@ -11,6 +11,7 @@ class FramePoint:
         self.index: int = index
         self.timestamp: int = timestamp
         self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
+        self.debugFrame: cv.Mat | None = None
 
     def setFlag(self, index: AbstractFlagIndex, val: typing.Any):
         self.flags[index] = val
@@ -24,7 +25,12 @@ class FramePoint:
 
     def getDebugFlag(self) -> typing.Any:
         return self.flags[self.flagIndexType.Debug]
+    
+    def setDebugFrame(self, debugFrame: cv.Mat):
+        self.debugFrame = debugFrame
 
+    def getDebugFrame(self) -> cv.Mat | None:
+        return self.debugFrame
 
     def toString(self) -> str:
         return "frame {} {}".format(self.index, formatTimestamp(self.timestamp))

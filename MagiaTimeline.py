@@ -57,7 +57,7 @@ def main():
 
     contentRect = RatioRectangle(srcRect, args.leftblackbar, 1.0 - args.rightblackbar, args.topblackbar, 1.0 - args.bottomblackbar)
 
-    strategy = None
+    strategy: AbstractStrategy | None = None
     if args.strategy == "mr":
         strategy = MagirecoStrategy(None, contentRect)
     else:
@@ -101,10 +101,12 @@ def main():
                 frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 3)
                 frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                 height += 20
-            cv.imshow("show", frameOut)
+            print("debug frame", frameIndex, formatTimestamp(timestamp), framePoint.getDebugFlag())
+            if framePoint.getDebugFrame() is not None:
+                frameOut = framePoint.getDebugFrame()
             if cv.waitKey(1) == ord('q'):
                 break
-            print("debug frame", frameIndex, formatTimestamp(timestamp), framePoint.getDebugFlag())
+            cv.imshow("show", frameOut)
             debugMp4.write(frameOut)
     srcMp4.release()
     if args.debug:
