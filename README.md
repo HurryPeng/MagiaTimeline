@@ -70,6 +70,12 @@ python MagiaTimeline.py --shortcircuit
 - There is no black bar around the canvas in the input video. 
 - The output file will be named `MagiaTimelineOutput.ass` and overwrite any existing file of this name. 
 
+**Compressing.** It is recommended to control the resolution of the video within 1280\*720 for performance. You can compress your video with `PyrDown.py`, which halves the width and height of a video by pyramiding down each frame. However, it is more recommended to compress with professional video editors for less compressing time and smaller video size. 
+
+```
+python PyrDown.py --src src.mp4 --dst pyrdown.mp4
+```
+
 ## Architecture
 
 MagiaTimeline's main pipeline adopts a compiler-like architecture. The source video is analyzed and transformed into intermediate representations (IR). Optimization passes are then applied on IRs for better timeline generation. 
