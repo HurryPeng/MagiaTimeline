@@ -35,7 +35,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Dialog, 300)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Dialog, 300, 0.0)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -59,22 +59,39 @@ class LimbusCompanyStrategy(AbstractStrategy):
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
-        _, roiDialogTextBin = cv.threshold(roiDialogGray, 172, 255, cv.THRESH_BINARY)
+        _, roiDialogTextBin = cv.threshold(roiDialogGray, 128, 255, cv.THRESH_BINARY)
         roiDialogTextBinDialate = cv.morphologyEx(roiDialogTextBin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (3, 3)))
+        roiDialogAllBrown = roiDialog.copy()
+        # roiDialogAllBrownHSV[:] = (27, 75, 25)
+        roiDialogAllBrown[:] = (18, 25, 26) # (27, 75, 25) in HSV
         roiDialogNoText = cv.bitwise_and(roiDialog, roiDialog, mask=255-roiDialogTextBinDialate)
-        roiDialogNoTextHSV = cv.cvtColor(roiDialogNoText, cv.COLOR_BGR2HSV)
-        meanDialogNoTextHSV = cv.mean(roiDialogNoTextHSV)
+        # roiDialogBrownTextHSV = cv.bitwise_and(roiDialogAllBrownHSV, roiDialogAllBrownHSV, mask=roiDialogTextBinDialate)
+        roiDialogBrownText = cv.bitwise_and(roiDialogAllBrown, roiDialogAllBrown, mask=roiDialogTextBinDialate)
+        # roiDialogNoTextHSV = cv.cvtColor(roiDialogNoText, cv.COLOR_BGR2HSV)
+        # roiDialogWithBrownTextHSV = roiDialogNoTextHSV + roiDialogBrownTextHSV
+        roiDialogWithBrownText = roiDialogNoText + roiDialogBrownText
+        roiDialogWithBrownTextBlur = cv.blur(roiDialogWithBrownText, (10, 10))
+        roiDialogWithBrownTextBlurHSV = cv.cvtColor(roiDialogWithBrownTextBlur, cv.COLOR_BGR2HSV)
+        # roiDialogWithBrownTextBlurHSV = cv.blur(roiDialogWithBrownTextHSV, (5, 5))
+        roiDialogWithBrownTextBlurHSVBin = inRange(roiDialogWithBrownTextBlurHSV, [10, 20, 0], [35, 255, 128])
+        meanDialogWithBrownTextBlurHSVBin = cv.mean(roiDialogWithBrownTextBlurHSVBin)[0]
+
+        # roiDialogNoTextBlur = cv.blur(roiDialogNoText, (5, 5))
+        # roiDialogNoTextBlurHSV = cv.cvtColor(roiDialogNoTextBlur, cv.COLOR_BGR2HSV)
+        # meanDialogNoTextBlurHSV = cv.mean(roiDialogNoTextBlurHSV)
+        # roiDialogNoTextBlurHSVBin = inRange(roiDialogNoTextBlurHSV, [10, 20, 0], [45, 255, 128])
         meanDialogTextBin: float = cv.mean(roiDialogTextBin)[0]
-        hasDialogBgColour: bool = meanDialogNoTextHSV[0] > 10 and meanDialogNoTextHSV[0] < 45 \
-            and meanDialogNoTextHSV[1] > 20 and meanDialogNoTextHSV[1] < 100 \
-            and meanDialogNoTextHSV[2] > 10 and meanDialogNoTextHSV[2] < 45
-        hasDialogText: bool = meanDialogTextBin > 0.5 and meanDialogTextBin < 30.0
+        hasDialogBgColour: bool = meanDialogWithBrownTextBlurHSVBin > 200
+        hasDialogText: bool = meanDialogTextBin > 0.8 and meanDialogTextBin < 30.0
 
         isValidDialog = hasDialogBgColour and hasDialogText
 
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.Dialog, isValidDialog)
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogBgColour, hasDialogBgColour)
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogText, hasDialogText)
+        framePoint.setDebugFrame(cv.cvtColor(roiDialogWithBrownTextBlurHSV, cv.COLOR_HSV2BGR))
+        # framePoint.setDebugFrame(roiDialogWithBrownTextHSVBin)
+        framePoint.setDebugFlag(meanDialogWithBrownTextBlurHSVBin)
         return isValidDialog
 
 class LimbusCompanyMechanicsStrategy(AbstractStrategy):
