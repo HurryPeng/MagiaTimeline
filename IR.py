@@ -28,6 +28,9 @@ class FramePoint:
     
     def setDebugFrame(self, debugFrame: cv.Mat):
         self.debugFrame = debugFrame
+
+    def setDebugFrameHSV(self, debugFrame: cv.Mat):
+        self.setDebugFrame(cv.cvtColor(debugFrame, cv.COLOR_HSV2BGR))
     
     def clearDebugFrame(self):
         self.debugFrame = None
