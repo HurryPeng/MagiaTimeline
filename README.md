@@ -28,6 +28,8 @@ Should also work on other versions, but not tested.
 
 ### Usage
 
+**Working Directory.** Before running any of the following commands, you should change the working directory of you command line to the root folder of this project. 
+
 **Help.** To see full help info, run:
 
 ```
@@ -52,23 +54,25 @@ python MagiaTimeline.py --src src.mp4 --dst MagiaTimelineOutput.ass
 python MagiaTimeline.py --leftblackbar 0.01 --rightblackbar 0.01 --topblackbar 0.09 --bottomblackbar --0.06
 ```
 
-**Debug Mode.** You can run in debug mode to preview the cutting of black bars and intermediate identification results. It is recommended to do such a quick check before processing the whole video. However, debug mode slows down the program significantly, so you should turn it off after the quick check. 
+**Debug Mode.** It is recommended to run debug mode and adjust parameters before processing the whole video. In debug mode, a real-time window will be displayed where you can preview the cutting of black bars, the alignment of critical sections and intermediate identification results. However, debug mode slows down the program significantly, so you should turn it off after adjustment completes. 
 
 ```
 python MagiaTimeline.py --debug
 ```
 
-**Short Circuit Mode.** Short circuit mode accelerates the program by skipping detecting other types of subtitles once one type has been confirmed. This should have no side-effect in theory because different kinds of subtitle should not appear at the same time, and may become a default option in the future. This mode is not compatible with debug mode, which needs to collect all intermediate information. 
+**Short Circuit Mode.** Short circuit mode accelerates the program by skipping detecting other types of subtitles once one type has been confirmed. This should have no side-effect if different kinds of subtitle guarantee not to appear at the same time. This mode is not compatible with debug mode, which needs to collect all intermediate information. 
 
 ```
 python MagiaTimeline.py --shortcircuit
 ```
 
-**Without Command Line**. If you have totally no idea how to use a command line to run anything above, you can still run this program from GUI. Before running, you should check that:
+**Without Command Line**. If you have totally no idea how to use a command line to run anything above, you can try running this program by double-clicking it from GUI. Before running, you should check that:
 
 - The input video is renamed to `src.mp4` and put under the same folder as `MagiaTimeline.py`. 
 - There is no black bar around the canvas in the input video. 
 - The output file will be named `MagiaTimelineOutput.ass` and overwrite any existing file of this name. 
+
+Even though, it is not guaranteed to behave correctly. Please learn how to use a command line. 
 
 **Compressing.** It is recommended to control the resolution of the video within 1280\*720 for performance. You can compress your video with `PyrDown.py`, which halves the width and height of a video by pyramiding down each frame. However, it is more recommended to compress with professional video editors for less compressing time and smaller video size. 
 
