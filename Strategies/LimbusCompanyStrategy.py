@@ -80,7 +80,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         roiDialogWithMeanTextCorrected: cv.Mat = np.uint8((1 / alpha) * roiDialogWithMeanText - (1 / alpha - 1) * meanDialogAbove) # type: ignore
         roiDialogWithMeanTextCorrectedBlur = cv.blur(roiDialogWithMeanTextCorrected, (10, 10))
         roiDialogWithMeanTextCorrectedBlurHSV = cv.cvtColor(roiDialogWithMeanTextCorrectedBlur, cv.COLOR_BGR2HSV)
-        roiDialogWithMeanTextCorrectedBlurHSVBin = inRange(roiDialogWithMeanTextCorrectedBlurHSV, [10, 20, 10], [45, 255, 100])
+        roiDialogWithMeanTextCorrectedBlurHSVBin = inRange(roiDialogWithMeanTextCorrectedBlurHSV, [10, 20, 10], [45, 255, 50])
         meanDialogWithMeanTextCorrectedBlurHSVBin = cv.mean(roiDialogWithMeanTextCorrectedBlurHSVBin)[0]
 
         hasDialogBgColour: bool = meanDialogWithMeanTextCorrectedBlurHSVBin > 180.0
