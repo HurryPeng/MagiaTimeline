@@ -66,6 +66,8 @@ python MagiaTimeline.py --debug
 python MagiaTimeline.py --shortcircuit
 ```
 
+**Combination of Arguments.** All the arguments above can be combined, unless explicitly forbidden. 
+
 **Without Command Line**. If you have totally no idea how to use a command line to run anything above, you can try running this program by double-clicking it from GUI. Before running, you should check that:
 
 - The input video is renamed to `src.mp4` and put under the same folder as `MagiaTimeline.py`. 
