@@ -11,7 +11,10 @@ Fans of RPGs would translate game videos when their native language is not suppo
 ### Supported Games
 
 - [Magia Record 「マギアレコード」 《魔法纪录》](https://magireco.com/), for which this project was initially written
+    - Strategy `mr`: Quest videos
 - [Limbus Company 「림버스컴퍼니」 《边狱公司》](https://limbuscompany.com/)
+    - Strategy `lcb`: Quest videos
+    - Strategy `lcb-mech`: Mechanics introduction videos
 
 ### Limitations
 
@@ -36,7 +39,7 @@ Should also work on other versions, but not tested.
 python MagiaTimeline.py --help
 ```
 
-**Strategy.** Specify which Strategy to use (which game). `mr` for Magia Record and `lcb` for Limbus Company. This is by default `mr`. 
+**Strategy.** Specify which Strategy to use. See [Supported Games](#Supported-Games) for a full list of Strategies. 
 
 ```
 python MagiaTimeline.py --strategy mr
