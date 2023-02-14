@@ -97,7 +97,7 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogBgColour = enum.auto()
-        DialogText = enum.auto()
+        DialogTextCont = enum.auto()
         DialogTextMin = enum.auto()
         DialogTextFeat = enum.auto()
 
@@ -116,22 +116,20 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
         self.cvPasses = [self.cvPassDialog]
 
         self.fpirPasses = collections.OrderedDict()
-        self.fpirPasses["fpirPassDetectFloatJump"] = FPIRPassDetectFeatureJump(
+        self.fpirPasses["fpirPassDetectFeatureJump"] = FPIRPassDetectFeatureJump(
             featFlag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFeat,
-            dstFlag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogText, 
-            featOpMean=lambda feats: np.mean(feats, 0),
-            featOpDist=lambda lhs, rhs: 0.5 - cosineSimilarity(lhs, rhs) / 2,
+            dstFlag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextCont, 
+            featOpMean=lambda feats : np.mean(feats, 0),
+            featOpDist=lambda lhs, rhs : 0.5 - cosineSimilarity(lhs, rhs) / 2,
             threshDist=0.01
         )
-        self.fpirPasses["fpirPassBooleanAnd1"] = FPIRPassBooleanAnd(
-            dstFlag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogText,
-            op1Flag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogText,
-            op2Flag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextMin
-        )
-        self.fpirPasses["fpirPassBooleanAnd2"] = FPIRPassBooleanAnd(
-            dstFlag=LimbusCompanyMechanicsStrategy.FlagIndex.Dialog,
-            op1Flag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogText,
-            op2Flag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogBgColour
+        def reduceToDialogText(framePoint: FramePoint):
+            framePoint.flags[LimbusCompanyMechanicsStrategy.FlagIndex.Dialog] = \
+                framePoint.flags[LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextCont] \
+                and framePoint.flags[LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextMin] \
+                and framePoint.flags[LimbusCompanyMechanicsStrategy.FlagIndex.DialogBgColour]
+        self.fpirPasses["fpirPassFramewiseFunctional"] = FPIRPassFramewiseFunctional(
+            func=reduceToDialogText
         )
         # self.fpirPasses["fpirPassTrainPCA"] = LimbusCompanyMechanicsStrategy.fpirPassTrainPCA()
 

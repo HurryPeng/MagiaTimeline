@@ -122,15 +122,20 @@ class FPIRPassDetectFeatureJump(FPIRPass):
             else:
                 framePoint.setFlag(self.dstFlag, True)
 
-class FPIRPassBooleanAnd(FPIRPass):
-    def __init__(self, dstFlag: AbstractFlagIndex, op1Flag: AbstractFlagIndex, op2Flag: AbstractFlagIndex):
-        self.dstFlag: AbstractFlagIndex = dstFlag
-        self.op1Flag: AbstractFlagIndex = op1Flag
-        self.op2Flag: AbstractFlagIndex = op2Flag
+class FPIRPassFunctional(FPIRPass):
+    def __init__(self, func: typing.Callable[[FPIR], typing.Any]):
+        self.func = func
+
+    def apply(self, fpir: FPIR):
+        return self.func(fpir)
+
+class FPIRPassFramewiseFunctional(FPIRPass):
+    def __init__(self, func: typing.Callable[[FramePoint], typing.Any]):
+        self.func = func
 
     def apply(self, fpir: FPIR):
         for id, framePoint in enumerate(fpir.framePoints):
-            framePoint.setFlag(self.dstFlag, framePoint.flags[self.op1Flag] and framePoint.flags[self.op2Flag])
+            self.func(framePoint)
 
 class FPIRPassBooleanBuildIntervals(FPIRPassBuildIntervals):
     def __init__(self, *flags: AbstractFlagIndex):
@@ -189,7 +194,7 @@ class IIR: # Interval Intermediate Representation
         self.intervals += fpirPassBuildIntervals.apply(fpir)
 
     def sort(self):
-        self.intervals.sort(key=lambda interval: interval.begin)
+        self.intervals.sort(key=lambda interval : interval.begin)
 
     def toAss(self) -> str:
         ass = ""
