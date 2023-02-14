@@ -99,14 +99,16 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
         DialogBgColour = enum.auto()
         DialogText = enum.auto()
         DialogTextMin = enum.auto()
-        DialogTextFloat = enum.auto()
+        DialogTextFeat = enum.auto()
+
+        DialogTextFrame = enum.auto()
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False] * cls.getNum()
+            return [False, False, False, False, np.array([1.0] * 4), None]
 
     def __init__(self, config, contentRect: AbstractRectangle) -> None:
-        self.dialogRect = RatioRectangle(contentRect, 0.18, 0.82, 0.875, 0.915)
+        self.dialogRect = RatioRectangle(contentRect, 0.30, 0.70, 0.875, 0.915)
 
         self.rectangles = collections.OrderedDict()
         self.rectangles["dialogRect"] = self.dialogRect
@@ -114,9 +116,12 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
         self.cvPasses = [self.cvPassDialog]
 
         self.fpirPasses = collections.OrderedDict()
-        self.fpirPasses["fpirPassDetectFloatJump"] = FPIRPassDetectFloatJump(
-            srcFlag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFloat,
-            dstFlag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogText
+        self.fpirPasses["fpirPassDetectFloatJump"] = FPIRPassDetectFeatureJump(
+            featFlag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFeat,
+            dstFlag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogText, 
+            featOpMean=lambda feats: np.mean(feats, 0),
+            featOpDist=lambda lhs, rhs: 0.5 - cosineSimilarity(lhs, rhs) / 2,
+            threshDist=0.01
         )
         self.fpirPasses["fpirPassBooleanAnd1"] = FPIRPassBooleanAnd(
             dstFlag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogText,
@@ -128,6 +133,7 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
             op1Flag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogText,
             op2Flag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogBgColour
         )
+        # self.fpirPasses["fpirPassTrainPCA"] = LimbusCompanyMechanicsStrategy.fpirPassTrainPCA()
 
         self.fpirToIirPasses = collections.OrderedDict()
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
@@ -136,6 +142,8 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
 
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(LimbusCompanyMechanicsStrategy.FlagIndex.Dialog, 500, 1.0)
+
+        self.pcaParams: np.ndarray = np.load("./Strategies/Models/lcb-mech-dialog-pca.npz")
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -167,7 +175,27 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
         meanDialogTextBin: float = cv.mean(roiDialogTextBin)[0]
         hasDialogBgColour: bool = meanDialogGrayNoText < 10
 
+        roiDialogGrayResize = cv.resize(roiDialogGray, (100, 20))
+        roiDialogGrayResizeFlatten = roiDialogGrayResize.flatten()
+
+        roiDialogGrayResizeCompressed = cv.PCAProject(roiDialogGrayResizeFlatten, mean=self.pcaParams["mean"].T, eigenvectors=self.pcaParams["eigenvectors"]).T[0]
+
         framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogBgColour, hasDialogBgColour)
         framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextMin, meanDialogTextBin > 10)
-        framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFloat, meanDialogTextBin)
+        framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFeat, roiDialogGrayResizeCompressed)
         return False
+
+    class FPIRPassTrainPCA(FPIRPass):
+        def apply(self, fpir: FPIR):
+            feats: np.ndarray = np.array([])
+            for i, framePoint in enumerate(fpir.framePoints):
+                feat: np.ndarray = framePoint.flags[LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFrame]
+                if i % 50 != 0: # sample only a few frames because one single subtitle lasts for seconds
+                    continue
+                if i == 0:
+                    feats = feat
+                else:
+                    feats = np.vstack((feats, feat))
+
+            mean, eigenvectors = cv.PCACompute(feats, mean=None, maxComponents=4)
+            np.savez("./Strategies/Models/lcb-mech-dialog-pca.npz", mean=mean, eigenvectors=eigenvectors)

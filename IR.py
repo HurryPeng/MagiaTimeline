@@ -95,21 +95,29 @@ class FPIRPassBooleanRemoveNoise(FPIRPass):
             if length < minLength: # flip
                 framePoint.flags[self.flag] = not framePoint.flags[self.flag]
 
-class FPIRPassDetectFloatJump(FPIRPass):
-    def __init__(self, srcFlag: AbstractFlagIndex, dstFlag: AbstractFlagIndex, windowSize: int = 3, minDiff: float = 0.5):
-        self.srcFlag: AbstractFlagIndex = srcFlag
+class FPIRPassDetectFeatureJump(FPIRPass):
+    def __init__(self, featFlag: AbstractFlagIndex, dstFlag: AbstractFlagIndex, \
+            featOpMean: typing.Callable[[typing.List[typing.Any]], typing.Any], \
+            featOpDist: typing.Callable[[typing.Any, typing.Any], float], \
+            threshDist: float = 0.5, windowSize: int = 3):
+        self.featFlag: AbstractFlagIndex = featFlag
         self.dstFlag: AbstractFlagIndex = dstFlag
+        self.featOpMean: typing.Callable[[typing.List[typing.Any]], typing.Any] = featOpMean
+        self.featOpDist: typing.Callable[[typing.Any, typing.Any], float] = featOpDist
+        self.threshDist: float = threshDist
         self.windowSize: int = windowSize
-        self.minDiff: float = minDiff
 
     def apply(self, fpir: FPIR):
         framePointsExt = fpir.getFramePointsWithVirtualEnd(self.windowSize)
         for id, framePoint in enumerate(fpir.framePoints):
-            avg: float = 0
+            featsToBeMeant = []
             for i in range(id + 1, id + 1 + self.windowSize):
-                avg += framePointsExt[i].flags[self.srcFlag]
-            avg /= self.windowSize
-            if abs(framePoint.flags[self.srcFlag] - avg) >= self.minDiff:
+                featsToBeMeant.append(framePointsExt[i].flags[self.featFlag])
+
+            meanFeat = self.featOpMean(featsToBeMeant)
+            dist = self.featOpDist(framePoint.flags[self.featFlag], meanFeat)
+
+            if dist >= self.threshDist:
                 framePoint.setFlag(self.dstFlag, False)
             else:
                 framePoint.setFlag(self.dstFlag, True)
