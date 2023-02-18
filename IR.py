@@ -16,6 +16,9 @@ class FramePoint:
     def setFlag(self, index: AbstractFlagIndex, val: typing.Any):
         self.flags[index] = val
 
+    def getFlag(self, index: AbstractFlagIndex) -> typing.Any:
+        return self.flags[index]
+
     def setFlags(self, map: typing.Dict[AbstractFlagIndex, typing.Any]):
         for k, v in map.items():
             self.flags[k] = v
@@ -69,31 +72,30 @@ class FPIRPassBuildIntervals(FPIRPass):
         pass
 
 class FPIRPassBooleanRemoveNoise(FPIRPass):
-    def __init__(self, flag: AbstractFlagIndex, minPositiveLength: int = 10, minNegativeLength: int = 2):
+    def __init__(self, flag: AbstractFlagIndex, trueToFalse: bool = True, minLength: int = 10):
         self.flag: AbstractFlagIndex = flag
-        self.minPositiveLength: int = minPositiveLength # set to 0 to disable removing positive noises
-        self.minNegativeLength: int = minNegativeLength # set to 0 to disable removing negative noises
+        self.trueToFalse: bool = trueToFalse
+        self.minLength: int = minLength
 
     def apply(self, fpir: FPIR):
         for id, framePoint in enumerate(fpir.framePoints):
-            minLength: int = self.minNegativeLength
-            if framePoint.flags[self.flag]:
-                minLength = self.minPositiveLength
-            l = id - minLength
-            r = id + minLength
+            if framePoint.getFlag(self.flag) != self.trueToFalse:
+                continue
+            l = id - self.minLength
+            r = id + self.minLength
             if l < 0 or r > len(fpir.framePoints) - 1:
                 continue
-            length = 0
+            length = 1
             for i in range(id - 1, l - 1, -1):
-                if fpir.framePoints[i].flags[self.flag] != framePoint.flags[self.flag]:
+                if fpir.framePoints[i].getFlag(self.flag) != framePoint.getFlag(self.flag):
                     break
                 length += 1
             for i in range(id + 1, r + 1):
-                if fpir.framePoints[i].flags[self.flag] != framePoint.flags[self.flag]:
+                if fpir.framePoints[i].getFlag(self.flag) != framePoint.getFlag(self.flag):
                     break
                 length += 1
-            if length < minLength: # flip
-                framePoint.flags[self.flag] = not framePoint.flags[self.flag]
+            if length < self.minLength: # flip
+                framePoint.setFlag(self.flag, not framePoint.getFlag(self.flag))
 
 class FPIRPassDetectFeatureJump(FPIRPass):
     def __init__(self, featFlag: AbstractFlagIndex, dstFlag: AbstractFlagIndex, \
@@ -112,10 +114,10 @@ class FPIRPassDetectFeatureJump(FPIRPass):
         for id, framePoint in enumerate(fpir.framePoints):
             featsToBeMeant = []
             for i in range(id + 1, id + 1 + self.windowSize):
-                featsToBeMeant.append(framePointsExt[i].flags[self.featFlag])
+                featsToBeMeant.append(framePointsExt[i].getFlag(self.featFlag))
 
             meanFeat = self.featOpMean(featsToBeMeant)
-            dist = self.featOpDist(framePoint.flags[self.featFlag], meanFeat)
+            dist = self.featOpDist(framePoint.getFlag(self.featFlag), meanFeat)
 
             if dist >= self.threshDist:
                 framePoint.setFlag(self.dstFlag, False)
@@ -148,11 +150,11 @@ class FPIRPassBooleanBuildIntervals(FPIRPassBuildIntervals):
         for framePoint in fpir.getFramePointsWithVirtualEnd():
             for i in range(len(state)):
                 if not state[i]: # off -> on
-                    if framePoint.flags[self.flags[i]]:
+                    if framePoint.getFlag(self.flags[i]):
                         state[i] = True
                         lastBegin = framePoint.timestamp
                 else: # on - > off
-                    if not framePoint.flags[self.flags[i]]:
+                    if not framePoint.getFlag(self.flags[i]):
                         state[i] = False
                         intervals.append(Interval(lastBegin, framePoint.timestamp, self.flags[i]))
         return intervals

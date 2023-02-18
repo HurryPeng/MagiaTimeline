@@ -55,10 +55,14 @@ class MagirecoStrategy(AbstractStrategy):
         self.cvPasses = [self.cvPassDialog, self.cvPassBlackscreen, self.cvPassWhitescreen, self.cvPassCgSub]
 
         self.fpirPasses = collections.OrderedDict()
-        self.fpirPasses["fpirPassRemoveNoiseDialog"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Dialog)
-        self.fpirPasses["fpirPassRemoveNoiseBlackscreen"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Blackscreen)
-        self.fpirPasses["fpirPassRemoveNoiseWhitescreen"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Whitescreen, minNegativeLength=0)
-        self.fpirPasses["fpirPassRemoveNoiseCgSub"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.CgSub)
+        self.fpirPasses["fpirPassRemoveNoiseDialogFalse"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Dialog, False, 2)
+        self.fpirPasses["fpirPassRemoveNoiseDialogTrue"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Dialog, True, 10)
+        self.fpirPasses["fpirPassRemoveNoiseBlackscreenFalse"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Blackscreen, False, 3)
+        self.fpirPasses["fpirPassRemoveNoiseBlackscreenTrue"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Blackscreen, True, 10)
+        self.fpirPasses["fpirPassRemoveNoiseWhitescreenFalse"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Whitescreen, False, 3)
+        self.fpirPasses["fpirPassRemoveNoiseWhitescreenTrue"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.Whitescreen, True, 10)
+        self.fpirPasses["fpirPassRemoveNoiseCgSubFalse"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.CgSub, False, 2)
+        self.fpirPasses["fpirPassRemoveNoiseCgSubTrue"] = FPIRPassBooleanRemoveNoise(MagirecoStrategy.FlagIndex.CgSub, True, 10)
 
         self.fpirToIirPasses = collections.OrderedDict()
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(

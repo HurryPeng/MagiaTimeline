@@ -29,7 +29,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         self.cvPasses = [self.cvPassDialog]
 
         self.fpirPasses = collections.OrderedDict()
-        self.fpirPasses["fpirPassRemoveNoiseDialog"] = FPIRPassBooleanRemoveNoise(LimbusCompanyStrategy.FlagIndex.Dialog, minNegativeLength=0)
+        self.fpirPasses["fpirPassRemoveNoiseDialog"] = FPIRPassBooleanRemoveNoise(LimbusCompanyStrategy.FlagIndex.Dialog, True, 10)
 
         self.fpirToIirPasses = collections.OrderedDict()
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
@@ -124,10 +124,11 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
             threshDist=0.01
         )
         def reduceToDialogText(framePoint: FramePoint):
-            framePoint.flags[LimbusCompanyMechanicsStrategy.FlagIndex.Dialog] = \
-                framePoint.flags[LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextCont] \
-                and framePoint.flags[LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextMin] \
-                and framePoint.flags[LimbusCompanyMechanicsStrategy.FlagIndex.DialogBgColour]
+            framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.Dialog,
+                framePoint.getFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextCont)
+                and framePoint.getFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextMin)
+                and framePoint.getFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogBgColour)
+            )
         self.fpirPasses["fpirPassFramewiseFunctional"] = FPIRPassFramewiseFunctional(
             func=reduceToDialogText
         )
@@ -187,7 +188,7 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
         def apply(self, fpir: FPIR):
             feats: np.ndarray = np.array([])
             for i, framePoint in enumerate(fpir.framePoints):
-                feat: np.ndarray = framePoint.flags[LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFrame]
+                feat: np.ndarray = framePoint.getFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFrame)
                 if i % 50 != 0: # sample only a few frames because one single subtitle lasts for seconds
                     continue
                 if i == 0:

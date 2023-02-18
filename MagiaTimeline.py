@@ -101,7 +101,7 @@ def main():
                 frameOut = rect.draw(frameOut)
             height = 50
             for name, index in flagIndexType.__members__.items():
-                value = framePoint.flags[index]
+                value = framePoint.getFlag(index)
                 frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 3)
                 frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                 height += 20
