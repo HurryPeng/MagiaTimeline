@@ -171,10 +171,11 @@ class MagirecoStrategy(AbstractStrategy):
         roiCgSubBorder = self.cgSubBorderRect.cutRoi(frame)
         roiCgSubBorderGray = cv.cvtColor(roiCgSubBorder, cv.COLOR_BGR2GRAY)
         roiCgSubBorderEdge = cv.convertScaleAbs(cv.Sobel(roiCgSubBorderGray, cv.CV_16S, 0, 1, ksize=3))
-        roiCgSubBorderErode = cv.morphologyEx(roiCgSubBorderEdge, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (51, 1)))
-        roiCgSubBorderRowReduce = cv.reduce(roiCgSubBorderErode, 1, cv.REDUCE_AVG, dtype=cv.CV_32F)
+        _, roiCgSubBorderEdgeBin = cv.threshold(roiCgSubBorderEdge, 5, 255, cv.THRESH_BINARY)
+        roiCgSubBorderBinErode = cv.morphologyEx(roiCgSubBorderEdgeBin, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (20, 1)))
+        roiCgSubBorderRowReduce = cv.reduce(roiCgSubBorderBinErode, 1, cv.REDUCE_AVG, dtype=cv.CV_32F)
         maxCgSubBorderRowReduce: float = cv.minMaxLoc(roiCgSubBorderRowReduce)[1]
-        hasCgSubBorder: bool = maxCgSubBorderRowReduce > 25.0
+        hasCgSubBorder: bool = maxCgSubBorderRowReduce > 200.0
 
         roiCgSubText = self.cgSubTextRect.cutRoi(frame)
         roiCgSubTextGray = cv.cvtColor(roiCgSubText, cv.COLOR_BGR2GRAY)
