@@ -18,13 +18,15 @@ class LimbusCompanyStrategy(AbstractStrategy):
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
             return [False] * cls.getNum()
 
-    def __init__(self, config, contentRect: AbstractRectangle) -> None:
+    def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
+        self.rectangles = collections.OrderedDict()
+        for k, v in config.items():
+            self.rectangles[k] = RatioRectangle(contentRect, *v)
         self.dialogRect = RatioRectangle(contentRect, 0.18, 0.82, 0.75, 0.95)
         self.dialogAboveRect = RatioRectangle(contentRect, 0.18, 0.82, 0.65, 0.75)
 
-        self.rectangles = collections.OrderedDict()
-        self.rectangles["dialogRect"] = self.dialogRect
-        self.rectangles["dialogAboveRect"] = self.dialogAboveRect
+        self.dialogRect = self.rectangles["dialogRect"]
+        self.dialogAboveRect = self.rectangles["dialogAboveRect"]
 
         self.cvPasses = [self.cvPassDialog]
 
@@ -108,10 +110,11 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
             return [False, False, False, False, np.array([1.0] * 4), None]
 
     def __init__(self, config, contentRect: AbstractRectangle) -> None:
-        self.dialogRect = RatioRectangle(contentRect, 0.30, 0.70, 0.875, 0.915)
-
         self.rectangles = collections.OrderedDict()
-        self.rectangles["dialogRect"] = self.dialogRect
+        for k, v in config.items():
+            self.rectangles[k] = RatioRectangle(contentRect, *v)
+
+        self.dialogRect = self.rectangles["dialogRect"]
 
         self.cvPasses = [self.cvPassDialog]
 

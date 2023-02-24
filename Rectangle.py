@@ -45,6 +45,12 @@ class AbstractRectangle(abc.ABC):
 
 class RatioRectangle(AbstractRectangle):
     def __init__(self, parent: AbstractRectangle, leftRatio: float, rightRatio: float, topRatio: float, bottomRatio: float) -> None:
+        if leftRatio > rightRatio or topRatio > bottomRatio:
+            raise Exception("Invalid ratio rectangle configuration "
+            + str([leftRatio, rightRatio, topRatio, bottomRatio])
+            + ". Left/top ratio cannot exceed right/bottom ratio"
+        )
+        
         self.parent: AbstractRectangle = parent
         self.leftRatio: float = leftRatio
         self.rightRatio: float = rightRatio

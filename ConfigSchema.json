@@ -1,0 +1,115 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://magiatimeline.tech/schemas/ConfigSchema.json",
+    "title": "MagiaTimeline configuration schema",
+
+    "$defs": {
+        "ratio": {
+            "description": "a nuber between 0 and 1 representing a relative width or height in a frame",
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+        },
+        "ratioRectangle": {
+            "description": "a rectangular area in a frame described by ratios of [left, right, top, bottom]",
+            "type": "array",
+            "items": [
+                {"$ref": "#/$defs/ratio"},
+                {"$ref": "#/$defs/ratio"},
+                {"$ref": "#/$defs/ratio"},
+                {"$ref": "#/$defs/ratio"}
+            ],
+            "minItems": 4,
+            "maxItems": 4,
+            "additionalItems": false
+        }
+    },
+
+    "type": "object",
+    "properties": {
+        "source": {
+            "description": "path of source mp4 video file",
+            "type": "string"
+        },
+        "destination": {
+            "description": "path of destination ass subtitle file",
+            "type": "string"
+        },
+        "assTemplate": {
+            "description": "template ass file defining the header of destination ass file",
+            "type": "string"
+        },
+        "mode": {
+            "description": "running mode that provides different performance and intermediate information",
+            "enum": ["default", "debug", "shortcircuit"]
+        },
+        "contentRect": {
+            "description": "rectangle that wraps the content of a frame, cutting away black bars around",
+            "$ref": "#/$defs/ratioRectangle"
+        },
+
+        "strategy": {
+            "description": "algorithm to use for timing, each supporting different games and scenes",
+            "enum": ["mr", "lcb", "lcb-mech"]
+        },
+        "preset": {
+            "description": "preset of parameters under a strategy to use for timing, mainly to support videos of different aspect ratios",
+            "type": "string"
+        }, 
+
+        "mr": {
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "description": "a preset for strategy mr",
+                    "type": "object",
+                    "properties": {
+                        "dialogOutlineRect": {"$ref": "#/$defs/ratioRectangle"},
+                        "dialogBgRect": {"$ref": "#/$defs/ratioRectangle"},
+                        "blackscreenRect": {"$ref": "#/$defs/ratioRectangle"},
+                        "whitescreenRect": {"$ref": "#/$defs/ratioRectangle"},
+                        "cgSubAboveRect": {"$ref": "#/$defs/ratioRectangle"},
+                        "cgSubBorderRect": {"$ref": "#/$defs/ratioRectangle"},
+                        "cgSubBelowRect": {"$ref": "#/$defs/ratioRectangle"},
+                        "cgSubTextRect": {"$ref": "#/$defs/ratioRectangle"}
+                    },
+                    "required": ["dialogOutlineRect", "dialogBgRect", "blackscreenRect", "whitescreenRect", "cgSubAboveRect", "cgSubBorderRect", "cgSubBelowRect", "cgSubTextRect"],
+                    "additionalProperties": false
+                }
+            }
+        },
+        
+        "lcb": {
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "type": "object",
+                    "description": "a preset for strategy lcb",
+                    "properties": {
+                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"},
+                        "dialogAboveRect": {"$ref": "#/$defs/ratioRectangle"}
+                    },
+                    "required": ["dialogRect", "dialogAboveRect"],
+                    "additionalProperties": false
+                }
+            }
+        },
+
+        "lcb-mech": {
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "type": "object",
+                    "description": "a preset for strategy lcb-mech",
+                    "properties": {
+                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                    },
+                    "required": ["dialogRect"],
+                    "additionalProperties": false
+                }
+            }
+        }
+    },
+    "required": ["source", "destination", "assTemplate", "mode", "contentRect", "strategy", "preset"],
+    "additionalProperties": false
+}

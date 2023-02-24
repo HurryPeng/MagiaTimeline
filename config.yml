@@ -1,0 +1,49 @@
+# MagiaTimeline config
+# yaml-language-server: $schema=./ConfigSchema.json
+
+source: src.mp4
+destination: MagiaTimelineOutput.ass
+assTemplate: template.ass
+mode: default
+contentRect: [0.0, 1.0, 0.0, 1.0]
+
+strategy: mr
+preset: default
+
+mr:
+  default:
+    dialogOutlineRect: [0.25, 0.75, 0.60, 0.95]
+    dialogBgRect: [0.3125, 0.6797, 0.7264, 0.8784]
+    blackscreenRect: [0.15, 0.85, 0.00, 1.00]
+    whitescreenRect: [0.15, 0.65, 0.00, 1.00]
+    cgSubAboveRect: [0.0, 1.0, 0.60, 0.65]
+    cgSubBorderRect: [0.0, 1.0, 0.65, 0.70]
+    cgSubBelowRect: [0.0, 1.0, 0.70, 0.75]
+    cgSubTextRect: [0.3, 0.7, 0.70, 1.00]
+  narrow:
+    dialogOutlineRect: [0.21, 0.79, 0.60, 0.97]
+    dialogBgRect: [0.27, 0.73, 0.75, 0.90]
+    blackscreenRect: [0.15, 0.85, 0.00, 1.00]
+    whitescreenRect: [0.15, 0.65, 0.00, 1.00]
+    cgSubAboveRect: [0.0, 1.0, 0.67, 0.72]
+    cgSubBorderRect: [0.0, 1.0, 0.72, 0.77]
+    cgSubBelowRect: [0.0, 1.0, 0.77, 0.82]
+    cgSubTextRect: [0.3, 0.7, 0.77, 1.00]
+  myownpreset:
+    dialogOutlineRect: [0.25, 0.75, 0.60, 0.95]
+    dialogBgRect: [0.3125, 0.6797, 0.7264, 0.8784]
+    blackscreenRect: [0.15, 0.85, 0.00, 1.00]
+    whitescreenRect: [0.15, 0.65, 0.00, 1.00]
+    cgSubAboveRect: [0.0, 1.0, 0.60, 0.65]
+    cgSubBorderRect: [0.0, 1.0, 0.65, 0.70]
+    cgSubBelowRect: [0.0, 1.0, 0.70, 0.75]
+    cgSubTextRect: [0.3, 0.7, 0.70, 1.00]
+
+lcb:
+  default:
+    dialogRect: [0.18, 0.82, 0.75, 0.95]
+    dialogAboveRect: [0.18, 0.82, 0.65, 0.75]
+
+lcb-mech:
+  default:
+    dialogRect: [0.30, 0.70, 0.875, 0.915]

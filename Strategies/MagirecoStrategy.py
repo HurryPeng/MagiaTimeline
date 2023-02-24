@@ -32,25 +32,19 @@ class MagirecoStrategy(AbstractStrategy):
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
             return [False] * cls.getNum()
 
-    def __init__(self, config, contentRect: AbstractRectangle) -> None:
-        self.dialogOutlineRect = RatioRectangle(contentRect, 0.25, 0.75, 0.60, 0.95)
-        self.dialogBgRect = RatioRectangle(contentRect, 0.3125, 0.6797, 0.7264, 0.8784)
-        self.blackscreenRect = RatioRectangle(contentRect, 0.15, 0.85, 0.00, 1.00)
-        self.whitescreenRect = RatioRectangle(contentRect, 0.15, 0.65, 0.00, 1.00)
-        self.cgSubAboveRect = RatioRectangle(contentRect, 0.0, 1.0, 0.60, 0.65)
-        self.cgSubBorderRect = RatioRectangle(contentRect, 0.0, 1.0, 0.65, 0.70)
-        self.cgSubBelowRect = RatioRectangle(contentRect, 0.0, 1.0, 0.70, 0.75)
-        self.cgSubTextRect = RatioRectangle(contentRect, 0.3, 0.7, 0.70, 1.00)
-
+    def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         self.rectangles = collections.OrderedDict()
-        self.rectangles["dialogOutlineRect"] = self.dialogOutlineRect
-        self.rectangles["dialogBgRect"] = self.dialogBgRect
-        self.rectangles["blackscreenRect"] = self.blackscreenRect
-        self.rectangles["whitescreenRect"] = self.whitescreenRect
-        self.rectangles["cgSubAboveRect"] = self.cgSubAboveRect
-        self.rectangles["cgSubBorderRect"] = self.cgSubBorderRect
-        self.rectangles["cgSubBelowRect"] = self.cgSubBelowRect
-        self.rectangles["cgSubTextRect"] = self.cgSubTextRect
+        for k, v in config.items():
+            self.rectangles[k] = RatioRectangle(contentRect, *v)
+
+        self.dialogOutlineRect = self.rectangles["dialogOutlineRect"]
+        self.dialogBgRect = self.rectangles["dialogBgRect"]
+        self.blackscreenRect = self.rectangles["blackscreenRect"]
+        self.whitescreenRect = self.rectangles["whitescreenRect"]
+        self.cgSubAboveRect = self.rectangles["cgSubAboveRect"]
+        self.cgSubBorderRect = self.rectangles["cgSubBorderRect"]
+        self.cgSubBelowRect = self.rectangles["cgSubBelowRect"]
+        self.cgSubTextRect = self.rectangles["cgSubTextRect"]
 
         self.cvPasses = [self.cvPassDialog, self.cvPassBlackscreen, self.cvPassWhitescreen, self.cvPassCgSub]
 

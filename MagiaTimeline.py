@@ -2,6 +2,9 @@ from __future__ import annotations
 import typing
 import cv2 as cv
 import argparse
+import json
+import jsonschema
+import yaml
 
 from Rectangle import *
 from IR import *
@@ -11,59 +14,41 @@ from Strategies.LimbusCompanyStrategy import *
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--strategy", type=str, default="mr", help="strategy type of different names, mr for MagiReco or lcb for LimbusCompany")
-    parser.add_argument("--src", type=str, default="src.mp4", help="source video file")
-    parser.add_argument("--ass", type=str, default="template.ass", help="source ass template file")
-    parser.add_argument("--leftblackbar", type=float, default=0.0, help="width ratio of black bar on the left of canvas, right is assumed symmetric if it is not set")
-    parser.add_argument("--rightblackbar", type=float, default=None, help="width ratio of black bar on the right of canvas, assumed symmetric with left if not set")
-    parser.add_argument("--topblackbar", type=float, default=0.0, help="height ratio of black bar on the top of canvas, bottom is assumed symmetric if it is not set")
-    parser.add_argument("--bottomblackbar", type=float, default=None, help="height ratio of black bar on the bottom of canvas, assumed symmetric with top if not set")
-    parser.add_argument("--dst", type=str, default="MagiaTimelineOutput.ass", help="destination ass subtitle file")
-    parser.add_argument("--debug", default=False, action="store_true", help="for debugging only, show frames with debug info and save to debug.mp4")
-    parser.add_argument("--shortcircuit", default=False, action="store_true", help="accelerates the program by skipping detecting other types of subtitles once one type has been confirmed, not compatible with debug mode")
+    parser.add_argument("--config", type=str, default="config.yml", help="config file stating parameters to run with")
+    parser.add_argument("--schema", type=str, default="ConfigSchema.json", help="schema file specifying the format of config file")
     args = parser.parse_args()
-    if True: # data validity test
-        if not args.strategy in ["mr", "lcb", "lcb-mech"]:
-            raise Exception("Invalid strategy! ")
-        srcMp4Test = open(args.src, "rb")
-        srcMp4Test.close()
-        if not (args.leftblackbar >= 0.0 and args.leftblackbar <= 1.0):
-            raise Exception("Invalid left black bar ratio! ")
-        if not (args.topblackbar >= 0.0 and args.topblackbar <= 1.0):
-            raise Exception("Invalid top black bar ratio! ")
-        if args.rightblackbar is None:
-            args.rightblackbar = args.leftblackbar
-        if args.bottomblackbar is None:
-            args.bottomblackbar = args.topblackbar
-        if not (args.rightblackbar >= 0.0 and args.rightblackbar <= 1.0):
-            raise Exception("Invalid right black bar ratio! ")
-        if not (args.bottomblackbar >= 0.0 and args.bottomblackbar <= 1.0):
-            raise Exception("Invalid bottom black bar ratio! ")
-        if args.debug and args.shortcircuit:
-            raise Exception("Debug mode is not compatible with short circuit mode! ")
     
-    srcMp4 = cv.VideoCapture(args.src)
+    schema = json.load(open(args.schema, "r"))
+    config = yaml.load(open(args.config, "r").read(), Loader=yaml.FullLoader)
+    jsonschema.validate(config, schema=schema) # Raises exception on failure
+    if not config["strategy"] in config:
+        raise Exception("No config found for strategy \"" + config["strategy"] + "\"")
+    if not config["preset"] in config[config["strategy"]]:
+        raise Exception("No preset \"" + config["preset"] + "\" found for strategy \"" + config["strategy"] + "\"")
+    strategyConfig = config[config["strategy"]][config["preset"]]
+
+    srcMp4 = cv.VideoCapture(config["source"])
     srcRect = SrcRectangle(srcMp4)
     fps: float = srcMp4.get(cv.CAP_PROP_FPS)
     size: typing.Tuple[int, int] = srcRect.getSizeInt()
 
     debugMp4: typing.Any = None
-    if args.debug:
-        debugMp4 = cv.VideoWriter('debug.mp4', cv.VideoWriter_fourcc('m','p','4','v'), fps, size)
-    templateAss = open(args.ass, "r")
-    dstAss = open(args.dst, "w")
+    if config["mode"] == "debug":
+        debugMp4 = cv.VideoWriter("debug.mp4", cv.VideoWriter_fourcc('m','p','4','v'), fps, size)
+    templateAss = open(config["assTemplate"], "r")
+    dstAss = open(config["destination"], "w")
     dstAss.writelines(templateAss.readlines())
     templateAss.close()
 
-    contentRect = RatioRectangle(srcRect, args.leftblackbar, 1.0 - args.rightblackbar, args.topblackbar, 1.0 - args.bottomblackbar)
+    contentRect = RatioRectangle(srcRect, *config["contentRect"])
 
     strategy: AbstractStrategy | None = None
-    if args.strategy == "mr":
-        strategy = MagirecoStrategy(None, contentRect)
-    elif args.strategy == "lcb":
-        strategy = LimbusCompanyStrategy(None, contentRect)
-    elif args.strategy == "lcb-mech":
-        strategy = LimbusCompanyMechanicsStrategy(None, contentRect)
+    if config["strategy"] == "mr":
+        strategy = MagirecoStrategy(strategyConfig, contentRect)
+    elif config["strategy"] == "lcb":
+        strategy = LimbusCompanyStrategy(strategyConfig, contentRect)
+    elif config["strategy"] == "lcb-mech":
+        strategy = LimbusCompanyMechanicsStrategy(strategyConfig, contentRect)
     else:
         raise Exception("Unknown strategy! ")
     flagIndexType = strategy.getFlagIndexType()
@@ -85,7 +70,7 @@ def main():
         framePoint = FramePoint(flagIndexType, frameIndex, timestamp)
         for cvPass in strategy.getCvPasses():
             mayShortcircuit = cvPass(frame, framePoint)
-            if mayShortcircuit and args.shortcircuit:
+            if mayShortcircuit and config["mode"] == "shortcircuit":
                 break
         fpir.framePoints.append(framePoint)
 
@@ -94,7 +79,7 @@ def main():
         if frameIndex % 1000 == 0:
             print(framePoint.toString())
 
-        if args.debug:
+        if config["mode"] == "debug":
             frameOut = frame
             frameOut = contentRect.draw(frameOut)
             for name, rect in strategy.getRectangles().items():
@@ -114,7 +99,7 @@ def main():
                 break
             cv.imshow("show", frameOut)
     srcMp4.release()
-    if args.debug:
+    if config["mode"] == "debug":
         debugMp4.release()
 
     print("==== FPIR Passes ====")
