@@ -49,15 +49,16 @@
         },
 
         "strategy": {
-            "description": "algorithm to use for timing, each supporting different games and scenes",
+            "description": "which algorithm to use for timing",
             "enum": ["mr", "lcb", "lcb-mech"]
         },
         "preset": {
-            "description": "preset of parameters under a strategy to use for timing, mainly to support videos of different aspect ratios",
+            "description": "which preset of parameters under a strategy to use for timing",
             "type": "string"
         }, 
 
         "mr": {
+            "description": "MagiaRecord quest video strategy",
             "type": "object",
             "patternProperties": {
                 ".*": {
@@ -80,6 +81,7 @@
         },
         
         "lcb": {
+            "description": "LimbusCompany quest video strategy",
             "type": "object",
             "patternProperties": {
                 ".*": {
@@ -96,6 +98,7 @@
         },
 
         "lcb-mech": {
+            "description": "LimbusCompany mechanics introduction video strategy",
             "type": "object",
             "patternProperties": {
                 ".*": {

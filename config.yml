@@ -1,15 +1,76 @@
-# MagiaTimeline config
 # yaml-language-server: $schema=./ConfigSchema.json
 
+# MagiaTimeline config
+
+# This is the configuration file that defines the parameters required for the main program to run. 
+# To make the program work for your video, you should adjust the parameters here before running. 
+# The file is written in YAML format and constrained by JSON Schema in ConfigSchema.json. 
+# However, you do not need to know a lot about YAML or JSON Schema to modify this file. 
+# Any character after a "#" in a line is comment that will not be regarded as part of the config. 
+# There will be comments for entries below to help you understand and modify the parameters. 
+# If you are still not sure how to do it, just "do as Romans do": imitate existing defaults. 
+# Take it easy, the program will verify this file before running, so you are not likely 
+# to be able to harm the program with ill-formed parameters. 
+
+# Rectangles
+
+# Any rectangle (or "rect") to be mentioned below defines a rectangular area in a frame. 
+# It is described as a tuple of four decimals from 0.0 to 1.0, [left, right, top, bottom]. 
+# Each decimal represents a width or height in ratio to the whole frame. 
+# For example, [0.0, 1.0, 0.0, 1.0] represents the whole frame, 
+# and [0.50, 1.0, 0.0, 1.0] represents the right half of the frame. 
+
+# source: path of source mp4 video file
 source: src.mp4
+
+# destination: path of destination ass subtitle file
 destination: MagiaTimelineOutput.ass
+
+# assTemplate: template ass file defining the header of destination ass file
+# You do not need to modify this in most cases. 
 assTemplate: template.ass
+
+# mode: running mode that provides different performance and intermediate information
+# - default: nothing special
+# - debug: shows a real-time window to preview alignments
+#   - It is recommended to run debug mode and adjust parameters before processing the whole video. 
+#     In debug mode, you can preview the cutting of black bars and the alignment of critical areas. 
+#     However, debug mode slows down the program significantly, 
+#     so you should run in other modes after adjustment completes. 
+# - shortcircuit: accelerates running
+#   - Short circuit mode accelerates the program by skipping detecting other types of subtitles 
+#     once one type has been confirmed.
+#     This should have no side-effect if different subtitles guarantee not to appear at the same time. 
 mode: default
+
+# contentRect: rectangle that wraps the content of a frame, cutting away black bars around
+# If your video has black bars around the canvas, you should set this rectangle to cut them away. 
+# For example, if your video has 1% of black bar on left and right and 9% on top and bottom, 
+# then you should set this to [0.01, 0.99, 0.09, 0.91]. 
 contentRect: [0.0, 1.0, 0.0, 1.0]
 
+# Strategies and Presets
+
+# MagiaTimeline supports different games and scenes by providing sets of algorithms called Strategies. 
+# However, when recorded from devices of different resolutions, critical areas (e.g. dialog boxes) 
+# may appear in different places on the screen, even for the same game. 
+# Therefore, we also provide several presets under each Strategy to suit different resolutions. 
+# Before running the program, you should choose a Strategy and a preset under the chosen strategy. 
+# If this still does not work for your resolution, you can create and use your own preset. 
+# You can modify each rectangle so that they align with the critical areas in your video. 
+# To check the alignment, use debug mode. 
+
+# strategy: which algorithm to use for timing
+# - mr: MagiaRecord quest video
+# - lcb: LimbusCompany quest video
+# - lcb-mech: LimbusCompany mechanics introduction video
 strategy: mr
+
+# preset: which preset of parameters under a strategy to use for timing
+# Each strategy can hold multiple presets. This is mainly to support videos of different aspect ratios. 
 preset: default
 
+# MagiaRecord quest video strategy
 mr:
   default:
     dialogOutlineRect: [0.25, 0.75, 0.60, 0.95]
@@ -29,7 +90,8 @@ mr:
     cgSubBorderRect: [0.0, 1.0, 0.72, 0.77]
     cgSubBelowRect: [0.0, 1.0, 0.77, 0.82]
     cgSubTextRect: [0.3, 0.7, 0.77, 1.00]
-  myownpreset:
+  # You can create and use your own preset, as long as it conforms to the format of its strategy. 
+  myownpreset: 
     dialogOutlineRect: [0.25, 0.75, 0.60, 0.95]
     dialogBgRect: [0.3125, 0.6797, 0.7264, 0.8784]
     blackscreenRect: [0.15, 0.85, 0.00, 1.00]
@@ -39,11 +101,13 @@ mr:
     cgSubBelowRect: [0.0, 1.0, 0.70, 0.75]
     cgSubTextRect: [0.3, 0.7, 0.70, 1.00]
 
+# LimbusCompany quest video strategy
 lcb:
   default:
     dialogRect: [0.18, 0.82, 0.75, 0.95]
     dialogAboveRect: [0.18, 0.82, 0.65, 0.75]
 
+# LimbusCompany mechanics introduction video strategy
 lcb-mech:
   default:
     dialogRect: [0.30, 0.70, 0.875, 0.915]

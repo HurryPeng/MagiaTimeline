@@ -5,3 +5,5 @@ __pycache__
 *.ass
 !template.ass
 *Output*.*
+*.yml
+!config.yml
