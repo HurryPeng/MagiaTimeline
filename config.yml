@@ -67,7 +67,6 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 strategy: mr
 
 # preset: which preset of parameters under a strategy to use for timing
-# Each strategy can hold multiple presets. This is mainly to support videos of different aspect ratios. 
 preset: default
 
 # MagiaRecord quest video strategy
