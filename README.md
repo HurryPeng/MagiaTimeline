@@ -2,7 +2,7 @@
 
 A CV-based automatic subtitle timeline marking tool for RPGs (Role-Play Games). 
 
-<img src="./logo/MagiaTimeline-Logo-Transparent.png" width="200">
+<img src="./logo/MagiaTimeline-Logo-Transparent.png" width="300">
 
 ## Introduction
 
