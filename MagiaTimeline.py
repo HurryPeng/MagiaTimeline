@@ -20,11 +20,14 @@ def main():
     
     schema = json.load(open(args.schema, "r"))
     config = yaml.load(open(args.config, "r").read(), Loader=yaml.FullLoader)
-    jsonschema.validate(config, schema=schema) # Raises exception on failure
-    if not config["strategy"] in config:
-        raise Exception("No config found for strategy \"" + config["strategy"] + "\"")
-    if not config["preset"] in config[config["strategy"]]:
-        raise Exception("No preset \"" + config["preset"] + "\" found for strategy \"" + config["strategy"] + "\"")
+    if True: # config validation
+        jsonschema.validate(config, schema=schema) # raises exception on failure
+        srcMp4Test = open(config["source"], "rb") # raises exception on failure
+        srcMp4Test.close()
+        if not config["strategy"] in config:
+            raise Exception("No config found for strategy \"" + config["strategy"] + "\"")
+        if not config["preset"] in config[config["strategy"]]:
+            raise Exception("No preset \"" + config["preset"] + "\" found for strategy \"" + config["strategy"] + "\"")
     strategyConfig = config[config["strategy"]][config["preset"]]
 
     srcMp4 = cv.VideoCapture(config["source"])
