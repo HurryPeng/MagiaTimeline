@@ -25,6 +25,7 @@ Not supporting videos with no subtitle at all. Hard to support videos where subt
 
 - Python 3.10.9
     - opencv-contrib-python 4.7.0.68
+    - jsonschema 4.17.3
 
 Should also work on other versions, but not tested. 
 
