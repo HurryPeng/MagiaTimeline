@@ -241,3 +241,50 @@ class IIRPassFillGap(IIRPass):
                 otherInterval.begin = mid
                 break
         iir.sort()
+
+class IIRPassAlign(IIRPass):
+    def __init__(self, tgtFlag: AbstractFlagIndex, refFlag: AbstractFlagIndex, maxGap: int = 300):
+        self.tgtFlag: AbstractFlagIndex = tgtFlag
+        self.refFlag: AbstractFlagIndex = refFlag
+        self.maxGap: int = maxGap # in millisecs
+    
+    def apply(self, iir: IIR):
+        refPoints: typing.List[int] = []
+        for _, interval in enumerate(iir.intervals):
+            if interval.flag != self.refFlag:
+                continue
+            refPoints.append(interval.begin)
+            refPoints.append(interval.end)
+        refPoints.sort()
+
+        for _, interval in enumerate(iir.intervals):
+            if interval.flag != self.tgtFlag:
+                continue
+            
+            r = 0
+            while r < len(refPoints) and refPoints[r] < interval.begin:
+                r = r + 1
+            l = max(0, r - 1)
+            r = min(r, len(refPoints) - 1)
+            lDist = refPoints[l] - interval.begin # <= 0
+            rDist = refPoints[r] - interval.begin # >= 0
+            dist = lDist
+            if rDist < -lDist:
+                dist = rDist
+            if abs(dist) <= self.maxGap:
+                interval.begin += dist
+            
+            r = 0
+            while r < len(refPoints) and refPoints[r] < interval.end:
+                r = r + 1
+            l = max(0, r - 1)
+            r = min(r, len(refPoints) - 1)
+            lDist = refPoints[l] - interval.begin # <= 0
+            rDist = refPoints[r] - interval.begin # >= 0
+            dist = lDist
+            if rDist < -lDist:
+                dist = rDist
+            if abs(dist) <= self.maxGap:
+                interval.end += dist
+            
+        iir.sort()

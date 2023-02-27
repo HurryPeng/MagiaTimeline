@@ -15,6 +15,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         DialogText = enum.auto()
         
         Speaker = enum.auto()
+        SpeakerText = enum.auto()
         SpeakerFeat = enum.auto()
         SpeakerCont = enum.auto()
 
@@ -22,7 +23,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False, False, False, False, np.array([1.0] * 4), None, None]
+            return [False, False, False, False, False, np.array([1.0] * 4), None, None]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         self.pcaParams: np.ndarray = np.load("./Strategies/Models/lcb-speaker-pca.npz")
@@ -42,11 +43,20 @@ class LimbusCompanyStrategy(AbstractStrategy):
         self.fpirPasses["fpirPassRemoveNoiseDialog"] = FPIRPassBooleanRemoveNoise(LimbusCompanyStrategy.FlagIndex.Dialog, True, 10)
         self.fpirPasses["fpirPassDetectFeatureJumpSpeaker"] = FPIRPassDetectFeatureJump(
             featFlag=LimbusCompanyStrategy.FlagIndex.SpeakerFeat,
-            dstFlag=LimbusCompanyStrategy.FlagIndex.Speaker, # !!!! 
+            dstFlag=LimbusCompanyStrategy.FlagIndex.SpeakerCont,
             featOpMean=lambda feats : np.mean(feats, 0),
             featOpDist=lambda lhs, rhs : 0.5 - cosineSimilarity(lhs, rhs) / 2,
             threshDist=0.01
         )
+        def reduceSpeaker(framePoint: FramePoint):
+            framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.Speaker,
+                framePoint.getFlag(LimbusCompanyStrategy.FlagIndex.SpeakerText)
+                and framePoint.getFlag(LimbusCompanyStrategy.FlagIndex.SpeakerCont)
+            )
+        self.fpirPasses["fpirPassReduceSpeaker"] = FPIRPassFramewiseFunctional(
+            func=reduceSpeaker
+        )
+        self.fpirPasses["fpirPassRemoveNoiseSpeaker"] = FPIRPassBooleanRemoveNoise(LimbusCompanyStrategy.FlagIndex.Speaker, True, 10)
 
         self.fpirToIirPasses = collections.OrderedDict()
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
@@ -56,7 +66,12 @@ class LimbusCompanyStrategy(AbstractStrategy):
 
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Dialog, 500, 0.0)
-        self.iirPasses["iirPassFillGapSpeaker"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Speaker, 300, 0.0)
+        self.iirPasses["iirPassFillGapSpeaker"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Speaker, 500, 1.0)
+        self.iirPasses["iirPassFillAlignDialogToSpeaker"] = IIRPassAlign(
+            tgtFlag=LimbusCompanyStrategy.FlagIndex.Dialog,
+            refFlag=LimbusCompanyStrategy.FlagIndex.Speaker,
+            maxGap=300
+        )
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -123,8 +138,13 @@ class LimbusCompanyStrategy(AbstractStrategy):
         roiSpeakerTextBinResize = cv.resize(roiSpeakerTextBin, (100, 20))
         roiSpeakerTextBinFlatten = roiSpeakerTextBinResize.flatten()
         roiSpeakerTextBinFeat = cv.PCAProject(roiSpeakerTextBinFlatten, mean=self.pcaParams["mean"].T, eigenvectors=self.pcaParams["eigenvectors"]).T[0]
+        meanSpeakerTextBin: float = cv.mean(roiSpeakerTextBin)[0]
+
+        hasSpeakerText: bool = meanSpeakerTextBin > 5.0
         
+        framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.SpeakerText, hasSpeakerText)
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.SpeakerFeat, roiSpeakerTextBinFeat)
+        framePoint.setDebugFlag(meanSpeakerTextBin)
         # framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.SpeakerTextFrame, roiSpeakerTextBinFlatten)
         return False
     
