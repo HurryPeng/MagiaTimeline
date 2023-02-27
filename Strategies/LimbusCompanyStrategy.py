@@ -39,7 +39,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Dialog, 300, 0.0)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Dialog, 500, 0.0)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -86,7 +86,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         meanDialogWithMeanTextCorrectedBlurHSVBin = cv.mean(roiDialogWithMeanTextCorrectedBlurHSVBin)[0]
 
         hasDialogBgColour: bool = meanDialogWithMeanTextCorrectedBlurHSVBin > 180.0
-        hasDialogText: bool = meanDialogTextBin > 0.8 and meanDialogTextBin < 30.0
+        hasDialogText: bool = meanDialogTextBin > 0.5 and meanDialogTextBin < 30.0
 
         isValidDialog = hasDialogBgColour and hasDialogText
 
