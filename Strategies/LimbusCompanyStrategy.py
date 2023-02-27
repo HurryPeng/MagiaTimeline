@@ -13,33 +13,51 @@ class LimbusCompanyStrategy(AbstractStrategy):
         Dialog = enum.auto()
         DialogBgColour = enum.auto()
         DialogText = enum.auto()
+        
+        Speaker = enum.auto()
+        SpeakerFeat = enum.auto()
+        SpeakerCont = enum.auto()
+
+        SpeakerTextFrame = enum.auto()
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False] * cls.getNum()
+            return [False, False, False, False, np.array([1.0] * 4), None, None]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
+        self.pcaParams: np.ndarray = np.load("./Strategies/Models/lcb-speaker-pca.npz")
+        
         self.rectangles = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
-        self.dialogRect = RatioRectangle(contentRect, 0.18, 0.82, 0.75, 0.95)
-        self.dialogAboveRect = RatioRectangle(contentRect, 0.18, 0.82, 0.65, 0.75)
+        self.rectangles["speakerRect"] = RatioRectangle(contentRect, 0.06, 0.17, 0.78, 0.85)
 
         self.dialogRect = self.rectangles["dialogRect"]
         self.dialogAboveRect = self.rectangles["dialogAboveRect"]
+        self.speakerRect = self.rectangles["speakerRect"]
 
-        self.cvPasses = [self.cvPassDialog]
+        self.cvPasses = [self.cvPassDialog, self.cvPassSpeaker]
 
         self.fpirPasses = collections.OrderedDict()
+        # self.fpirPasses["fpirPassTrainPCA"] = LimbusCompanyStrategy.FPIRPassTrainPCA()
         self.fpirPasses["fpirPassRemoveNoiseDialog"] = FPIRPassBooleanRemoveNoise(LimbusCompanyStrategy.FlagIndex.Dialog, True, 10)
+        self.fpirPasses["fpirPassDetectFeatureJumpSpeaker"] = FPIRPassDetectFeatureJump(
+            featFlag=LimbusCompanyStrategy.FlagIndex.SpeakerFeat,
+            dstFlag=LimbusCompanyStrategy.FlagIndex.Speaker, # !!!! 
+            featOpMean=lambda feats : np.mean(feats, 0),
+            featOpDist=lambda lhs, rhs : 0.5 - cosineSimilarity(lhs, rhs) / 2,
+            threshDist=0.01
+        )
 
         self.fpirToIirPasses = collections.OrderedDict()
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
-            LimbusCompanyStrategy.FlagIndex.Dialog
+            LimbusCompanyStrategy.FlagIndex.Dialog, 
+            LimbusCompanyStrategy.FlagIndex.Speaker
         )
 
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Dialog, 500, 0.0)
+        self.iirPasses["iirPassFillGapSpeaker"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Speaker, 300, 0.0)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -59,6 +77,9 @@ class LimbusCompanyStrategy(AbstractStrategy):
 
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
+    
+    def getFlag2Track(self) -> typing.Dict[AbstractFlagIndex, int]:
+        return {LimbusCompanyStrategy.FlagIndex.Speaker: 1}
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         alpha = 0.85
@@ -86,14 +107,42 @@ class LimbusCompanyStrategy(AbstractStrategy):
         meanDialogWithMeanTextCorrectedBlurHSVBin = cv.mean(roiDialogWithMeanTextCorrectedBlurHSVBin)[0]
 
         hasDialogBgColour: bool = meanDialogWithMeanTextCorrectedBlurHSVBin > 180.0
-        hasDialogText: bool = meanDialogTextBin > 0.5 and meanDialogTextBin < 30.0
+        hasDialogText: bool = meanDialogTextBin > 0.3 and meanDialogTextBin < 30.0
 
         isValidDialog = hasDialogBgColour and hasDialogText
 
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.Dialog, isValidDialog)
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogBgColour, hasDialogBgColour)
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogText, hasDialogText)
-        return isValidDialog
+        return False
+    
+    def cvPassSpeaker(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiSpeaker = self.speakerRect.cutRoi(frame)
+
+        roiSpeakerGray = cv.cvtColor(roiSpeaker, cv.COLOR_BGR2GRAY)
+        _, roiSpeakerTextBin = cv.threshold(roiSpeakerGray, 192, 255, cv.THRESH_BINARY)
+        roiSpeakerTextBinResize = cv.resize(roiSpeakerTextBin, (100, 20))
+        roiSpeakerTextBinFlatten = roiSpeakerTextBinResize.flatten()
+        roiSpeakerTextBinFeat = cv.PCAProject(roiSpeakerTextBinFlatten, mean=self.pcaParams["mean"].T, eigenvectors=self.pcaParams["eigenvectors"]).T[0]
+        
+        framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.SpeakerFeat, roiSpeakerTextBinFeat)
+        # framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.SpeakerTextFrame, roiSpeakerTextBinFlatten)
+        return False
+    
+    class FPIRPassTrainPCA(FPIRPass):
+        def apply(self, fpir: FPIR):
+            feats: np.ndarray = np.array([])
+            for i, framePoint in enumerate(fpir.framePoints):
+                feat: np.ndarray = framePoint.getFlag(LimbusCompanyStrategy.FlagIndex.SpeakerTextFrame)
+                if i % 50 != 0: # sample only a few frames because one single subtitle lasts for seconds
+                    continue
+                if i == 0:
+                    feats = feat
+                else:
+                    feats = np.vstack((feats, feat))
+
+            mean, eigenvectors = cv.PCACompute(feats, mean=None, maxComponents=4)
+            np.savez("./Strategies/Models/lcb-speaker-pca.npz", mean=mean, eigenvectors=eigenvectors)
 
 class LimbusCompanyMechanicsStrategy(AbstractStrategy):
     class FlagIndex(AbstractFlagIndex):
@@ -110,6 +159,8 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
             return [False, False, False, False, np.array([1.0] * 4), None]
 
     def __init__(self, config, contentRect: AbstractRectangle) -> None:
+        self.pcaParams: np.ndarray = np.load("./Strategies/Models/lcb-mech-dialog-pca.npz")
+        
         self.rectangles = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
@@ -145,8 +196,6 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(LimbusCompanyMechanicsStrategy.FlagIndex.Dialog, 500, 1.0)
 
-        self.pcaParams: np.ndarray = np.load("./Strategies/Models/lcb-mech-dialog-pca.npz")
-
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
@@ -178,13 +227,13 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
         hasDialogBgColour: bool = meanDialogGrayNoText < 10
 
         roiDialogGrayResize = cv.resize(roiDialogGray, (100, 20))
-        roiDialogGrayResizeFlatten = roiDialogGrayResize.flatten()
+        roiDialogGrayFlatten = roiDialogGrayResize.flatten()
 
-        roiDialogGrayResizeCompressed = cv.PCAProject(roiDialogGrayResizeFlatten, mean=self.pcaParams["mean"].T, eigenvectors=self.pcaParams["eigenvectors"]).T[0]
+        roiDialogGrayFeat = cv.PCAProject(roiDialogGrayFlatten, mean=self.pcaParams["mean"].T, eigenvectors=self.pcaParams["eigenvectors"]).T[0]
 
         framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogBgColour, hasDialogBgColour)
         framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextMin, meanDialogTextBin > 10)
-        framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFeat, roiDialogGrayResizeCompressed)
+        framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextFeat, roiDialogGrayFeat)
         return False
 
     class FPIRPassTrainPCA(FPIRPass):
