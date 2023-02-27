@@ -123,7 +123,7 @@ def main():
         iirPass.apply(iir)
 
     print("==== IIR to ASS ====")
-    dstAss.write(iir.toAss())
+    dstAss.write(iir.toAss(strategy.getFlag2Track()))
     dstAss.close()
 
 if __name__ == "__main__":

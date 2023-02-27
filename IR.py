@@ -166,11 +166,12 @@ class Interval:
         self.end: int = end # timestamp
         self.flag: AbstractFlagIndex = flag
 
-    def toAss(self, flag: str = "unknown") -> str:
-        template = "Dialogue: 0,{},{},Default,,0,0,0,,Subtitle_{}_{}"
+    def toAss(self, id: int = -1, track: int = 0) -> str:
+        template = "Dialogue: 0,{},{},Default,,0,0,{},,Subtitle_{}_{}"
         sBegin = formatTimestamp(self.begin)
         sEnd = formatTimestamp(self.end)
-        return template.format(sBegin, sEnd, self.flag.name, flag)
+        marginV: int = 100 + 50 * track
+        return template.format(sBegin, sEnd, marginV, self.flag.name, id)
 
     def dist(self, other: Interval) -> int:
         l = self
@@ -198,11 +199,13 @@ class IIR: # Interval Intermediate Representation
     def sort(self):
         self.intervals.sort(key=lambda interval : interval.begin)
 
-    def toAss(self) -> str:
+    def toAss(self, flag2Track: typing.Dict[AbstractFlagIndex, int] = {}) -> str:
+        lines: typing.List[str] = []
         ass = ""
         for id, interval in enumerate(self.intervals):
-            ass += interval.toAss(str(id)) + "\n"
-        return ass
+            track: int = flag2Track.get(interval.flag, 0)
+            lines.append(interval.toAss(id, track) + "\n")
+        return "".join(lines)
 
 class IIRPass(abc.ABC):
     @abc.abstractmethod

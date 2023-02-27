@@ -32,3 +32,6 @@ class AbstractStrategy(abc.ABC):
     @abc.abstractmethod
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         pass
+
+    def getFlag2Track(self) -> typing.Dict[AbstractFlagIndex, int]:
+        return {}
