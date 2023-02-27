@@ -103,8 +103,8 @@ mr:
 # LimbusCompany quest video strategy
 lcb:
   default:
-    dialogRect: [0.18, 0.82, 0.75, 0.95]
-    dialogAboveRect: [0.18, 0.82, 0.65, 0.75]
+    dialogRect: [0.18, 0.82, 0.78, 0.97]
+    dialogAboveRect: [0.18, 0.82, 0.70, 0.78]
 
 # LimbusCompany mechanics introduction video strategy
 lcb-mech:
