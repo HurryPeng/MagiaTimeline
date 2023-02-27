@@ -30,7 +30,6 @@ class LimbusCompanyStrategy(AbstractStrategy):
         self.rectangles = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
-        self.rectangles["speakerRect"] = RatioRectangle(contentRect, 0.06, 0.17, 0.78, 0.85)
 
         self.dialogRect = self.rectangles["dialogRect"]
         self.dialogAboveRect = self.rectangles["dialogAboveRect"]
