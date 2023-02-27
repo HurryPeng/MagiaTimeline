@@ -145,18 +145,18 @@ class FPIRPassBooleanBuildIntervals(FPIRPassBuildIntervals):
 
     def apply(self, fpir: FPIR) -> typing.List[Interval]:
         intervals: typing.List[Interval] = []
-        lastBegin: int = 0
-        state = [False] * len(self.flags)
+        lastBegin: typing.List[int] = [0] * len(self.flags)
+        state: typing.List[bool] = [False] * len(self.flags)
         for framePoint in fpir.getFramePointsWithVirtualEnd():
             for i in range(len(state)):
                 if not state[i]: # off -> on
                     if framePoint.getFlag(self.flags[i]):
                         state[i] = True
-                        lastBegin = framePoint.timestamp
+                        lastBegin[i] = framePoint.timestamp
                 else: # on - > off
                     if not framePoint.getFlag(self.flags[i]):
                         state[i] = False
-                        intervals.append(Interval(lastBegin, framePoint.timestamp, self.flags[i]))
+                        intervals.append(Interval(lastBegin[i], framePoint.timestamp, self.flags[i]))
         return intervals
 
 class Interval:
@@ -201,9 +201,11 @@ class IIR: # Interval Intermediate Representation
 
     def toAss(self, flag2Track: typing.Dict[AbstractFlagIndex, int] = {}) -> str:
         lines: typing.List[str] = []
-        ass = ""
-        for id, interval in enumerate(self.intervals):
+        trackCounter: typing.Dict[int, int] = {}
+        for _, interval in enumerate(self.intervals):
             track: int = flag2Track.get(interval.flag, 0)
+            id = trackCounter.get(interval.flag, 0)
+            trackCounter[interval.flag] = id + 1
             lines.append(interval.toAss(id, track) + "\n")
         return "".join(lines)
 
