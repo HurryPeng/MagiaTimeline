@@ -279,8 +279,8 @@ class IIRPassAlign(IIRPass):
                 r = r + 1
             l = max(0, r - 1)
             r = min(r, len(refPoints) - 1)
-            lDist = refPoints[l] - interval.begin # <= 0
-            rDist = refPoints[r] - interval.begin # >= 0
+            lDist = refPoints[l] - interval.end # <= 0
+            rDist = refPoints[r] - interval.end # >= 0
             dist = lDist
             if rDist < -lDist:
                 dist = rDist
