@@ -23,7 +23,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False, False, False, False, False, np.array([1.0] * 4), None, None]
+            return [False, False, False, False, False, np.array([1.0] * 4), False, None]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         self.pcaParams: np.ndarray = np.load("./Strategies/Models/lcb-speaker-pca.npz")
@@ -46,7 +46,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
             dstFlag=LimbusCompanyStrategy.FlagIndex.SpeakerCont,
             featOpMean=lambda feats : np.mean(feats, 0),
             featOpDist=lambda lhs, rhs : 0.5 - cosineSimilarity(lhs, rhs) / 2,
-            threshDist=0.01
+            threshDist=0.0001
         )
         def reduceSpeaker(framePoint: FramePoint):
             framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.Speaker,
@@ -70,7 +70,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         self.iirPasses["iirPassFillAlignDialogToSpeaker"] = IIRPassAlign(
             tgtFlag=LimbusCompanyStrategy.FlagIndex.Dialog,
             refFlag=LimbusCompanyStrategy.FlagIndex.Speaker,
-            maxGap=300
+            maxGap=600
         )
 
     @classmethod
@@ -117,7 +117,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         roiDialogWithMeanTextCorrected: cv.Mat = np.uint8((1 / alpha) * roiDialogWithMeanText - (1 / alpha - 1) * meanDialogAbove) # type: ignore
         roiDialogWithMeanTextCorrectedBlur = cv.blur(roiDialogWithMeanTextCorrected, (10, 10))
         roiDialogWithMeanTextCorrectedBlurHSV = cv.cvtColor(roiDialogWithMeanTextCorrectedBlur, cv.COLOR_BGR2HSV)
-        roiDialogWithMeanTextCorrectedBlurHSVBin = inRange(roiDialogWithMeanTextCorrectedBlurHSV, [10, 20, 10], [45, 255, 50])
+        roiDialogWithMeanTextCorrectedBlurHSVBin = inRange(roiDialogWithMeanTextCorrectedBlurHSV, [0, 20, 10], [180, 255, 50])
         meanDialogWithMeanTextCorrectedBlurHSVBin = cv.mean(roiDialogWithMeanTextCorrectedBlurHSVBin)[0]
 
         hasDialogBgColour: bool = meanDialogWithMeanTextCorrectedBlurHSVBin > 180.0
@@ -134,18 +134,16 @@ class LimbusCompanyStrategy(AbstractStrategy):
         roiSpeaker = self.speakerRect.cutRoi(frame)
 
         roiSpeakerGray = cv.cvtColor(roiSpeaker, cv.COLOR_BGR2GRAY)
-        _, roiSpeakerTextBin = cv.threshold(roiSpeakerGray, 192, 255, cv.THRESH_BINARY)
-        roiSpeakerTextBinResize = cv.resize(roiSpeakerTextBin, (100, 20))
-        roiSpeakerTextBinFlatten = roiSpeakerTextBinResize.flatten()
-        roiSpeakerTextBinFeat = cv.PCAProject(roiSpeakerTextBinFlatten, mean=self.pcaParams["mean"].T, eigenvectors=self.pcaParams["eigenvectors"]).T[0]
+        _, roiSpeakerTextBin = cv.threshold(roiSpeakerGray, 192, 255, cv.THRESH_TOZERO)
+        roiSpeakerTextResize = cv.resize(roiSpeakerGray, (75, 30))
+        roiSpeakerTextFlatten = roiSpeakerTextResize.flatten()
+        roiSpeakerTextFeat = cv.PCAProject(roiSpeakerTextFlatten, mean=self.pcaParams["mean"].T, eigenvectors=self.pcaParams["eigenvectors"]).T[0]
         meanSpeakerTextBin: float = cv.mean(roiSpeakerTextBin)[0]
 
-        hasSpeakerText: bool = meanSpeakerTextBin > 5.0
+        hasSpeakerText: bool = meanSpeakerTextBin > 2.5
         
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.SpeakerText, hasSpeakerText)
-        framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.SpeakerFeat, roiSpeakerTextBinFeat)
-        framePoint.setDebugFlag(meanSpeakerTextBin)
-        # framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.SpeakerTextFrame, roiSpeakerTextBinFlatten)
+        framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.SpeakerFeat, roiSpeakerTextFeat)
         return False
     
     class FPIRPassTrainPCA(FPIRPass):
@@ -153,7 +151,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
             feats: np.ndarray = np.array([])
             for i, framePoint in enumerate(fpir.framePoints):
                 feat: np.ndarray = framePoint.getFlag(LimbusCompanyStrategy.FlagIndex.SpeakerTextFrame)
-                if i % 50 != 0: # sample only a few frames because one single subtitle lasts for seconds
+                if i % 15 != 0: # sample only a few frames because one single subtitle lasts for seconds
                     continue
                 if i == 0:
                     feats = feat

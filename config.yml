@@ -105,7 +105,7 @@ lcb:
   default:
     dialogRect: [0.18, 0.82, 0.78, 0.97]
     dialogAboveRect: [0.18, 0.82, 0.70, 0.78]
-    speakerRect: [0.06, 0.17, 0.78, 0.85]
+    speakerRect: [0.07, 0.16, 0.79, 0.84]
 
 # LimbusCompany mechanics introduction video strategy
 lcb-mech:

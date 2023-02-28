@@ -256,6 +256,8 @@ class IIRPassAlign(IIRPass):
             refPoints.append(interval.begin)
             refPoints.append(interval.end)
         refPoints.sort()
+        if len(refPoints) == 0:
+            return
 
         for _, interval in enumerate(iir.intervals):
             if interval.flag != self.tgtFlag:
