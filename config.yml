@@ -20,11 +20,13 @@
 # For example, [0.0, 1.0, 0.0, 1.0] represents the whole frame, 
 # and [0.50, 1.0, 0.0, 1.0] represents the right half of the frame. 
 
-# source: path of source mp4 video file
-source: src.mp4
+# source: paths of source mp4 video files
+source:
+- src.mp4
 
-# destination: path of destination ass subtitle file
-destination: MagiaTimelineOutput.ass
+# destination: paths of destination ass subtitle files
+destination:
+- MagiaTimelineOutput.ass
 
 # assTemplate: template ass file defining the header of destination ass file
 # You do not need to modify this in most cases. 

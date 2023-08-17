@@ -28,12 +28,20 @@
     "type": "object",
     "properties": {
         "source": {
-            "description": "path of source mp4 video file",
-            "type": "string"
+            "description": "paths of source mp4 video files",
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "minLength": 1
         },
         "destination": {
-            "description": "path of destination ass subtitle file",
-            "type": "string"
+            "description": "paths of destination ass subtitle files",
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "minLength": 1
         },
         "assTemplate": {
             "description": "template ass file defining the header of destination ass file",
@@ -41,6 +49,7 @@
         },
         "mode": {
             "description": "running mode that provides different performance and intermediate information",
+            "type": "string",
             "enum": ["default", "debug", "shortcircuit"]
         },
         "contentRect": {
