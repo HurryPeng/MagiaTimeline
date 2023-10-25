@@ -33,7 +33,7 @@ class MagirecoStrategy(AbstractStrategy):
             return [False] * cls.getNum()
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
-        self.rectangles = collections.OrderedDict()
+        self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
 

@@ -1,6 +1,7 @@
 .vscode
 __pycache__
 *.mp4
+*.mov
 *.txt
 *.ass
 !template.ass

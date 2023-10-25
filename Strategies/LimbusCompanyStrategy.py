@@ -46,7 +46,8 @@ class LimbusCompanyStrategy(AbstractStrategy):
             dstFlag=LimbusCompanyStrategy.FlagIndex.SpeakerCont,
             featOpMean=lambda feats : np.mean(feats, 0),
             featOpDist=lambda lhs, rhs : 0.5 - cosineSimilarity(lhs, rhs) / 2,
-            threshDist=0.0001
+            threshDist=0.0001,
+            inverse=True
         )
         def reduceSpeaker(framePoint: FramePoint):
             framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.Speaker,
@@ -192,7 +193,8 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
             dstFlag=LimbusCompanyMechanicsStrategy.FlagIndex.DialogTextCont, 
             featOpMean=lambda feats : np.mean(feats, 0),
             featOpDist=lambda lhs, rhs : 0.5 - cosineSimilarity(lhs, rhs) / 2,
-            threshDist=0.01
+            threshDist=0.01,
+            inverse=True
         )
         def reduceToDialogText(framePoint: FramePoint):
             framePoint.setFlag(LimbusCompanyMechanicsStrategy.FlagIndex.Dialog,

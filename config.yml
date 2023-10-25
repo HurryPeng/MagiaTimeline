@@ -22,7 +22,7 @@
 
 # source: paths of source mp4 video files
 source:
-- src.mp4
+- Scene0/Scene0.Film1.mp4
 
 # destination: paths of destination ass subtitle files
 destination:
@@ -43,13 +43,18 @@ assTemplate: template.ass
 #   - Short circuit mode accelerates the program by skipping detecting other types of subtitles 
 #     once one type has been confirmed.
 #     This should have no side-effect if different subtitles guarantee not to appear at the same time. 
-mode: default
+mode: shortcircuit
 
 # contentRect: rectangle that wraps the content of a frame, cutting away black bars around
 # If your video has black bars around the canvas, you should set this rectangle to cut them away. 
 # For example, if your video has 1% of black bar on left and right and 9% on top and bottom, 
 # then you should set this to [0.01, 0.99, 0.09, 0.91]. 
-contentRect: [0.0, 1.0, 0.0, 1.0]
+# contentRect: [0.0, 1.0, 0.0, 1.0]
+# contentRect: [0.01, 0.99, 0.0, 1.0]
+# contentRect: [0.0, 1.0, 0.05, 0.85]
+contentRect: [0, 1, 0.09, 0.91]
+# contentRect: [0.11, 0.92, 0.0, 1.0]
+# contentRect: [0.12, 0.92, 0.10, 0.90]
 
 # Strategies and Presets
 
@@ -64,9 +69,10 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 
 # strategy: which algorithm to use for timing
 # - mr: MagiaRecord quest video
+# - mr-s0: MagiaRecord Scene0 film
 # - lcb: LimbusCompany quest video
 # - lcb-mech: LimbusCompany mechanics introduction video
-strategy: mr
+strategy: mr-s0
 
 # preset: which preset of parameters under a strategy to use for timing
 preset: default
@@ -101,6 +107,12 @@ mr:
     cgSubBorderRect: [0.0, 1.0, 0.65, 0.70]
     cgSubBelowRect: [0.0, 1.0, 0.70, 0.75]
     cgSubTextRect: [0.3, 0.7, 0.70, 1.00]
+
+# MagiaRecord Scene0 film strategy
+
+mr-s0:
+  default:
+    dialogRect: [0.35, 0.65, 0.81, 0.93]
 
 # LimbusCompany quest video strategy
 lcb:

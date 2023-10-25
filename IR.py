@@ -29,7 +29,7 @@ class FramePoint:
     def getDebugFlag(self) -> typing.Any:
         return self.flags[self.flagIndexType.Debug]
     
-    def setDebugFrame(self, debugFrame: cv.Mat):
+    def setDebugFrame(self, debugFrame):
         self.debugFrame = debugFrame
 
     def setDebugFrameHSV(self, debugFrame: cv.Mat):
@@ -101,13 +101,14 @@ class FPIRPassDetectFeatureJump(FPIRPass):
     def __init__(self, featFlag: AbstractFlagIndex, dstFlag: AbstractFlagIndex, \
             featOpMean: typing.Callable[[typing.List[typing.Any]], typing.Any], \
             featOpDist: typing.Callable[[typing.Any, typing.Any], float], \
-            threshDist: float = 0.5, windowSize: int = 3):
+            threshDist: float = 0.5, windowSize: int = 3, inverse: bool = False):
         self.featFlag: AbstractFlagIndex = featFlag
         self.dstFlag: AbstractFlagIndex = dstFlag
         self.featOpMean: typing.Callable[[typing.List[typing.Any]], typing.Any] = featOpMean
         self.featOpDist: typing.Callable[[typing.Any, typing.Any], float] = featOpDist
         self.threshDist: float = threshDist
         self.windowSize: int = windowSize
+        self.inverse: bool = inverse
 
     def apply(self, fpir: FPIR):
         framePointsExt = fpir.getFramePointsWithVirtualEnd(self.windowSize)
@@ -120,9 +121,9 @@ class FPIRPassDetectFeatureJump(FPIRPass):
             dist = self.featOpDist(framePoint.getFlag(self.featFlag), meanFeat)
 
             if dist >= self.threshDist:
-                framePoint.setFlag(self.dstFlag, False)
+                framePoint.setFlag(self.dstFlag, not self.inverse)
             else:
-                framePoint.setFlag(self.dstFlag, True)
+                framePoint.setFlag(self.dstFlag, self.inverse)
 
 class FPIRPassFunctional(FPIRPass):
     def __init__(self, func: typing.Callable[[FPIR], typing.Any]):

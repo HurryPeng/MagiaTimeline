@@ -10,6 +10,7 @@ from Rectangle import *
 from IR import *
 from Util import *
 from Strategies.MagirecoStrategy import *
+from Strategies.MagirecoScene0Strategy import *
 from Strategies.LimbusCompanyStrategy import *
 
 def main():
@@ -57,6 +58,8 @@ def main():
         strategy: AbstractStrategy | None = None
         if config["strategy"] == "mr":
             strategy = MagirecoStrategy(strategyConfig, contentRect)
+        if config["strategy"] == "mr-s0":
+            strategy = MagirecoScene0Strategy(strategyConfig, contentRect)
         elif config["strategy"] == "lcb":
             strategy = LimbusCompanyStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "lcb-mech":

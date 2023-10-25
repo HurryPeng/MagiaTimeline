@@ -59,7 +59,7 @@
 
         "strategy": {
             "description": "which algorithm to use for timing",
-            "enum": ["mr", "lcb", "lcb-mech"]
+            "enum": ["mr", "mr-s0", "lcb", "lcb-mech"]
         },
         "preset": {
             "description": "which preset of parameters under a strategy to use for timing",
@@ -84,6 +84,22 @@
                         "cgSubTextRect": {"$ref": "#/$defs/ratioRectangle"}
                     },
                     "required": ["dialogOutlineRect", "dialogBgRect", "blackscreenRect", "whitescreenRect", "cgSubAboveRect", "cgSubBorderRect", "cgSubBelowRect", "cgSubTextRect"],
+                    "additionalProperties": false
+                }
+            }
+        },
+
+        "mr-s0": {
+            "description": "MagiaRecord Scene0 film strategy",
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "description": "a preset for strategy mr",
+                    "type": "object",
+                    "properties": {
+                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                    },
+                    "required": ["dialogRect"],
                     "additionalProperties": false
                 }
             }
