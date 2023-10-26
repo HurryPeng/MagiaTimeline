@@ -78,8 +78,18 @@ class MagirecoScene0Strategy(AbstractStrategy):
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
         # roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)
 
+        _, roiDialogShade0BinFix = cv.threshold(roiDialogGray, 50, 255, cv.THRESH_BINARY_INV)
+        roiDialogShade0BinAdap = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 7, 3)
+        roiDialogShade0Bin = cv.bitwise_or(roiDialogShade0BinFix, roiDialogShade0BinAdap)
+        ccnum, cclabels, ccstats, cccentroids = cv.connectedComponentsWithStats(cv.bitwise_not(roiDialogShade0Bin), connectivity=4)
+
+        roiDialogCCFilterBin = roiDialogShade0Bin
+        for n in range(ccnum):
+            stat = ccstats[n]
+            if not(stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25):
+                roiDialogCCFilterBin[cclabels == n] = 255
+
         _, roiDialogShade1BinFix = cv.threshold(roiDialogGray, 40, 255, cv.THRESH_BINARY_INV)
-        # _, roiDialogBin = cv.threshold(roiDialogGray, 0, 255, cv.THRESH_OTSU)
         roiDialogShade1BinAdap = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 7, 6)
         roiDialogShade1Bin = cv.bitwise_and(roiDialogShade1BinFix, roiDialogShade1BinAdap)
 
@@ -90,6 +100,10 @@ class MagirecoScene0Strategy(AbstractStrategy):
         # roiDialogText1BinDialate = cv.morphologyEx(roiDialogText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         roiDialogText1BinOpen = cv.morphologyEx(roiDialogText1Bin, cv.MORPH_OPEN, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         
+        roiDialogText2Bin = cv.bitwise_and(cv.bitwise_not(roiDialogCCFilterBin), roiDialogText1BinOpen)
+
+        framePoint.setDebugFrame(roiDialogText2Bin)
+
         # roiDialogShade2Bin = cv.bitwise_and(roiDialogShade1Bin, roiDialogText1BinDialate)
         # roiDialogShade2BinDialate = cv.morphologyEx(roiDialogShade1Bin, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (11, 11)))
 
@@ -97,13 +111,12 @@ class MagirecoScene0Strategy(AbstractStrategy):
 
         # roiDialogCompoundBin = cv.bitwise_xor(roiDialogText1BinOpen, roiDialogShade2Bin)
 
-        # framePoint.setDebugFrame(roiDialogText1BinOpen)
+        meanDialogText2Bin: float = cv.mean(roiDialogText2Bin)[0]
+        hasDialog: bool = meanDialogText2Bin > 3
 
-        meanDialogText1BinOpen: float = cv.mean(roiDialogText1BinOpen)[0]
-        hasDialog: bool = meanDialogText1BinOpen > 5
-
-        framePoint.setDebugFlag(meanDialogText1BinOpen)
+        framePoint.setDebugFlag(meanDialogText2Bin, ccnum)
+        # framePoint.setDebugFlag(meanDialogText1BinOpen, num, stats)
 
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Dialog, hasDialog)
-        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogVal, meanDialogText1BinOpen)
+        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogVal, meanDialogText2Bin)
         return hasDialog
