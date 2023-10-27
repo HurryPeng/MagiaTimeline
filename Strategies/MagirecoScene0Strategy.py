@@ -78,31 +78,42 @@ class MagirecoScene0Strategy(AbstractStrategy):
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
         # roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)
 
-        _, roiDialogShade0BinFix = cv.threshold(roiDialogGray, 50, 255, cv.THRESH_BINARY_INV)
-        roiDialogShade0BinAdap = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 7, 3)
-        roiDialogShade0Bin = cv.bitwise_or(roiDialogShade0BinFix, roiDialogShade0BinAdap)
-        ccnum, cclabels, ccstats, cccentroids = cv.connectedComponentsWithStats(cv.bitwise_not(roiDialogShade0Bin), connectivity=4)
-
-        roiDialogCCFilterBin = roiDialogShade0Bin
-        for n in range(ccnum):
-            stat = ccstats[n]
-            if not(stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25):
-                roiDialogCCFilterBin[cclabels == n] = 255
-
-        _, roiDialogShade1BinFix = cv.threshold(roiDialogGray, 40, 255, cv.THRESH_BINARY_INV)
-        roiDialogShade1BinAdap = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 7, 6)
+        _, roiDialogShade1BinFix = cv.threshold(roiDialogGray, 50, 255, cv.THRESH_BINARY)
+        roiDialogShade1BinAdap = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 7, 3)
         roiDialogShade1Bin = cv.bitwise_and(roiDialogShade1BinFix, roiDialogShade1BinAdap)
-
-        roiDialogShade1BinClose = cv.morphologyEx(roiDialogShade1Bin, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (11, 11)))
         
-        roiDialogText1Bin = cv.bitwise_and(roiDialogShade1BinClose, cv.bitwise_not(roiDialogShade1Bin))
+        cc1Num, cc1Labels, cc1Stats, cc1Centroids = cv.connectedComponentsWithStats(roiDialogShade1Bin, connectivity=4)
+        roiDialogText1Bin = roiDialogShade1Bin
+        for n in range(cc1Num):
+            stat = cc1Stats[n]
+            if not(stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
+                roiDialogText1Bin[cc1Labels == n] = 0
+        roiDialogText1BinDialate = cv.morphologyEx(roiDialogText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
+
+        _, roiDialogShade2BinFix = cv.threshold(roiDialogGray, 40, 255, cv.THRESH_BINARY_INV)
+        roiDialogShade2BinAdap = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 7, 6)
+        roiDialogShade2Bin = cv.bitwise_and(roiDialogShade2BinFix, roiDialogShade2BinAdap)
+        roiDialogShade2BinFiltered = cv.bitwise_and(roiDialogShade2Bin, roiDialogText1BinDialate)
+
+        roiDialogShade2BinFilteredClose = cv.morphologyEx(roiDialogShade2BinFiltered, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (11, 11)))
+        
+        roiDialogText2Bin = cv.bitwise_and(roiDialogShade2BinFilteredClose, roiDialogText1Bin)
+
+        cc2Num, cc2Labels, cc2Stats, cc2Centroids = cv.connectedComponentsWithStats(roiDialogText2Bin, connectivity=4)
+        roiDialogText3Bin = roiDialogText2Bin
+        cc2LeagalAreaSum: int = 0
+        for n in range(cc2Num):
+            stat = cc2Stats[n]
+            if (stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
+                cc2LeagalAreaSum += stat[4]
+        cc2LeagalAreaRatio: float = cc2LeagalAreaSum / self.dialogRect.getArea() * 255
 
         # roiDialogText1BinDialate = cv.morphologyEx(roiDialogText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
-        roiDialogText1BinOpen = cv.morphologyEx(roiDialogText1Bin, cv.MORPH_OPEN, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
+        # roiDialogText2BinOpen = cv.morphologyEx(roiDialogText2Bin, cv.MORPH_OPEN, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         
-        roiDialogText2Bin = cv.bitwise_and(cv.bitwise_not(roiDialogCCFilterBin), roiDialogText1BinOpen)
+        # roiDialogText2Bin = cv.bitwise_and(roiDialogText1Bin, roiDialogText2BinOpen)
 
-        framePoint.setDebugFrame(roiDialogText2Bin)
+        framePoint.setDebugFrame(roiDialogText3Bin)
 
         # roiDialogShade2Bin = cv.bitwise_and(roiDialogShade1Bin, roiDialogText1BinDialate)
         # roiDialogShade2BinDialate = cv.morphologyEx(roiDialogShade1Bin, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (11, 11)))
@@ -111,12 +122,11 @@ class MagirecoScene0Strategy(AbstractStrategy):
 
         # roiDialogCompoundBin = cv.bitwise_xor(roiDialogText1BinOpen, roiDialogShade2Bin)
 
-        meanDialogText2Bin: float = cv.mean(roiDialogText2Bin)[0]
-        hasDialog: bool = meanDialogText2Bin > 3
+        hasDialog: bool = cc2LeagalAreaRatio > 3
 
-        framePoint.setDebugFlag(meanDialogText2Bin, ccnum)
+        framePoint.setDebugFlag(cc2LeagalAreaRatio, cc1Num)
         # framePoint.setDebugFlag(meanDialogText1BinOpen, num, stats)
 
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Dialog, hasDialog)
-        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogVal, meanDialogText2Bin)
+        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogVal, cc2LeagalAreaRatio)
         return hasDialog

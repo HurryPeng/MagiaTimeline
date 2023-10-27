@@ -34,6 +34,9 @@ class AbstractRectangle(abc.ABC):
 
     def getHeightInt(self) -> int:
         return self.getSizeInt()[1]
+    
+    def getArea(self) -> int:
+        return self.getWidthInt() * self.getHeightInt()
 
     def cutRoi(self, frame: cv.Mat) -> cv.Mat:
         leftOffset, topOffset = self.getOffsetsInt()
