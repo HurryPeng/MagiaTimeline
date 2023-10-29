@@ -192,6 +192,16 @@ class MagirecoScene0Strategy(AbstractStrategy):
         floatBalloonRightRatio = min(1, floatBalloonCentralYRatio + 0.2)
         floatBalloonTopRatio = max(0, floatBalloonCentralXRatio - 0.15)
         floatBalloonBottomRatio = min(1, floatBalloonCentralXRatio + 0.15)
+        
+        # Guarantee constant shape in corners
+        if floatBalloonLeftRatio == 0:
+            floatBalloonRightRatio = 0.4
+        if floatBalloonRightRatio == 1:
+            floatBalloonLeftRatio = 0.6
+        if floatBalloonTopRatio == 0:
+            floatBalloonBottomRatio = 0.3
+        if floatBalloonBottomRatio == 1:
+            floatBalloonTopRatio = 0.7
 
         self.rectangles["floatingBalloonRect"] = RatioRectangle(self.balloonRect, floatBalloonLeftRatio, floatBalloonRightRatio, floatBalloonTopRatio, floatBalloonBottomRatio)
         self.floatingBalloonRect = self.rectangles["floatingBalloonRect"]
