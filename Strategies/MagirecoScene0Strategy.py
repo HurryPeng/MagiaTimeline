@@ -185,8 +185,9 @@ class MagirecoScene0Strategy(AbstractStrategy):
         _, maxBalloonBlur, _, maxBalloonBlurPoint = cv.minMaxLoc(roiBalloonBlur)
         floatBalloonCentralY = maxBalloonBlurPoint[0]
         floatBalloonCentralX = maxBalloonBlurPoint[1]
-        floatBalloonCentralYRatio = floatBalloonCentralY / self.balloonRect.getWidthInt()
-        floatBalloonCentralXRatio = floatBalloonCentralX / self.balloonRect.getHeightInt()
+        balloonRectWidth, balloonRectHeight = self.balloonRect.getSizeInt()
+        floatBalloonCentralYRatio = floatBalloonCentralY / balloonRectWidth
+        floatBalloonCentralXRatio = floatBalloonCentralX / balloonRectHeight
         floatBalloonLeftRatio = max(0, floatBalloonCentralYRatio - 0.2)
         floatBalloonRightRatio = min(1, floatBalloonCentralYRatio + 0.2)
         floatBalloonTopRatio = max(0, floatBalloonCentralXRatio - 0.15)

@@ -1,88 +1,86 @@
+from __future__ import annotations
 import abc
 import typing
 import cv2 as cv
 
 class AbstractRectangle(abc.ABC):
     @abc.abstractmethod
-    def getSizeFloat(self) -> typing.Tuple[float, float]:
-        # returns: width, height
+    def getParent(self) -> typing.Optional[AbstractRectangle]:
         pass
 
     @abc.abstractmethod
-    def getOffsetsFloat(self) -> typing.Tuple[float, float]:
-        # returns: leftOffset, topOffset
+    def getCornersFloat(self, canvasRect: typing.Optional[AbstractRectangle] = None) -> typing.Tuple[float, float, float, float]:
+        # returns: left, right, top, bottom
         pass
 
-    def getSizeInt(self) -> typing.Tuple[int, int]:
+    def getCornersInt(self, canvasRect: typing.Optional[AbstractRectangle] = None) -> typing.Tuple[int, int, int, int]:
+        # returns: left, right, top, bottom
+        return tuple([int(x) for x in self.getCornersFloat(canvasRect)])
+
+    def getSizeFloat(self, canvasRect: typing.Optional[AbstractRectangle] = None) -> typing.Tuple[float, float]:
         # returns: width, height
-        return tuple([int(x) for x in self.getSizeFloat()])
+        l, r, t, b = self.getCornersFloat(canvasRect)
+        return r - l, b - t
+
+    def getSizeInt(self, canvasRect: typing.Optional[AbstractRectangle] = None) -> typing.Tuple[int, int]:
+        # returns: width, height
+        return tuple([int(x) for x in self.getSizeFloat(canvasRect)])
     
-    def getOffsetsInt(self) -> typing.Tuple[int, int]:
-        # returns: leftOffset, topOffset
-        return tuple([int(x) for x in self.getOffsetsFloat()])
+    def getArea(self, canvasRect: typing.Optional[AbstractRectangle] = None) -> int:
+        w, h = self.getSizeInt(canvasRect)
+        return w * h
 
-    def getBottomRightOffsetsFloat(self) -> typing.Tuple[float, float]:
-        # returns: rightOffset, bottomOffset
-        return tuple([i + j for i, j in zip(self.getOffsetsFloat(), self.getSizeFloat())])
-
-    def getBottomRightOffsetsInt(self) -> typing.Tuple[int, int]:
-        # returns: rightOffset, bottomOffset
-        return tuple([int(x) for x in self.getBottomRightOffsetsFloat()])
-
-    def getWidthInt(self) -> int:
-        return self.getSizeInt()[0]
-
-    def getHeightInt(self) -> int:
-        return self.getSizeInt()[1]
-    
-    def getArea(self) -> int:
-        return self.getWidthInt() * self.getHeightInt()
-
-    def cutRoi(self, frame: cv.Mat) -> cv.Mat:
-        leftOffset, topOffset = self.getOffsetsInt()
-        rightOffset, bottomOffset = self.getBottomRightOffsetsInt()
-        return frame[topOffset:bottomOffset, leftOffset:rightOffset]
-
-    def draw(self, frame: cv.Mat) -> cv.Mat:
-        return cv.rectangle(frame, self.getOffsetsInt(), self.getBottomRightOffsetsInt(), (0, 0, 255), 1)
+    def cutRoi(self, frame: cv.Mat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.Mat:
+        l, r, t, b = self.getCornersInt(canvasRect)
+        return frame[t:b, l:r]
+        
+    def draw(self, frame: cv.Mat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.Mat:
+        l, r, t, b = self.getCornersInt(canvasRect)
+        return cv.rectangle(frame, (l, t), (r, b), (0, 0, 255), 1)
 
 class RatioRectangle(AbstractRectangle):
     def __init__(self, parent: AbstractRectangle, leftRatio: float, rightRatio: float, topRatio: float, bottomRatio: float) -> None:
+        self.parent: AbstractRectangle = parent
+        self.updateRatios(leftRatio, rightRatio, topRatio, bottomRatio)
+
+    def updateRatios(self, leftRatio: float, rightRatio: float, topRatio: float, bottomRatio: float):
         if leftRatio > rightRatio or topRatio > bottomRatio:
             raise Exception("Invalid ratio rectangle configuration "
             + str([leftRatio, rightRatio, topRatio, bottomRatio])
             + ". Left/top ratio cannot exceed right/bottom ratio"
         )
-        
-        self.parent: AbstractRectangle = parent
         self.leftRatio: float = leftRatio
         self.rightRatio: float = rightRatio
         self.topRatio: float = topRatio
         self.bottomRatio: float = bottomRatio
+    
+    def getParent(self) -> typing.Optional[AbstractRectangle]:
+        return self.parent
 
-        parentLeftOffset, parentTopOffset = self.parent.getOffsetsFloat()
-        parentWidth, parentHeight = self.parent.getSizeFloat()
-
-        self.leftOffset: float = parentLeftOffset + parentWidth * self.leftRatio
-        self.rightOffset: float = parentLeftOffset + parentWidth * self.rightRatio
-        self.topOffset: float = parentTopOffset + parentHeight * self.topRatio
-        self.bottomOffset: float = parentTopOffset + parentHeight * self.bottomRatio
-        self.width: float = self.rightOffset - self.leftOffset
-        self.height: float = self.bottomOffset - self.topOffset
-
-    def getSizeFloat(self) -> typing.Tuple[float, float]:
-        return self.width, self.height
-
-    def getOffsetsFloat(self) -> typing.Tuple[float, float]:
-        return self.leftOffset, self.topOffset
+    def getCornersFloat(self, canvasRect: typing.Optional[AbstractRectangle] = None) -> typing.Tuple[float, float, float, float]:
+        parentLeft, parentRight, parentTop, parentBottom = self.parent.getCornersFloat(canvasRect)
+        parentWidth = parentRight - parentLeft
+        parentHeight = parentBottom - parentTop
+        width = parentWidth * (self.rightRatio - self.leftRatio)
+        height = parentHeight * (self.bottomRatio - self.topRatio)
+        
+        if canvasRect is self:
+            return 0.0, width, 0.0, height
+        
+        left = parentLeft + parentWidth * self.leftRatio
+        right = left + width
+        top = parentTop + parentHeight * self.topRatio
+        bottom = top + height
+        
+        return left, right, top, bottom
 
 class SrcRectangle(AbstractRectangle):
     def __init__(self, src: cv.VideoCapture):
         self.width: float = float(src.get(cv.CAP_PROP_FRAME_WIDTH))
         self.height: float = float(src.get(cv.CAP_PROP_FRAME_HEIGHT))
 
-    def getSizeFloat(self) -> typing.Tuple[float, float]:
-        return self.width, self.height
+    def getParent(self) -> typing.Optional[AbstractRectangle]:
+        return None
 
-    def getOffsetsFloat(self) -> typing.Tuple[float, float]:
-        return 0.0, 0.0
+    def getCornersFloat(self, canvasRect: typing.Optional[AbstractRectangle] = None) -> typing.Tuple[float, float, float, float]:
+        return 0.0, self.width, 0.0, self.height
