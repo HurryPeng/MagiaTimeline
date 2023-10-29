@@ -59,6 +59,12 @@ class FPIR: # Frame Point Intermediate Representation
 
     def getFramePointsWithVirtualEnd(self, length: int = 1) -> typing.List[FramePoint]:
         return self.framePoints + [self.genVirtualEnd()] * length
+    
+    def toStringFull(self) -> str:
+        lines = []
+        for framePoint in self.framePoints:
+            lines.append(framePoint.toStringFull() + "\n")
+        return "".join(lines)
 
 class FPIRPass(abc.ABC):
     @abc.abstractmethod

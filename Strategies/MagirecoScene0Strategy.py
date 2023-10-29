@@ -11,8 +11,12 @@ from IR import *
 class MagirecoScene0Strategy(AbstractStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
-        DialogVal = enum.auto()
-        DialogValJump = enum.auto()
+        DialogNameVal = enum.auto()
+        DialogNameValJump = enum.auto()
+        DialogContentVal = enum.auto()
+        DialogContentValJumpDown = enum.auto()
+        DialogContentValJumpUp = enum.auto()
+        DialogContentValJumpUpJumpUp = enum.auto()
 
         Balloon = enum.auto()
         BalloonVal = enum.auto()
@@ -27,28 +31,55 @@ class MagirecoScene0Strategy(AbstractStrategy):
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
 
+        self.rectangles["dialogNameRect"] = RatioRectangle(self.rectangles["dialogRect"], 0, 0.5, 0, 0.33)
+        self.rectangles["dialogContentRect"] = RatioRectangle(self.rectangles["dialogRect"], 0, 1, 0.34, 1)
         self.rectangles["balloonRect"] = RatioRectangle(contentRect, 0.15, 0.85, 0.1, 0.75)
         self.rectangles["floatingBalloonRect"] = RatioRectangle(contentRect, 0, 1, 0, 1)
 
-
         self.dialogRect = self.rectangles["dialogRect"]
+        self.dialogNameRect = self.rectangles["dialogNameRect"]
+        self.dialogContentRect = self.rectangles["dialogContentRect"]
         self.balloonRect = self.rectangles["balloonRect"]
         self.floatingBalloonRect = self.rectangles["floatingBalloonRect"]
 
         self.cvPasses = [self.cvPassDialog, self.cvPassBalloon]
 
         self.fpirPasses = collections.OrderedDict()
-        self.fpirPasses["fpirPassDetectDialogFeatureJump"] = FPIRPassDetectFeatureJump(
-            featFlag=MagirecoScene0Strategy.FlagIndex.DialogVal,
-            dstFlag=MagirecoScene0Strategy.FlagIndex.DialogValJump, 
+        self.fpirPasses["fpirPassDetectDialogContentJumpDown"] = FPIRPassDetectFeatureJump(
+            featFlag=MagirecoScene0Strategy.FlagIndex.DialogContentVal,
+            dstFlag=MagirecoScene0Strategy.FlagIndex.DialogContentValJumpDown, 
+            featOpMean=lambda feats : np.mean(feats, 0),
+            featOpDist=lambda lhs, rhs : lhs-rhs, # No abs(), only detects falling edge
+            threshDist=2.0
+        )
+        self.fpirPasses["fpirPassDetectDialogContentJumpUp"] = FPIRPassDetectFeatureJump(
+            featFlag=MagirecoScene0Strategy.FlagIndex.DialogContentVal,
+            dstFlag=MagirecoScene0Strategy.FlagIndex.DialogContentValJumpUp, 
+            featOpMean=lambda feats : np.mean(feats, 0),
+            featOpDist=lambda lhs, rhs : -(lhs-rhs), # No abs(), only detects rising edge
+            threshDist=2.0,
+            windowSize=5
+        )
+        self.fpirPasses["fpirPassDetectDialogContentJumpUpJumpUp"] = FPIRPassDetectFeatureJump(
+            featFlag=MagirecoScene0Strategy.FlagIndex.DialogContentValJumpUp,
+            dstFlag=MagirecoScene0Strategy.FlagIndex.DialogContentValJumpUpJumpUp, 
+            featOpMean=lambda feats : np.mean([float(x) for x in feats], 0),
+            featOpDist=lambda lhs, rhs : -(lhs-rhs), # No abs(), only detects rising edge
+            threshDist=0.5
+        )
+        self.fpirPasses["fpirPassDetectDialogNameJump"] = FPIRPassDetectFeatureJump(
+            featFlag=MagirecoScene0Strategy.FlagIndex.DialogNameVal,
+            dstFlag=MagirecoScene0Strategy.FlagIndex.DialogNameValJump, 
             featOpMean=lambda feats : np.mean(feats, 0),
             featOpDist=lambda lhs, rhs : abs(lhs-rhs),
-            threshDist=10
+            threshDist=1.0
         )
         def breakDialogJump(framePoint: FramePoint):
             framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Dialog,
                 framePoint.getFlag(MagirecoScene0Strategy.FlagIndex.Dialog)
-                and not framePoint.getFlag(MagirecoScene0Strategy.FlagIndex.DialogValJump)
+                and not framePoint.getFlag(MagirecoScene0Strategy.FlagIndex.DialogContentValJumpDown)
+                and not framePoint.getFlag(MagirecoScene0Strategy.FlagIndex.DialogContentValJumpUpJumpUp)
+                and not framePoint.getFlag(MagirecoScene0Strategy.FlagIndex.DialogNameValJump)
             )
         self.fpirPasses["fpirPassBreakDialogJump"] = FPIRPassFramewiseFunctional(
             func=breakDialogJump
@@ -60,8 +91,8 @@ class MagirecoScene0Strategy(AbstractStrategy):
             featFlag=MagirecoScene0Strategy.FlagIndex.BalloonVal,
             dstFlag=MagirecoScene0Strategy.FlagIndex.BalloonValJump, 
             featOpMean=lambda feats : np.mean(feats, 0),
-            featOpDist=lambda lhs, rhs : abs(lhs-rhs),
-            threshDist=5
+            featOpDist=lambda lhs, rhs : lhs-rhs, # No abs(), only detects falling edge
+            threshDist=3.0
         )
         def breakBalloonJump(framePoint: FramePoint):
             framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Balloon,
@@ -81,8 +112,8 @@ class MagirecoScene0Strategy(AbstractStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Dialog, 500)
-        self.iirPasses["iirPassFillGapBalloon"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Balloon, 500)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Dialog, 500, meetPoint=1)
+        self.iirPasses["iirPassFillGapBalloon"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Balloon, 500, meetPoint=1)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -128,39 +159,42 @@ class MagirecoScene0Strategy(AbstractStrategy):
         
         roiDialogText2Bin = cv.bitwise_and(roiDialogShade2BinFilteredClose, roiDialogText1Bin)
 
-        cc2Num, cc2Labels, cc2Stats, cc2Centroids = cv.connectedComponentsWithStats(roiDialogText2Bin, connectivity=4)
-        roiDialogText3Bin = roiDialogText2Bin
-        cc2LeagalAreaSum: int = 0
-        for n in range(cc2Num):
-            stat = cc2Stats[n]
+        roiDialogNameText2Bin = self.dialogNameRect.cutRoi(roiDialogText2Bin, self.dialogRect)
+        roiDialogContentText2Bin = self.dialogContentRect.cutRoi(roiDialogText2Bin, self.dialogRect)
+
+        cc2NameNum, cc2NameLabels, cc2NameStats, cc2NameCentroids = cv.connectedComponentsWithStats(roiDialogNameText2Bin, connectivity=4)
+        roiDialogNameText3Bin = roiDialogNameText2Bin
+        cc2NameLeagalAreaSum: int = 0
+        for n in range(cc2NameNum):
+            stat = cc2NameStats[n]
             if (stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
-                cc2LeagalAreaSum += stat[4]
+                cc2NameLeagalAreaSum += stat[4]
             # if not (stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
-            #     roiDialogText3Bin[cc2Labels == n] = 0
-        cc2LeagalAreaRatio: float = cc2LeagalAreaSum / self.dialogRect.getArea() * 256
+            #     roiDialogNameText3Bin[cc2NameLabels == n] = 0
+        cc2NameLeagalAreaRatio: float = cc2NameLeagalAreaSum / self.dialogRect.getArea() * 256
 
-        # roiDialogText1BinDialate = cv.morphologyEx(roiDialogText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
-        # roiDialogText2BinOpen = cv.morphologyEx(roiDialogText2Bin, cv.MORPH_OPEN, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
-        
-        # roiDialogText2Bin = cv.bitwise_and(roiDialogText1Bin, roiDialogText2BinOpen)
+        cc2ContentNum, cc2ContentLabels, cc2ContentStats, cc2ContentCentroids = cv.connectedComponentsWithStats(roiDialogContentText2Bin, connectivity=4)
+        roiDialogContentText3Bin = roiDialogContentText2Bin
+        cc2ContentLeagalAreaSum: int = 0
+        for n in range(cc2ContentNum):
+            stat = cc2ContentStats[n]
+            if (stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
+                cc2ContentLeagalAreaSum += stat[4]
+            # if not (stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
+            #     roiDialogText3Bin[cc2ContentLabels == n] = 0
+        cc2ContentLeagalAreaRatio: float = cc2ContentLeagalAreaSum / self.dialogRect.getArea() * 256
 
+        hasDialog: bool = cc2NameLeagalAreaRatio > 1.0 or cc2ContentLeagalAreaRatio > 3.0
+        hasDialogStrict: bool = cc2NameLeagalAreaRatio > 1.0 and cc2ContentLeagalAreaRatio > 5.0
 
-        # roiDialogShade2Bin = cv.bitwise_and(roiDialogShade1Bin, roiDialogText1BinDialate)
-        # roiDialogShade2BinDialate = cv.morphologyEx(roiDialogShade1Bin, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (11, 11)))
-
-        # roiDialogText2Bin = cv.bitwise_and(roiDialogShade2BinDialate, roiDialogText1Bin)
-
-        # roiDialogCompoundBin = cv.bitwise_xor(roiDialogText1BinOpen, roiDialogShade2Bin)
-
-        hasDialog: bool = cc2LeagalAreaRatio > 3
-
-        # framePoint.setDebugFrame(roiDialogText3Bin)
-        # framePoint.setDebugFlag(cc2LeagalAreaRatio, cc1Num)
+        # framePoint.setDebugFrame(roiDialogNameText2Bin)
+        framePoint.setDebugFlag(cc2NameLeagalAreaRatio, cc2ContentLeagalAreaRatio)
         # framePoint.setDebugFlag(meanDialogText1BinOpen, num, stats)
 
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Dialog, hasDialog)
-        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogVal, cc2LeagalAreaRatio)
-        return hasDialog
+        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogNameVal, cc2NameLeagalAreaRatio)
+        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogContentVal, cc2ContentLeagalAreaRatio)
+        return hasDialogStrict
 
     def cvPassBalloon(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiBolloon = self.balloonRect.cutRoi(frame)
@@ -180,9 +214,15 @@ class MagirecoScene0Strategy(AbstractStrategy):
         # roiBolloonText1BinDialate = cv.morphologyEx(roiBolloonText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         # roiBalloonShade2Bin = cv.bitwise_and(roiBalloonShade1Bin, roiBolloonText1BinDialate)
 
-        roiBalloonBlur = cv.blur(roiBolloonText2BinOpen, (301, 51))
+        roiBalloonBlur = cv.blur(roiBolloonText2BinOpen, (301, 101))
 
         _, maxBalloonBlur, _, maxBalloonBlurPoint = cv.minMaxLoc(roiBalloonBlur)
+
+        if maxBalloonBlur < 3:
+            framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Balloon, False)
+            framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.BalloonVal, 0)
+            return False
+
         floatBalloonCentralY = maxBalloonBlurPoint[0]
         floatBalloonCentralX = maxBalloonBlurPoint[1]
         balloonRectWidth, balloonRectHeight = self.balloonRect.getSizeInt()
@@ -248,7 +288,6 @@ class MagirecoScene0Strategy(AbstractStrategy):
 
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Balloon, hasFloatingBalloon)
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.BalloonVal, cc2LeagalAreaRatio)
-
 
         # frameGray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         # # _, frameBin = cv.threshold(frameGray, 50, 255, cv.THRESH_BINARY)
