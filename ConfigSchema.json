@@ -97,7 +97,8 @@
                     "description": "a preset for strategy mr",
                     "type": "object",
                     "properties": {
-                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"},
+                        "blackscreenRect": {"$ref": "#/$defs/ratioRectangle"}
                     },
                     "required": ["dialogRect"],
                     "additionalProperties": false

@@ -10,6 +10,9 @@ from IR import *
 
 class MagirecoScene0Strategy(AbstractStrategy):
     class FlagIndex(AbstractFlagIndex):
+        Blackscreen = enum.auto()
+        BlackscreenBg = enum.auto()
+        BlackscreenText = enum.auto()
         Dialog = enum.auto()
         DialogNameVal = enum.auto()
         DialogNameValJump = enum.auto()
@@ -37,14 +40,19 @@ class MagirecoScene0Strategy(AbstractStrategy):
         self.rectangles["floatingBalloonRect"] = RatioRectangle(contentRect, 0, 1, 0, 1)
 
         self.dialogRect = self.rectangles["dialogRect"]
+        self.blackscreenRect = self.rectangles["blackscreenRect"]
         self.dialogNameRect = self.rectangles["dialogNameRect"]
         self.dialogContentRect = self.rectangles["dialogContentRect"]
         self.balloonRect = self.rectangles["balloonRect"]
         self.floatingBalloonRect = self.rectangles["floatingBalloonRect"]
 
-        self.cvPasses = [self.cvPassDialog, self.cvPassBalloon]
+        self.cvPasses = [self.cvPassBlackscreen, self.cvPassDialog, self.cvPassBalloon]
 
         self.fpirPasses = collections.OrderedDict()
+
+        self.fpirPasses["fpirPassRemoveNoiseBlackscreenFalse"] = FPIRPassBooleanRemoveNoise(MagirecoScene0Strategy.FlagIndex.Blackscreen, False, 3)
+        self.fpirPasses["fpirPassRemoveNoiseBlackscreenTrue"] = FPIRPassBooleanRemoveNoise(MagirecoScene0Strategy.FlagIndex.Blackscreen, True, 10)
+        
         self.fpirPasses["fpirPassDetectDialogContentJumpDown"] = FPIRPassDetectFeatureJump(
             featFlag=MagirecoScene0Strategy.FlagIndex.DialogContentVal,
             dstFlag=MagirecoScene0Strategy.FlagIndex.DialogContentValJumpDown, 
@@ -107,11 +115,13 @@ class MagirecoScene0Strategy(AbstractStrategy):
 
         self.fpirToIirPasses = collections.OrderedDict()
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
+            MagirecoScene0Strategy.FlagIndex.Blackscreen, 
             MagirecoScene0Strategy.FlagIndex.Dialog, 
             MagirecoScene0Strategy.FlagIndex.Balloon, 
         )
 
         self.iirPasses = collections.OrderedDict()
+        self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Blackscreen, 1200)
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Dialog, 500, meetPoint=1)
         self.iirPasses["iirPassFillGapBalloon"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Balloon, 500, meetPoint=1)
 
@@ -133,6 +143,23 @@ class MagirecoScene0Strategy(AbstractStrategy):
 
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
+    
+    def cvPassBlackscreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiBlackscreen = self.blackscreenRect.cutRoi(frame)
+        roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
+        _, roiBlackscreenBgBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
+        _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 160, 255, cv.THRESH_BINARY)
+        meanBlackscreenBgBin: float = cv.mean(roiBlackscreenBgBin)[0]
+        meanBlackscreenTextBin: float = cv.mean(roiBlackscreenTextBin)[0]
+        hasBlackscreenBg: bool = meanBlackscreenBgBin < 20
+        hasBlackscreenText: bool = meanBlackscreenTextBin > 0.07 and meanBlackscreenTextBin < 16
+
+        isValidBlackscreen = hasBlackscreenBg and hasBlackscreenText
+
+        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Blackscreen, isValidBlackscreen)
+        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.BlackscreenBg, hasBlackscreenBg)
+        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.BlackscreenText, hasBlackscreenText)
+        return isValidBlackscreen
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)

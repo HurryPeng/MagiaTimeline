@@ -56,9 +56,10 @@ def main():
         contentRect = RatioRectangle(srcRect, *config["contentRect"])
 
         strategy: AbstractStrategy | None = None
+        print(config["strategy"])
         if config["strategy"] == "mr":
             strategy = MagirecoStrategy(strategyConfig, contentRect)
-        if config["strategy"] == "mr-s0":
+        elif config["strategy"] == "mr-s0":
             strategy = MagirecoScene0Strategy(strategyConfig, contentRect)
         elif config["strategy"] == "lcb":
             strategy = LimbusCompanyStrategy(strategyConfig, contentRect)
