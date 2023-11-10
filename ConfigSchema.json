@@ -52,6 +52,10 @@
             "type": "string",
             "enum": ["default", "debug", "shortcircuit"]
         },
+        "enableOpenCL": {
+            "description": "enable OpenCL acceleration",
+            "type": "boolean"
+        },
         "contentRect": {
             "description": "rectangle that wraps the content of a frame, cutting away black bars around",
             "$ref": "#/$defs/ratioRectangle"

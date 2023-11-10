@@ -30,11 +30,11 @@ class AbstractRectangle(abc.ABC):
         w, h = self.getSizeInt(canvasRect)
         return w * h
 
-    def cutRoi(self, frame: cv.Mat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.Mat:
+    def cutRoi(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.UMat:
         l, r, t, b = self.getCornersInt(canvasRect)
-        return frame[t:b, l:r]
+        return cv.UMat(frame, (t, b), (l, r))
         
-    def draw(self, frame: cv.Mat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.Mat:
+    def draw(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.UMat:
         l, r, t, b = self.getCornersInt(canvasRect)
         return cv.rectangle(frame, (l, t), (r, b), (0, 0, 255), 1)
 

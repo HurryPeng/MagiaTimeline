@@ -18,7 +18,7 @@ class AbstractStrategy(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
+    def getCvPasses(self) -> typing.List[typing.Callable[[cv.UMat, FramePoint], bool]]:
         pass
 
     @abc.abstractmethod

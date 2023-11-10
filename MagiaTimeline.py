@@ -5,6 +5,7 @@ import argparse
 import json
 import jsonschema
 import yaml
+import time
 
 from Rectangle import *
 from IR import *
@@ -34,7 +35,11 @@ def main():
             raise Exception("No preset \"" + config["preset"] + "\" found for strategy \"" + config["strategy"] + "\"")
     strategyConfig = config[config["strategy"]][config["preset"]]
 
+    cv.ocl.setUseOpenCL(config["enableOpenCL"])
+
     for nTask, src in enumerate(config["source"]):
+        timeStart = time.time()
+
         dst = config["destination"][nTask]
 
         print("")
@@ -78,6 +83,7 @@ def main():
             frameIndex: int = int(srcMp4.get(cv.CAP_PROP_POS_FRAMES))
             timestamp: int = int(srcMp4.get(cv.CAP_PROP_POS_MSEC))
             validFrame, frame = srcMp4.read()
+            frame = cv.UMat(frame)
             if not validFrame:
                 break
 
@@ -138,6 +144,9 @@ def main():
         print("==== IIR to ASS ====")
         dstAss.write(iir.toAss(strategy.getFlag2Track()))
         dstAss.close()
+
+        timeEnd = time.time()
+        print("Elapsed ", timeEnd - timeStart, "s")
 
 if __name__ == "__main__":
     main()

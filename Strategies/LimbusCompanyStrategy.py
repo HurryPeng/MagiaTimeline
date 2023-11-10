@@ -81,7 +81,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
+    def getCvPasses(self) -> typing.List[typing.Callable[[cv.UMat, FramePoint], bool]]:
         return self.cvPasses
 
     def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
@@ -96,7 +96,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
     def getFlag2Track(self) -> typing.Dict[AbstractFlagIndex, int]:
         return {LimbusCompanyStrategy.FlagIndex.Speaker: 1}
 
-    def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+    def cvPassDialog(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
         alpha = 0.85
         # stdDialogBGR = np.array((15.11, 23.24, 25.42))
         # stdDialogHSV = np.array((27.0, 102.0, 25.5))
@@ -115,7 +115,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         roiDialogMeanText = cv.bitwise_and(roiDialogMealAll, roiDialogMealAll, mask=roiDialogTextBinDialate)
         roiDialogWithMeanText = roiDialogNoText + roiDialogMeanText
         meanDialogAbove = np.array(cv.mean(roiDialogAbove)[0:3])
-        roiDialogWithMeanTextCorrected: cv.Mat = np.uint8((1 / alpha) * roiDialogWithMeanText - (1 / alpha - 1) * meanDialogAbove) # type: ignore
+        roiDialogWithMeanTextCorrected: cv.UMat = cv.UMat(np.uint8((1 / alpha) * roiDialogWithMeanText - (1 / alpha - 1) * meanDialogAbove)) # type: ignore
         roiDialogWithMeanTextCorrectedBlur = cv.blur(roiDialogWithMeanTextCorrected, (10, 10))
         roiDialogWithMeanTextCorrectedBlurHSV = cv.cvtColor(roiDialogWithMeanTextCorrectedBlur, cv.COLOR_BGR2HSV)
         roiDialogWithMeanTextCorrectedBlurHSVBin = inRange(roiDialogWithMeanTextCorrectedBlurHSV, [0, 20, 10], [180, 255, 50])
@@ -131,7 +131,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogText, hasDialogText)
         return False
     
-    def cvPassSpeaker(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+    def cvPassSpeaker(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
         roiSpeaker = self.speakerRect.cutRoi(frame)
 
         roiSpeakerGray = cv.cvtColor(roiSpeaker, cv.COLOR_BGR2GRAY)
@@ -222,7 +222,7 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
+    def getCvPasses(self) -> typing.List[typing.Callable[[cv.UMat, FramePoint], bool]]:
         return self.cvPasses
 
     def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
@@ -234,7 +234,7 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
 
-    def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+    def cvPassDialog(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
         _, roiDialogTextBin = cv.threshold(roiDialogGray, 128, 255, cv.THRESH_BINARY)

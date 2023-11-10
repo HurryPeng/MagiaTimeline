@@ -79,7 +79,7 @@ class MagirecoStrategy(AbstractStrategy):
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
+    def getCvPasses(self) -> typing.List[typing.Callable[[cv.UMat, FramePoint], bool]]:
         return self.cvPasses
 
     def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
@@ -91,7 +91,7 @@ class MagirecoStrategy(AbstractStrategy):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
 
-    def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+    def cvPassDialog(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
         roiDialogBg = self.dialogBgRect.cutRoi(frame)
         roiDialogBgGray = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2GRAY)
         roiDialogBgHSV = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2HSV)
@@ -116,7 +116,7 @@ class MagirecoStrategy(AbstractStrategy):
         framePoint.setFlag(MagirecoStrategy.FlagIndex.DialogOutline, hasDialogOutline)
         return isValidDialog
 
-    def cvPassBlackscreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+    def cvPassBlackscreen(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
         roiBlackscreen = self.blackscreenRect.cutRoi(frame)
         roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
         _, roiBlackscreenBgBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
@@ -133,7 +133,7 @@ class MagirecoStrategy(AbstractStrategy):
         framePoint.setFlag(MagirecoStrategy.FlagIndex.BlackscreenText, hasBlackscreenText)
         return isValidBlackscreen
 
-    def cvPassWhitescreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+    def cvPassWhitescreen(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
         roiWhitescreen = self.whitescreenRect.cutRoi(frame)
         roiWhitescreenGray = cv.cvtColor(roiWhitescreen, cv.COLOR_BGR2GRAY)
         _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 160, 255, cv.THRESH_BINARY)
@@ -150,7 +150,7 @@ class MagirecoStrategy(AbstractStrategy):
         framePoint.setFlag(MagirecoStrategy.FlagIndex.WhitescreenText, hasWhitescreenText)
         return isValidWhitescreen
 
-    def cvPassCgSub(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+    def cvPassCgSub(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
         roiCgSubAbove = self.cgSubAboveRect.cutRoi(frame)
         roiCgSubAboveGray = cv.cvtColor(roiCgSubAbove, cv.COLOR_BGR2GRAY)
         meanCgSubAboveGray = cv.mean(roiCgSubAboveGray)[0]
@@ -175,7 +175,7 @@ class MagirecoStrategy(AbstractStrategy):
         roiCgSubTextGray = cv.cvtColor(roiCgSubText, cv.COLOR_BGR2GRAY)
         _, roiCgSubTextBin = cv.threshold(roiCgSubTextGray, 160, 255, cv.THRESH_BINARY)
         meanCgSubTextBin: float = cv.mean(roiCgSubTextBin)[0]
-        hasCgSubText: bool = meanCgSubTextBin > 0.5 and meanCgSubTextBin < 30
+        hasCgSubText: bool = meanCgSubTextBin > 0.5 and meanCgSubTextBin < 50
 
         isValidCgSub = hasCgSubContrast and hasCgSubBorder and hasCgSubText
 

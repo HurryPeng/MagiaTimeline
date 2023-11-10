@@ -45,6 +45,9 @@ assTemplate: template.ass
 #     This should have no side-effect if different subtitles guarantee not to appear at the same time. 
 mode: shortcircuit
 
+# enableOpenCL: enable OpenCL acceleration
+enableOpenCL: false
+
 # contentRect: rectangle that wraps the content of a frame, cutting away black bars around
 # If your video has black bars around the canvas, you should set this rectangle to cut them away. 
 # For example, if your video has 1% of black bar on left and right and 9% on top and bottom, 
