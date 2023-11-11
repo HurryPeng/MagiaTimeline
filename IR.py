@@ -178,7 +178,7 @@ class Interval:
         self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
 
     def toAss(self, id: int = -1) -> str:
-        template = "Dialogue: 0,{},{},{},,,,,,Subtitle_{}_{}"
+        template = "Dialogue: 0,{},{},{},,0,0,100,,Subtitle_{}_{}"
         sBegin = formatTimestamp(self.begin)
         sEnd = formatTimestamp(self.end)
         return template.format(sBegin, sEnd, self.style, self.mainFlag.name, id)
