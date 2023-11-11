@@ -72,11 +72,6 @@ class FPIRPass(abc.ABC):
         # returns anything or nothing
         pass
 
-class FPIRPassBuildIntervals(FPIRPass):
-    @abc.abstractmethod
-    def apply(self, fpir: FPIR) -> typing.List[Interval]:
-        pass
-
 class FPIRPassBooleanRemoveNoise(FPIRPass):
     def __init__(self, flag: AbstractFlagIndex, trueToFalse: bool = True, minLength: int = 10):
         self.flag: AbstractFlagIndex = flag
@@ -146,6 +141,11 @@ class FPIRPassFramewiseFunctional(FPIRPass):
         for id, framePoint in enumerate(fpir.framePoints):
             self.func(framePoint)
 
+class FPIRPassBuildIntervals(FPIRPass):
+    @abc.abstractmethod
+    def apply(self, fpir: FPIR) -> typing.List[Interval]:
+        pass
+
 class FPIRPassBooleanBuildIntervals(FPIRPassBuildIntervals):
     def __init__(self, *flags: AbstractFlagIndex):
         self.flags: typing.Tuple[AbstractFlagIndex, ...] = flags
@@ -155,30 +155,33 @@ class FPIRPassBooleanBuildIntervals(FPIRPassBuildIntervals):
         lastBegin: typing.List[int] = [0] * len(self.flags)
         state: typing.List[bool] = [False] * len(self.flags)
         for framePoint in fpir.getFramePointsWithVirtualEnd():
-            for i in range(len(state)):
-                if not state[i]: # off -> on
-                    if framePoint.getFlag(self.flags[i]):
-                        state[i] = True
-                        lastBegin[i] = framePoint.timestamp
+            for s in range(len(state)):
+                if not state[s]: # off -> on
+                    if framePoint.getFlag(self.flags[s]):
+                        state[s] = True
+                        lastBegin[s] = framePoint.index
                 else: # on - > off
-                    if not framePoint.getFlag(self.flags[i]):
-                        state[i] = False
-                        intervals.append(Interval(lastBegin[i], framePoint.timestamp, self.flags[i]))
+                    if not framePoint.getFlag(self.flags[s]):
+                        state[s] = False
+                        intervals.append(Interval(fpir.flagIndexType, self.flags[s], fpir.framePoints[lastBegin[s]].timestamp, framePoint.timestamp, fpir.framePoints[lastBegin[s] : framePoint.index]))
         return intervals
 
 class Interval:
-    def __init__(self, begin: int, end: int, flag: AbstractFlagIndex):
-        # TODO: Ultimately an Interval should be also able to hold a full set of flags
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], mainFlag: AbstractFlagIndex, begin: int, end: int, framePoints: typing.List[FramePoint]):
+        self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
+        self.mainFlag: AbstractFlagIndex = mainFlag
+        self.framePoints: typing.List[FramePoint] = framePoints
+        # begin and end are not promised to align with underlying framePoints
         self.begin: int = begin # timestamp
         self.end: int = end # timestamp
-        self.flag: AbstractFlagIndex = flag
+        self.style: str = "Default"
+        self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
 
-    def toAss(self, id: int = -1, track: int = 0) -> str:
-        template = "Dialogue: 0,{},{},Default,,0,0,{},,Subtitle_{}_{}"
+    def toAss(self, id: int = -1) -> str:
+        template = "Dialogue: 0,{},{},{},,,,,,Subtitle_{}_{}"
         sBegin = formatTimestamp(self.begin)
         sEnd = formatTimestamp(self.end)
-        marginV: int = 100 + 50 * track
-        return template.format(sBegin, sEnd, marginV, self.flag.name, id)
+        return template.format(sBegin, sEnd, self.style, self.mainFlag.name, id)
 
     def dist(self, other: Interval) -> int:
         l = self
@@ -206,14 +209,13 @@ class IIR: # Interval Intermediate Representation
     def sort(self):
         self.intervals.sort(key=lambda interval : interval.begin)
 
-    def toAss(self, flag2Track: typing.Dict[AbstractFlagIndex, int] = {}) -> str:
+    def toAss(self) -> str:
         lines: typing.List[str] = []
-        trackCounter: typing.Dict[int, int] = {}
+        mainFlagCounter: typing.Dict[int, int] = {}
         for _, interval in enumerate(self.intervals):
-            track: int = flag2Track.get(interval.flag, 0)
-            id = trackCounter.get(interval.flag, 0)
-            trackCounter[interval.flag] = id + 1
-            lines.append(interval.toAss(id, track) + "\n")
+            id = mainFlagCounter.get(interval.mainFlag, 0)
+            mainFlagCounter[interval.mainFlag] = id + 1
+            lines.append(interval.toAss(id) + "\n")
         return "".join(lines)
 
 class IIRPass(abc.ABC):
@@ -230,12 +232,12 @@ class IIRPassFillGap(IIRPass):
     
     def apply(self, iir: IIR):
         for id, interval in enumerate(iir.intervals):
-            if interval.flag != self.flag:
+            if interval.mainFlag != self.flag:
                 continue
             otherId = id + 1
             while otherId < len(iir.intervals):
                 otherInterval = iir.intervals[otherId]
-                if otherInterval.flag != self.flag:
+                if otherInterval.mainFlag != self.flag:
                     otherId += 1
                     continue
                 if interval.dist(otherInterval) > self.maxGap:
@@ -258,7 +260,7 @@ class IIRPassAlign(IIRPass):
     def apply(self, iir: IIR):
         refPoints: typing.List[int] = []
         for _, interval in enumerate(iir.intervals):
-            if interval.flag != self.refFlag:
+            if interval.mainFlag != self.refFlag:
                 continue
             refPoints.append(interval.begin)
             refPoints.append(interval.end)
@@ -267,7 +269,7 @@ class IIRPassAlign(IIRPass):
             return
 
         for _, interval in enumerate(iir.intervals):
-            if interval.flag != self.tgtFlag:
+            if interval.mainFlag != self.tgtFlag:
                 continue
             
             r = 0
@@ -297,3 +299,18 @@ class IIRPassAlign(IIRPass):
                 interval.end += dist
             
         iir.sort()
+
+class IIRPassFunctional(IIRPass):
+    def __init__(self, func: typing.Callable[[IIR], typing.Any]):
+        self.func = func
+
+    def apply(self, iir: IIR):
+        return self.func(iir)
+
+class IIRPassIntervalwiseFunctional(IIRPass):
+    def __init__(self, func: typing.Callable[[Interval], typing.Any]):
+        self.func = func
+
+    def apply(self, iir: IIR):
+        for id, interval in enumerate(iir.intervals):
+            self.func(interval)

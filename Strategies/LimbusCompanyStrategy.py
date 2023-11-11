@@ -93,8 +93,10 @@ class LimbusCompanyStrategy(AbstractStrategy):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
     
-    def getFlag2Track(self) -> typing.Dict[AbstractFlagIndex, int]:
-        return {LimbusCompanyStrategy.FlagIndex.Speaker: 1}
+    def getStyles(self) -> typing.List[str]:
+        return [
+            "Style: Speaker,Microsoft YaHei,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,150,1"
+        ]
 
     def cvPassDialog(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
         alpha = 0.85

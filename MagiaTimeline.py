@@ -53,10 +53,10 @@ def main():
         debugMp4: typing.Any = None
         if config["mode"] == "debug":
             debugMp4 = cv.VideoWriter("debug.mp4", cv.VideoWriter_fourcc('m','p','4','v'), fps, size)
-        templateAss = open(config["assTemplate"], "r")
+        templateAsst = open(config["assTemplate"], "r")
+        assStr: str = templateAsst.read()
+        templateAsst.close()
         dstAss = open(dst, "w")
-        dstAss.writelines(templateAss.readlines())
-        templateAss.close()
 
         contentRect = RatioRectangle(srcRect, *config["contentRect"])
 
@@ -142,7 +142,9 @@ def main():
             iirPass.apply(iir)
 
         print("==== IIR to ASS ====")
-        dstAss.write(iir.toAss(strategy.getFlag2Track()))
+        assStr = assStr.format(styles = "".join(strategy.getStyles()), events = iir.toAss())
+
+        dstAss.write(assStr)
         dstAss.close()
 
         timeEnd = time.time()

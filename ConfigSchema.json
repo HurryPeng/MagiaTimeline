@@ -44,7 +44,7 @@
             "minLength": 1
         },
         "assTemplate": {
-            "description": "template ass file defining the header of destination ass file",
+            "description": "template ass file defining the header of destination ass file, in asst format",
             "type": "string"
         },
         "mode": {

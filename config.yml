@@ -28,9 +28,9 @@ source:
 destination:
 - MagiaTimelineOutput.ass
 
-# assTemplate: template ass file defining the header of destination ass file
+# assTemplate: template ass file defining the header of destination ass file, in asst format
 # You do not need to modify this in most cases. 
-assTemplate: template.ass
+assTemplate: template.asst
 
 # mode: running mode that provides different performance and intermediate information
 # - default: nothing special

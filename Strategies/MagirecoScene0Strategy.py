@@ -13,6 +13,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
         Blackscreen = enum.auto()
         BlackscreenBg = enum.auto()
         BlackscreenText = enum.auto()
+
         Dialog = enum.auto()
         DialogNameVal = enum.auto()
         DialogNameValJump = enum.auto()
@@ -25,9 +26,16 @@ class MagirecoScene0Strategy(AbstractStrategy):
         BalloonVal = enum.auto()
         BalloonValJump = enum.auto()
 
+        MeanTextColour = enum.auto()
+
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False] * cls.getNum()
+            return [
+                    False, False, False,
+                    False, 0.0, False, 0.0, False, False, False,
+                    False, 0.0, False, 
+                    np.array([0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+                ]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
@@ -124,6 +132,41 @@ class MagirecoScene0Strategy(AbstractStrategy):
         self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Blackscreen, 1200)
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Dialog, 500, meetPoint=1)
         self.iirPasses["iirPassFillGapBalloon"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Balloon, 500, meetPoint=1)
+        
+        colourSpace: typing.Dict[str, typing.Tuple[float, float]] = {
+            "Shiro":  ( 0.00,  0.00),
+            "Mabayu": ( 0.15,  0.55),
+            "Homura": (-0.05, -0.17),
+            "Madoka": ( 0.27, -0.17),
+            "Sayaka": (-0.20, -0.03),
+            "Mami":   ( 0.20,  0.20),
+            "Kyoko":  ( 0.40,  0.00)
+        }
+        def classifySpeaker(interval: Interval):
+            if not interval.mainFlag == MagirecoScene0Strategy.FlagIndex.Dialog and not interval.mainFlag == MagirecoScene0Strategy.FlagIndex.Balloon:
+                return
+            meanTextColour = np.mean([interval.framePoints[i].flags[MagirecoScene0Strategy.FlagIndex.MeanTextColour] for i in range(len(interval.framePoints))], 0)
+            meanTextColourHSV = cv.cvtColor(np.array([[meanTextColour]], dtype=np.float32), cv.COLOR_BGR2HSV)[0][0]
+            
+            h = meanTextColourHSV[0]
+            s = meanTextColourHSV[1]
+
+            x = s * np.cos(np.deg2rad(h))
+            y = s * np.sin(np.deg2rad(h))
+
+            interval.style = "Shiro"
+            minDist = 1000
+            for style, point in colourSpace.items():
+                x0 = point[0]
+                y0 = point[1]
+                dist = (x - x0) * (x - x0) + (y - y0) * (y - y0)
+                if dist < minDist:
+                    interval.style = style
+                    minDist = dist
+            
+            # print(formatTimestamp(interval.begin), h, s, x, y, interval.style, minDist)
+
+        self.iirPasses["iirPassClassifySpeaker"] = IIRPassIntervalwiseFunctional(classifySpeaker)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -143,6 +186,17 @@ class MagirecoScene0Strategy(AbstractStrategy):
 
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
+    
+    def getStyles(self) -> typing.List[str]:
+        return [
+            "Style: Shiro,Microsoft YaHei,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Mabayu,Microsoft YaHei,40,&H0053FACF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Homura,Microsoft YaHei,40,&H00FFC2CD,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Madoka,Microsoft YaHei,40,&H00C29FF4,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Sayaka,Microsoft YaHei,40,&H00E3D789,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Mami,Microsoft YaHei,40,&H009EEBFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Kyoko,Microsoft YaHei,40,&H008390F1,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n"
+        ]
     
     def cvPassBlackscreen(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
         roiBlackscreen = self.blackscreenRect.cutRoi(frame)
@@ -164,6 +218,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
     def cvPassDialog(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
+        # roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)
 
         _, roiDialogShade1BinFix = cv.threshold(roiDialogGray, 50, 255, cv.THRESH_BINARY)
         roiDialogShade1BinAdap = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 7, 3)
@@ -191,6 +246,8 @@ class MagirecoScene0Strategy(AbstractStrategy):
         roiDialogShade2BinFilteredClose = cv.morphologyEx(roiDialogShade2BinFiltered, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (11, 11)))
         
         roiDialogText2Bin = cv.bitwise_and(roiDialogShade2BinFilteredClose, roiDialogText1Bin)
+
+        meanTextColour = cv.mean(roiDialog, mask=roiDialogText2Bin)
 
         roiDialogNameText2Bin = self.dialogNameRect.cutRoi(roiDialogText2Bin, self.dialogRect)
         roiDialogContentText2Bin = self.dialogContentRect.cutRoi(roiDialogText2Bin, self.dialogRect)
@@ -221,7 +278,9 @@ class MagirecoScene0Strategy(AbstractStrategy):
         hasDialog: bool = cc2NameLeagalAreaRatio > 1.0 or cc2ContentLeagalAreaRatio > 3.0
         hasDialogStrict: bool = cc2NameLeagalAreaRatio > 1.0 and cc2ContentLeagalAreaRatio > 5.0
 
-        # framePoint.setDebugFrame(roiDialogNameText2Bin)
+        if hasDialog:
+            framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.MeanTextColour, meanTextColour)
+
         # framePoint.setDebugFlag(cc2NameLeagalAreaRatio, cc2ContentLeagalAreaRatio)
         # framePoint.setDebugFlag(meanDialogText1BinOpen, num, stats)
 
@@ -311,6 +370,8 @@ class MagirecoScene0Strategy(AbstractStrategy):
         
         roiFBText2Bin = cv.bitwise_and(roiFBShade2BinFilteredClose, roiFBText1Bin)
 
+        meanTextColour= cv.mean(roiFB, mask=roiFBText2Bin)
+
         cc2Num, cc2Labels, cc2Stats, cc2Centroids = cv.connectedComponentsWithStatsWithAlgorithm(roiFBText2Bin, connectivity=4, ltype=cv.CV_16U, ccltype=cv.CCL_SAUF)
         cc2Stats: cv.UMat = cc2Stats.get()
         
@@ -322,6 +383,9 @@ class MagirecoScene0Strategy(AbstractStrategy):
         cc2LeagalAreaRatio: float = cc2LeagalAreaSum / self.floatingBalloonRect.getArea() * 256
 
         hasFloatingBalloon = cc2LeagalAreaRatio > 2.5
+
+        if hasFloatingBalloon:
+            framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.MeanTextColour, meanTextColour)
 
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Balloon, hasFloatingBalloon)
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.BalloonVal, cc2LeagalAreaRatio)
