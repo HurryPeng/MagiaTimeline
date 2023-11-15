@@ -54,7 +54,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
         self.balloonRect = self.rectangles["balloonRect"]
         self.floatingBalloonRect = self.rectangles["floatingBalloonRect"]
 
-        self.cvPasses = [self.cvPassBlackscreen, self.cvPassDialog, self.cvPassBalloon]
+        self.cvPasses = [self.cvPassDialog, self.cvPassBalloon, self.cvPassBlackscreen]
 
         self.fpirPasses = collections.OrderedDict()
 
@@ -135,12 +135,12 @@ class MagirecoScene0Strategy(AbstractStrategy):
         
         colourSpace: typing.Dict[str, typing.Tuple[float, float]] = {
             "Shiro":  ( 0.00,  0.00),
-            "Mabayu": ( 0.15,  0.55),
+            "Mabayu": ( 0.13,  0.55),
             "Homura": (-0.05, -0.17),
             "Madoka": ( 0.27, -0.17),
-            "Sayaka": (-0.20, -0.03),
+            "Sayaka": (-0.25, -0.05),
             "Mami":   ( 0.20,  0.20),
-            "Kyoko":  ( 0.40,  0.00)
+            "Kyoko":  ( 0.40, -0.02)
         }
         def classifySpeaker(interval: Interval):
             if not interval.mainFlag == MagirecoScene0Strategy.FlagIndex.Dialog and not interval.mainFlag == MagirecoScene0Strategy.FlagIndex.Balloon:
@@ -154,7 +154,6 @@ class MagirecoScene0Strategy(AbstractStrategy):
             x = s * np.cos(np.deg2rad(h))
             y = s * np.sin(np.deg2rad(h))
 
-            interval.style = "Shiro"
             minDist = 1000
             for style, point in colourSpace.items():
                 x0 = point[0]
@@ -163,8 +162,10 @@ class MagirecoScene0Strategy(AbstractStrategy):
                 if dist < minDist:
                     interval.style = style
                     minDist = dist
+            if minDist > 0.20:
+                interval.style = "Shiranai"
             
-            # print(formatTimestamp(interval.begin), h, s, x, y, interval.style, minDist)
+            print(formatTimestamp(interval.begin), h, s, x, y, interval.style, minDist)
 
         self.iirPasses["iirPassClassifySpeaker"] = IIRPassIntervalwiseFunctional(classifySpeaker)
 
@@ -190,6 +191,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
     def getStyles(self) -> typing.List[str]:
         return [
             "Style: Shiro,Microsoft YaHei,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Shiranai,Microsoft YaHei,40,&H00000000,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
             "Style: Mabayu,Microsoft YaHei,40,&H0053FACF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
             "Style: Homura,Microsoft YaHei,40,&H00FFC2CD,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
             "Style: Madoka,Microsoft YaHei,40,&H00C29FF4,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",

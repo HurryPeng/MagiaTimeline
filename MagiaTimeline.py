@@ -48,6 +48,7 @@ def main():
         srcMp4 = cv.VideoCapture(src)
         srcRect = SrcRectangle(srcMp4)
         fps: float = srcMp4.get(cv.CAP_PROP_FPS)
+        frameCount: float = srcMp4.get(cv.CAP_PROP_FRAME_COUNT)
         size: typing.Tuple[int, int] = srcRect.getSizeInt()
 
         debugMp4: typing.Any = None
@@ -148,7 +149,10 @@ def main():
         dstAss.close()
 
         timeEnd = time.time()
-        print("Elapsed ", timeEnd - timeStart, "s")
+        timeElapsed = timeEnd - timeStart
+        
+        print("Elapsed", timeElapsed, "s")
+        print("Speed", (frameCount / fps) / timeElapsed, "x")
 
 if __name__ == "__main__":
     main()
