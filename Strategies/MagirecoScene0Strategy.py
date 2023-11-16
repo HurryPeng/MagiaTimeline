@@ -139,8 +139,9 @@ class MagirecoScene0Strategy(AbstractStrategy):
             "Homura": (-0.05, -0.17),
             "Madoka": ( 0.27, -0.17),
             "Sayaka": (-0.25, -0.05),
+            "Kyoko":  ( 0.40, -0.02),
             "Mami":   ( 0.20,  0.20),
-            "Kyoko":  ( 0.40, -0.02)
+            "Nagisa": ( 0.05, -0.17),
         }
         def classifySpeaker(interval: Interval):
             if not interval.mainFlag == MagirecoScene0Strategy.FlagIndex.Dialog and not interval.mainFlag == MagirecoScene0Strategy.FlagIndex.Balloon:
@@ -196,8 +197,9 @@ class MagirecoScene0Strategy(AbstractStrategy):
             "Style: Homura,Microsoft YaHei,40,&H00FFC2CD,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
             "Style: Madoka,Microsoft YaHei,40,&H00C29FF4,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
             "Style: Sayaka,Microsoft YaHei,40,&H00E3D789,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Kyoko,Microsoft YaHei,40,&H008390F1,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
             "Style: Mami,Microsoft YaHei,40,&H009EEBFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Kyoko,Microsoft YaHei,40,&H008390F1,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n"
+            "Style: Nagisa,Microsoft YaHei,40,&H00DCAFE3,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
         ]
     
     def cvPassBlackscreen(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
