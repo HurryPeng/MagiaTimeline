@@ -193,12 +193,12 @@ class MagirecoScene0Strategy(AbstractStrategy):
         return [
             "Style: Shiro,Microsoft YaHei,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
             "Style: Shiranai,Microsoft YaHei,40,&H00000000,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Mabayu,Microsoft YaHei,40,&H0053FACF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Homura,Microsoft YaHei,40,&H00FFC2CD,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Madoka,Microsoft YaHei,40,&H00C29FF4,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Sayaka,Microsoft YaHei,40,&H00E3D789,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Kyoko,Microsoft YaHei,40,&H008390F1,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Mami,Microsoft YaHei,40,&H009EEBFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Mabayu,Microsoft YaHei,40,&H0038FCCC,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Homura,Microsoft YaHei,40,&H00FEC5C4,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Madoka,Microsoft YaHei,40,&H00C699F6,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Sayaka,Microsoft YaHei,40,&H00F3DD96,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Kyoko,Microsoft YaHei,40,&H00738EFC,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Mami,Microsoft YaHei,40,&H0083E1FE,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
             "Style: Nagisa,Microsoft YaHei,40,&H00DCAFE3,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
         ]
     
