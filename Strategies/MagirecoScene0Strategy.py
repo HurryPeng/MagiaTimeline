@@ -141,7 +141,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
             "Sayaka": (-0.25, -0.05),
             "Kyoko":  ( 0.40, -0.02),
             "Mami":   ( 0.20,  0.20),
-            "Nagisa": ( 0.05, -0.17),
+            # "Nagisa": ( 0.05, -0.17), # Nagisa doesn't appear a lot
         }
         def classifySpeaker(interval: Interval):
             if not interval.mainFlag == MagirecoScene0Strategy.FlagIndex.Dialog and not interval.mainFlag == MagirecoScene0Strategy.FlagIndex.Balloon:

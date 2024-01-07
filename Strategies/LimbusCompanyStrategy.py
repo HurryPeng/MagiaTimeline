@@ -103,8 +103,8 @@ class LimbusCompanyStrategy(AbstractStrategy):
         # stdDialogBGR = np.array((15.11, 23.24, 25.42))
         # stdDialogHSV = np.array((27.0, 102.0, 25.5))
 
-        roiDialog = self.dialogRect.cutRoi(frame)
-        roiDialogAbove = self.dialogAboveRect.cutRoi(frame)
+        roiDialog = self.dialogRect.cutRoi(frame).get() # Converted to cv.Mat for temporal convenience
+        roiDialogAbove = self.dialogAboveRect.cutRoi(frame).get()
 
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
         _, roiDialogTextBin = cv.threshold(roiDialogGray, 128, 255, cv.THRESH_BINARY)
@@ -134,7 +134,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
         return False
     
     def cvPassSpeaker(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
-        roiSpeaker = self.speakerRect.cutRoi(frame)
+        roiSpeaker = self.speakerRect.cutRoi(frame).get() # Converted to cv.Mat for temporal convenience
 
         roiSpeakerGray = cv.cvtColor(roiSpeaker, cv.COLOR_BGR2GRAY)
         _, roiSpeakerTextBin = cv.threshold(roiSpeakerGray, 192, 255, cv.THRESH_TOZERO)
