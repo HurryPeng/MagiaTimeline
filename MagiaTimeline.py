@@ -117,10 +117,10 @@ def main():
                 debugMp4.write(frameOut)
                 if framePoint.getDebugFrame() is not None:
                     frameOut = framePoint.getDebugFrame()
-                    framePoint.clearDebugFrame()
                 if cv.waitKey(1) == ord('q'):
                     break
                 cv.imshow("show", frameOut)
+            framePoint.clearDebugFrame()
         srcMp4.release()
         if config["mode"] == "debug":
             debugMp4.release()

@@ -33,6 +33,10 @@ class AbstractRectangle(abc.ABC):
     def cutRoi(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.UMat:
         l, r, t, b = self.getCornersInt(canvasRect)
         return cv.UMat(frame, (t, b), (l, r))
+    
+    def cutRoiAndGetShape(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle] = None) -> typing.Tuple[cv.UMat, typing.Tuple[int, int]]:
+        l, r, t, b = self.getCornersInt(canvasRect)
+        return cv.UMat(frame, (t, b), (l, r)), (r - l, b - t) # width, height
         
     def draw(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.UMat:
         l, r, t, b = self.getCornersInt(canvasRect)
