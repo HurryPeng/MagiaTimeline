@@ -118,11 +118,9 @@
                     "type": "object",
                     "description": "a preset for strategy lcb",
                     "properties": {
-                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"},
-                        "dialogAboveRect": {"$ref": "#/$defs/ratioRectangle"},
-                        "speakerRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
                     },
-                    "required": ["dialogRect", "dialogAboveRect", "speakerRect"],
+                    "required": ["dialogRect"],
                     "additionalProperties": false
                 }
             }

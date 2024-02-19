@@ -13,6 +13,7 @@ from Util import *
 from Strategies.MagirecoStrategy import *
 from Strategies.MagirecoScene0Strategy import *
 from Strategies.LimbusCompanyStrategy import *
+from Strategies.LimbusCompanyMechanicsStrategy import *
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
