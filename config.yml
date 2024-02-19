@@ -22,7 +22,7 @@
 
 # source: paths of source mp4 video files
 source:
-- Scene0/Scene0.Film1.mp4
+- LCB/5.5-4.MP4
 
 # destination: paths of destination ass subtitle files
 destination:
@@ -46,16 +46,16 @@ assTemplate: template.asst
 mode: shortcircuit
 
 # enableOpenCL: enable OpenCL acceleration
-enableOpenCL: false
+enableOpenCL: true
 
 # contentRect: rectangle that wraps the content of a frame, cutting away black bars around
 # If your video has black bars around the canvas, you should set this rectangle to cut them away. 
 # For example, if your video has 1% of black bar on left and right and 9% on top and bottom, 
 # then you should set this to [0.01, 0.99, 0.09, 0.91]. 
-# contentRect: [0.0, 1.0, 0.0, 1.0]
+contentRect: [0.0, 1.0, 0.0, 1.0]
 # contentRect: [0.01, 0.99, 0.0, 1.0]
 # contentRect: [0.0, 1.0, 0.05, 0.85]
-contentRect: [0, 1, 0.09, 0.91]
+# contentRect: [0, 1, 0.09, 0.91]
 # contentRect: [0.11, 0.92, 0.0, 1.0]
 # contentRect: [0.12, 0.92, 0.10, 0.90]
 
@@ -75,7 +75,7 @@ contentRect: [0, 1, 0.09, 0.91]
 # - mr-s0: MagiaRecord Scene0 film
 # - lcb: LimbusCompany quest video
 # - lcb-mech: LimbusCompany mechanics introduction video
-strategy: mr-s0
+strategy: lcb
 
 # preset: which preset of parameters under a strategy to use for timing
 preset: default
@@ -117,14 +117,11 @@ mr-s0:
   default:
     dialogRect: [0.35, 0.65, 0.74, 0.93]
     blackscreenRect: [0.15, 0.85, 0.00, 1.00]
-    blackscreenRect: [0.15, 0.85, 0.00, 1.00]
 
 # LimbusCompany quest video strategy
 lcb:
   default:
-    dialogRect: [0.18, 0.82, 0.78, 0.97]
-    dialogAboveRect: [0.18, 0.82, 0.70, 0.78]
-    speakerRect: [0.07, 0.16, 0.79, 0.84]
+    dialogRect: [0.18, 0.82, 0.74, 0.93]
 
 # LimbusCompany mechanics introduction video strategy
 lcb-mech:
