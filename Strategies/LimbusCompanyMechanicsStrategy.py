@@ -68,7 +68,7 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.UMat, FramePoint], bool]]:
+    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
         return self.cvPasses
 
     def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
@@ -80,7 +80,7 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
 
-    def cvPassDialog(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
+    def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
         _, roiDialogTextBin = cv.threshold(roiDialogGray, 128, 255, cv.THRESH_BINARY)

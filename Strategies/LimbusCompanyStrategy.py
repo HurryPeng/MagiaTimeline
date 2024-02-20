@@ -21,7 +21,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
             return [False, False, 0.0, False, 0.0]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
-        self.rectangles = collections.OrderedDict()
+        self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
 
@@ -47,7 +47,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.UMat, FramePoint], bool]]:
+    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
         return self.cvPasses
 
     def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
@@ -59,8 +59,8 @@ class LimbusCompanyStrategy(AbstractStrategy):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
 
-    def cvPassDialog(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
-        roiDialog = self.dialogRect.cutRoi(frame) # Converted to cv.Mat for temporal convenience
+    def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiDialog = self.dialogRect.cutRoiToUmat(frame)
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
 
         _, roiDialogTextBin = cv.threshold(roiDialogGray, 128, 255, cv.THRESH_BINARY)
@@ -72,7 +72,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
 
         roiDialogBgBin = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, 7, 0)
         roiDialogBgBinNoText = cv.bitwise_and(roiDialogBgBin, cv.bitwise_not(roiDialogTextBinTophat))
-        roiDialogBgBinNoTextDenoise = cv.morphologyEx(roiDialogBgBinNoText, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
+        # roiDialogBgBinNoTextDenoise = cv.morphologyEx(roiDialogBgBinNoText, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
         roiDialogBgBinNoTextOpen = cv.morphologyEx(roiDialogBgBinNoText, cv.MORPH_OPEN, kernel=cv.getStructuringElement(cv.MORPH_RECT, (25, 1)))
 
         meanDialogBgBinNoTextOpen: float = cv.mean(roiDialogBgBinNoTextOpen)[0]

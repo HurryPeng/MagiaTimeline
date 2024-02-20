@@ -79,7 +79,7 @@ class MagirecoStrategy(AbstractStrategy):
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.UMat, FramePoint], bool]]:
+    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
         return self.cvPasses
 
     def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
@@ -91,8 +91,8 @@ class MagirecoStrategy(AbstractStrategy):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
 
-    def cvPassDialog(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
-        roiDialogBg = self.dialogBgRect.cutRoi(frame)
+    def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiDialogBg = self.dialogBgRect.cutRoiToUmat(frame)
         roiDialogBgGray = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2GRAY)
         roiDialogBgHSV = cv.cvtColor(roiDialogBg, cv.COLOR_BGR2HSV)
         roiDialogBgBin = inRange(roiDialogBgHSV, [0, 0, 160], [255, 32, 255])
@@ -102,7 +102,7 @@ class MagirecoStrategy(AbstractStrategy):
         hasDialogBg: bool = meanDialogBgBin > 160
         hasDialogText: bool = meanDialogTextBin < 254 and meanDialogTextBin > 192
 
-        roiDialogOutline = self.dialogOutlineRect.cutRoi(frame)
+        roiDialogOutline = self.dialogOutlineRect.cutRoiToUmat(frame)
         roiDialogOutlineHSV = cv.cvtColor(roiDialogOutline, cv.COLOR_BGR2HSV)
         roiDialogOutlineBin = inRange(roiDialogOutlineHSV, [10, 40, 90], [30, 130, 190])
         meanDialogOutlineBin: float = cv.mean(roiDialogOutlineBin)[0]
@@ -116,8 +116,8 @@ class MagirecoStrategy(AbstractStrategy):
         framePoint.setFlag(MagirecoStrategy.FlagIndex.DialogOutline, hasDialogOutline)
         return isValidDialog
 
-    def cvPassBlackscreen(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
-        roiBlackscreen = self.blackscreenRect.cutRoi(frame)
+    def cvPassBlackscreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiBlackscreen = self.blackscreenRect.cutRoiToUmat(frame)
         roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
         _, roiBlackscreenBgBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
         _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 160, 255, cv.THRESH_BINARY)
@@ -133,8 +133,8 @@ class MagirecoStrategy(AbstractStrategy):
         framePoint.setFlag(MagirecoStrategy.FlagIndex.BlackscreenText, hasBlackscreenText)
         return isValidBlackscreen
 
-    def cvPassWhitescreen(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
-        roiWhitescreen = self.whitescreenRect.cutRoi(frame)
+    def cvPassWhitescreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiWhitescreen = self.whitescreenRect.cutRoiToUmat(frame)
         roiWhitescreenGray = cv.cvtColor(roiWhitescreen, cv.COLOR_BGR2GRAY)
         _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 160, 255, cv.THRESH_BINARY)
         _, roiWhitescreenTextBin = cv.threshold(roiWhitescreenGray, 160, 255, cv.THRESH_BINARY_INV)
@@ -150,11 +150,11 @@ class MagirecoStrategy(AbstractStrategy):
         framePoint.setFlag(MagirecoStrategy.FlagIndex.WhitescreenText, hasWhitescreenText)
         return isValidWhitescreen
 
-    def cvPassCgSub(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
-        roiCgSubAbove = self.cgSubAboveRect.cutRoi(frame)
+    def cvPassCgSub(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiCgSubAbove = self.cgSubAboveRect.cutRoiToUmat(frame)
         roiCgSubAboveGray = cv.cvtColor(roiCgSubAbove, cv.COLOR_BGR2GRAY)
         meanCgSubAboveGray = cv.mean(roiCgSubAboveGray)[0]
-        roiCgSubBelow = self.cgSubBelowRect.cutRoi(frame)
+        roiCgSubBelow = self.cgSubBelowRect.cutRoiToUmat(frame)
         roiCgSubBelowGray = cv.cvtColor(roiCgSubBelow, cv.COLOR_BGR2GRAY)
         _, roiCgSubBelowGrayNoText = cv.threshold(roiCgSubBelowGray, 160, 255, cv.THRESH_TOZERO_INV)
         meanCgSubBelowGrayNoText: float = cv.mean(roiCgSubBelowGrayNoText)[0]
@@ -162,7 +162,7 @@ class MagirecoStrategy(AbstractStrategy):
         cgSubBrightnessDecrRate: float = 1 - meanCgSubBelowGrayNoText / max(meanCgSubAboveGray, 1.0)
         hasCgSubContrast: bool = cgSubBrightnessDecrVal > 15.0 and cgSubBrightnessDecrRate > 0.30
 
-        roiCgSubBorder = self.cgSubBorderRect.cutRoi(frame)
+        roiCgSubBorder = self.cgSubBorderRect.cutRoiToUmat(frame)
         roiCgSubBorderGray = cv.cvtColor(roiCgSubBorder, cv.COLOR_BGR2GRAY)
         roiCgSubBorderEdge = cv.convertScaleAbs(cv.Sobel(roiCgSubBorderGray, cv.CV_16S, 0, 1, ksize=3))
         _, roiCgSubBorderEdgeBin = cv.threshold(roiCgSubBorderEdge, 5, 255, cv.THRESH_BINARY)
@@ -171,7 +171,7 @@ class MagirecoStrategy(AbstractStrategy):
         maxCgSubBorderRowReduce: float = cv.minMaxLoc(roiCgSubBorderRowReduce)[1]
         hasCgSubBorder: bool = maxCgSubBorderRowReduce > 200.0
 
-        roiCgSubText = self.cgSubTextRect.cutRoi(frame)
+        roiCgSubText = self.cgSubTextRect.cutRoiToUmat(frame)
         roiCgSubTextGray = cv.cvtColor(roiCgSubText, cv.COLOR_BGR2GRAY)
         _, roiCgSubTextBin = cv.threshold(roiCgSubTextGray, 160, 255, cv.THRESH_BINARY)
         meanCgSubTextBin: float = cv.mean(roiCgSubTextBin)[0]

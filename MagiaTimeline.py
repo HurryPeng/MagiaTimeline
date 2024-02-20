@@ -85,7 +85,6 @@ def main():
             frameIndex: int = int(srcMp4.get(cv.CAP_PROP_POS_FRAMES))
             timestamp: int = int(srcMp4.get(cv.CAP_PROP_POS_MSEC))
             validFrame, frame = srcMp4.read()
-            frame = cv.UMat(frame)
             if not validFrame:
                 break
 

@@ -177,7 +177,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.UMat, FramePoint], bool]]:
+    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
         return self.cvPasses
 
     def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
@@ -202,7 +202,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
             "Style: Nagisa,Microsoft YaHei,40,&H00DCAFE3,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
         ]
     
-    def cvPassBlackscreen(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
+    def cvPassBlackscreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiBlackscreen = self.blackscreenRect.cutRoi(frame)
         roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
         _, roiBlackscreenBgBin = cv.threshold(roiBlackscreenGray, 80, 255, cv.THRESH_BINARY)
@@ -219,7 +219,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.BlackscreenText, hasBlackscreenText)
         return isValidBlackscreen
 
-    def cvPassDialog(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
+    def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
         # roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)
@@ -229,8 +229,6 @@ class MagirecoScene0Strategy(AbstractStrategy):
         roiDialogShade1Bin = cv.bitwise_and(roiDialogShade1BinFix, roiDialogShade1BinAdap)
         
         cc1Num, cc1Labels, cc1Stats, cc1Centroids = cv.connectedComponentsWithStatsWithAlgorithm(roiDialogShade1Bin, connectivity=4, ltype=cv.CV_16U, ccltype=cv.CCL_SAUF)
-        cc1Stats: cv.UMat = cc1Stats.get()
-        cc1Labels: cv.UMat = cc1Labels.get()
 
         cc1AcceptedLabels = []
         for n in range(cc1Num):
@@ -239,7 +237,6 @@ class MagirecoScene0Strategy(AbstractStrategy):
                 cc1AcceptedLabels.append(n)
 
         roiDialogText1Bin = np.isin(cc1Labels, cc1AcceptedLabels) * np.uint8(255)
-        roiDialogText1Bin = cv.UMat(roiDialogText1Bin)
         roiDialogText1BinDialate = cv.morphologyEx(roiDialogText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
 
         _, roiDialogShade2BinFix = cv.threshold(roiDialogGray, 40, 255, cv.THRESH_BINARY_INV)
@@ -257,7 +254,6 @@ class MagirecoScene0Strategy(AbstractStrategy):
         roiDialogContentText2Bin = self.dialogContentRect.cutRoi(roiDialogText2Bin, self.dialogRect)
 
         cc2NameNum, cc2NameLabels, cc2NameStats, cc2NameCentroids = cv.connectedComponentsWithStatsWithAlgorithm(roiDialogNameText2Bin, connectivity=4, ltype=cv.CV_16U, ccltype=cv.CCL_SAUF)
-        cc2NameStats: cv.UMat = cc2NameStats.get()
 
         cc2NameLeagalAreaSum: int = 0
         for n in range(cc2NameNum):
@@ -267,7 +263,6 @@ class MagirecoScene0Strategy(AbstractStrategy):
         cc2NameLeagalAreaRatio: float = cc2NameLeagalAreaSum / self.dialogRect.getArea() * 256
 
         cc2ContentNum, cc2ContentLabels, cc2ContentStats, cc2ContentCentroids = cv.connectedComponentsWithStatsWithAlgorithm(roiDialogContentText2Bin, connectivity=4, ltype=cv.CV_16U, ccltype=cv.CCL_SAUF)
-        cc2ContentStats: cv.UMat = cc2ContentStats.get()
 
         roiDialogContentText3Bin = roiDialogContentText2Bin
         cc2ContentLeagalAreaSum: int = 0
@@ -293,7 +288,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogContentVal, cc2ContentLeagalAreaRatio)
         return hasDialogStrict
 
-    def cvPassBalloon(self, frame: cv.UMat, framePoint: FramePoint) -> bool:
+    def cvPassBalloon(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiBolloon = self.balloonRect.cutRoi(frame)
         roiBolloonGray = cv.cvtColor(roiBolloon, cv.COLOR_BGR2GRAY)
 
@@ -351,8 +346,6 @@ class MagirecoScene0Strategy(AbstractStrategy):
         roiFBShade1Bin = cv.bitwise_and(roiFBShade1BinFix, roiFBShade1BinAdap)
         
         cc1Num, cc1Labels, cc1Stats, cc1Centroids = cv.connectedComponentsWithStatsWithAlgorithm(roiFBShade1Bin, connectivity=4, ltype=cv.CV_16U, ccltype=cv.CCL_SAUF)
-        cc1Labels: cv.UMat = cc1Labels.get()
-        cc1Stats: cv.UMat = cc1Stats.get()
 
         cc1AcceptedLabels = []
         for n in range(cc1Num):
@@ -361,7 +354,6 @@ class MagirecoScene0Strategy(AbstractStrategy):
                 cc1AcceptedLabels.append(n)
 
         roiFBText1Bin = np.isin(cc1Labels, cc1AcceptedLabels) * np.uint8(255)
-        roiFBText1Bin = cv.UMat(roiFBText1Bin)
 
         roiFBText1BinDialate = cv.morphologyEx(roiFBText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
 
@@ -377,7 +369,6 @@ class MagirecoScene0Strategy(AbstractStrategy):
         meanTextColour= cv.mean(roiFB, mask=roiFBText2Bin)
 
         cc2Num, cc2Labels, cc2Stats, cc2Centroids = cv.connectedComponentsWithStatsWithAlgorithm(roiFBText2Bin, connectivity=4, ltype=cv.CV_16U, ccltype=cv.CCL_SAUF)
-        cc2Stats: cv.UMat = cc2Stats.get()
         
         cc2LeagalAreaSum: int = 0
         for n in range(cc2Num):

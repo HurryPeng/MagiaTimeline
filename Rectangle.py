@@ -29,16 +29,26 @@ class AbstractRectangle(abc.ABC):
     def getArea(self, canvasRect: typing.Optional[AbstractRectangle] = None) -> int:
         w, h = self.getSizeInt(canvasRect)
         return w * h
-
-    def cutRoi(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.UMat:
-        l, r, t, b = self.getCornersInt(canvasRect)
-        return cv.UMat(frame, (t, b), (l, r))
     
-    def cutRoiAndGetShape(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle] = None) -> typing.Tuple[cv.UMat, typing.Tuple[int, int]]:
+    @typing.overload
+    def cutRoi(self, frame: cv.typing.MatLike, canvasRect: typing.Optional[AbstractRectangle]) -> cv.typing.MatLike: ...
+    @typing.overload
+    def cutRoi(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle]) -> cv.UMat: ...
+    def cutRoi(self, frame: typing.Union[cv.typing.MatLike, cv.UMat], canvasRect: typing.Optional[AbstractRectangle]):
         l, r, t, b = self.getCornersInt(canvasRect)
-        return cv.UMat(frame, (t, b), (l, r)), (r - l, b - t) # width, height
-        
-    def draw(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.UMat:
+        if isinstance(frame, cv.UMat):
+            return cv.UMat(frame, (t, b), (l, r))
+        else:
+            return frame[t:b, l:r]
+    
+    def cutRoiToUmat(self, frame: cv.Mat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.UMat:
+        return cv.UMat(self.cutRoi(frame, canvasRect))
+
+    @typing.overload
+    def draw(self, frame: cv.typing.MatLike, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.typing.MatLike: ...
+    @typing.overload
+    def draw(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.UMat: ...
+    def draw(self, frame: typing.Union[cv.typing.MatLike, cv.UMat], canvasRect: typing.Optional[AbstractRectangle] = None) -> typing.Union[cv.typing.MatLike, cv.UMat]:
         l, r, t, b = self.getCornersInt(canvasRect)
         return cv.rectangle(frame, (l, t), (r, b), (0, 0, 255), 1)
 
