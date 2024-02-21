@@ -63,6 +63,19 @@ class LimbusCompanyStrategy(AbstractStrategy):
         roiDialog = self.dialogRect.cutRoiToUmat(frame)
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
 
+        roiDialogBgBin = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, 9, 0)
+        roiDialogBgBinOpen = cv.morphologyEx(roiDialogBgBin, cv.MORPH_OPEN, kernel=cv.getStructuringElement(cv.MORPH_RECT, (31, 1)))
+
+        meanDialogBgBinOpen: float = cv.mean(roiDialogBgBinOpen)[0]
+        dialogBgVal: float = meanDialogBgBinOpen / self.dialogRect.getArea()
+        hasDialogBg: bool = dialogBgVal > 130e-6
+
+        framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogBg, hasDialogBg)
+        framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogBgVal, dialogBgVal)
+
+        if not hasDialogBg:
+            return False
+
         _, roiDialogTextBin = cv.threshold(roiDialogGray, 128, 255, cv.THRESH_BINARY)
         roiDialogTextBinTophat = cv.morphologyEx(roiDialogTextBin, cv.MORPH_TOPHAT, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
 
@@ -70,21 +83,12 @@ class LimbusCompanyStrategy(AbstractStrategy):
         dialogTextVal: float = meanDialogTextBinTophat / self.dialogRect.getArea()
         hasDialogText: bool = dialogTextVal > 1e-6 and dialogTextVal < 100e-6
 
-        roiDialogBgBin = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, 7, 0)
-        roiDialogBgBinNoText = cv.bitwise_and(roiDialogBgBin, cv.bitwise_not(roiDialogTextBinTophat))
-        # roiDialogBgBinNoTextDenoise = cv.morphologyEx(roiDialogBgBinNoText, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
-        roiDialogBgBinNoTextOpen = cv.morphologyEx(roiDialogBgBinNoText, cv.MORPH_OPEN, kernel=cv.getStructuringElement(cv.MORPH_RECT, (25, 1)))
-
-        meanDialogBgBinNoTextOpen: float = cv.mean(roiDialogBgBinNoTextOpen)[0]
-        dialogBgVal: float = meanDialogBgBinNoTextOpen / self.dialogRect.getArea()
-        hasDialogBg: bool = dialogBgVal > 80e-6
-
         isValidDialog = hasDialogText and hasDialogBg
-        # framePoint.setDebugFrame(roiDialogBgBinNoTextOpen)
+        # framePoint.setDebugFrame(roiDialogTextBinTophat)
 
-        framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.Dialog, isValidDialog)
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogText, hasDialogText)
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogTextVal, dialogTextVal)
-        framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogBg, hasDialogBg)
-        framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogBgVal, dialogBgVal)
+
+        framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.Dialog, isValidDialog)
+        
         return False
