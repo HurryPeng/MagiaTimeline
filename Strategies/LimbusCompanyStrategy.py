@@ -68,7 +68,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
 
         meanDialogBgBinOpen: float = cv.mean(roiDialogBgBinOpen)[0]
         dialogBgVal: float = meanDialogBgBinOpen / self.dialogRect.getArea()
-        hasDialogBg: bool = dialogBgVal > 130e-6
+        hasDialogBg: bool = dialogBgVal > 100e-6
 
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogBg, hasDialogBg)
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogBgVal, dialogBgVal)
@@ -81,7 +81,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
 
         meanDialogTextBinTophat: float = cv.mean(roiDialogTextBinTophat)[0]
         dialogTextVal: float = meanDialogTextBinTophat / self.dialogRect.getArea()
-        hasDialogText: bool = dialogTextVal > 1e-6 and dialogTextVal < 100e-6
+        hasDialogText: bool = dialogTextVal > 1e-6 and dialogTextVal < 120e-6
 
         isValidDialog = hasDialogText and hasDialogBg
         # framePoint.setDebugFrame(roiDialogTextBinTophat)
