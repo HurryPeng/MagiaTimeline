@@ -44,7 +44,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
 
         self.rectangles["dialogNameRect"] = RatioRectangle(self.rectangles["dialogRect"], 0, 0.5, 0, 0.33)
         self.rectangles["dialogContentRect"] = RatioRectangle(self.rectangles["dialogRect"], 0, 1, 0.34, 1)
-        self.rectangles["balloonRect"] = RatioRectangle(contentRect, 0.15, 0.85, 0.1, 0.75)
+        self.rectangles["balloonRect"] = RatioRectangle(contentRect, 0.15, 0.85, 0.05, 0.75)
         self.rectangles["floatingBalloonRect"] = RatioRectangle(contentRect, 0, 1, 0, 1)
 
         self.dialogRect = self.rectangles["dialogRect"]
@@ -165,9 +165,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
                     minDist = dist
             if minDist > 0.20:
                 interval.style = "Shiranai"
-            
-            print(formatTimestamp(interval.begin), h, s, x, y, interval.style, minDist)
-
+        
         self.iirPasses["iirPassClassifySpeaker"] = IIRPassIntervalwiseFunctional(classifySpeaker)
 
     @classmethod
@@ -233,7 +231,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
         cc1AcceptedLabels = []
         for n in range(cc1Num):
             stat = cc1Stats[n]
-            if stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3):
+            if stat[4] > 20 and stat[4] < 400 and stat[2] < 30 and stat[3] < 30 and (stat[2] > 3 and stat[4] > 3):
                 cc1AcceptedLabels.append(n)
 
         roiDialogText1Bin = np.isin(cc1Labels, cc1AcceptedLabels) * np.uint8(255)
@@ -258,7 +256,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
         cc2NameLeagalAreaSum: int = 0
         for n in range(cc2NameNum):
             stat = cc2NameStats[n]
-            if (stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
+            if (stat[4] > 20 and stat[4] < 400 and stat[2] < 30 and stat[3] < 30 and (stat[2] > 3 and stat[4] > 3)):
                 cc2NameLeagalAreaSum += stat[4]
         cc2NameLeagalAreaRatio: float = cc2NameLeagalAreaSum / self.dialogRect.getArea() * 256
 
@@ -268,7 +266,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
         cc2ContentLeagalAreaSum: int = 0
         for n in range(cc2ContentNum):
             stat = cc2ContentStats[n]
-            if (stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
+            if (stat[4] > 20 and stat[4] < 400 and stat[2] < 30 and stat[3] < 30 and (stat[2] > 3 and stat[4] > 3)):
                 cc2ContentLeagalAreaSum += stat[4]
             # if not (stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
             #     roiDialogText3Bin[cc2ContentLabels == n] = 0
@@ -282,6 +280,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
 
         # framePoint.setDebugFlag(cc2NameLeagalAreaRatio, cc2ContentLeagalAreaRatio)
         # framePoint.setDebugFlag(meanDialogText1BinOpen, num, stats)
+        framePoint.setDebugFrame(roiDialogContentText2Bin)
 
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Dialog, hasDialog)
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogNameVal, cc2NameLeagalAreaRatio)
@@ -350,7 +349,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
         cc1AcceptedLabels = []
         for n in range(cc1Num):
             stat = cc1Stats[n]
-            if stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3):
+            if stat[4] > 20 and stat[4] < 400 and stat[2] < 30 and stat[3] < 30 and (stat[2] > 3 and stat[4] > 3):
                 cc1AcceptedLabels.append(n)
 
         roiFBText1Bin = np.isin(cc1Labels, cc1AcceptedLabels) * np.uint8(255)
@@ -373,7 +372,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
         cc2LeagalAreaSum: int = 0
         for n in range(cc2Num):
             stat = cc2Stats[n]
-            if (stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
+            if (stat[4] > 20 and stat[4] < 400 and stat[2] < 30 and stat[3] < 30 and (stat[2] > 3 and stat[4] > 3)):
                 cc2LeagalAreaSum += stat[4]
         cc2LeagalAreaRatio: float = cc2LeagalAreaSum / self.floatingBalloonRect.getArea() * 256
 

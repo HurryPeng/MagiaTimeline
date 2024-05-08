@@ -73,8 +73,6 @@ class LimbusCompanyStrategy(AbstractStrategy):
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogBg, hasDialogBg)
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogBgVal, dialogBgVal)
 
-        if not hasDialogBg:
-            return False
 
         _, roiDialogTextBin = cv.threshold(roiDialogGray, 128, 255, cv.THRESH_BINARY)
         roiDialogTextBinTophat = cv.morphologyEx(roiDialogTextBin, cv.MORPH_TOPHAT, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))

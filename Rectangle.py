@@ -33,8 +33,8 @@ class AbstractRectangle(abc.ABC):
     @typing.overload
     def cutRoi(self, frame: cv.typing.MatLike, canvasRect: typing.Optional[AbstractRectangle]) -> cv.typing.MatLike: ...
     @typing.overload
-    def cutRoi(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle]) -> cv.UMat: ...
-    def cutRoi(self, frame: typing.Union[cv.typing.MatLike, cv.UMat], canvasRect: typing.Optional[AbstractRectangle]):
+    def cutRoi(self, frame: cv.UMat, canvasRect: typing.Optional[AbstractRectangle] = None) -> cv.UMat: ...
+    def cutRoi(self, frame: typing.Union[cv.typing.MatLike, cv.UMat], canvasRect: typing.Optional[AbstractRectangle] = None):
         l, r, t, b = self.getCornersInt(canvasRect)
         if isinstance(frame, cv.UMat):
             return cv.UMat(frame, (t, b), (l, r))
