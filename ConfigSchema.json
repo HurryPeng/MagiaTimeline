@@ -63,7 +63,7 @@
 
         "strategy": {
             "description": "which algorithm to use for timing",
-            "enum": ["mr", "mr-s0", "lcb", "lcb-mech", "pkm"]
+            "enum": ["mr", "mr-s0", "lcb", "lcb-mech", "pkm", "prk"]
         },
         "preset": {
             "description": "which preset of parameters under a strategy to use for timing",
@@ -104,7 +104,7 @@
                         "dialogRect": {"$ref": "#/$defs/ratioRectangle"},
                         "blackscreenRect": {"$ref": "#/$defs/ratioRectangle"}
                     },
-                    "required": ["dialogRect"],
+                    "required": ["dialogRect", "blackscreenRect"],
                     "additionalProperties": false
                 }
             }
@@ -153,6 +153,22 @@
                         "dialogBgRect": {"$ref": "#/$defs/ratioRectangle"}
                     },
                     "required": ["dialogBgRect"],
+                    "additionalProperties": false
+                }
+            }
+        },
+
+        "prk": {
+            "description": "Parako strategy",
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "description": "a preset for strategy prk",
+                    "type": "object",
+                    "properties": {
+                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                    },
+                    "required": ["dialogRect"],
                     "additionalProperties": false
                 }
             }

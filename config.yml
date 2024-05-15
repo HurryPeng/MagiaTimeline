@@ -29,7 +29,9 @@ source:
 # - 202405/AlinaMajo2/Meiyu.mov
 # - 202405/AlinaMajo2/Momoko.mov
 # - 202405/AlinaMajo2/Nanaka.mov
-- 202405/LastBirdsHope-1.mp4
+# - 202405/LastBirdsHope-1.mp4
+# - parako/Parako-293.mp4
+- parako/Parako-287.mp4
 
 # destination: paths of destination ass subtitle files
 destination:
@@ -67,9 +69,9 @@ enableOpenCL: true
 # If your video has black bars around the canvas, you should set this rectangle to cut them away. 
 # For example, if your video has 1% of black bar on left and right and 9% on top and bottom, 
 # then you should set this to [0.01, 0.99, 0.09, 0.91]. 
-# contentRect: [0.0, 1.0, 0.0, 1.0]
+contentRect: [0.0, 1.0, 0.0, 1.0]
 # contentRect: [0.0, 1.0, 0.05, 0.95]
-contentRect: [0.0, 1.0, 0.09, 0.91]
+# contentRect: [0.0, 1.0, 0.09, 0.91]
 # contentRect: [0.1, 0.9, 0.03, 0.97]
 # contentRect: [0.01, 0.99, 0.0, 1.0]
 # contentRect: [0.0, 1.0, 0.05, 0.85]
@@ -93,7 +95,7 @@ contentRect: [0.0, 1.0, 0.09, 0.91]
 # - mr-s0: MagiaRecord Scene0 film
 # - lcb: LimbusCompany quest video
 # - lcb-mech: LimbusCompany mechanics introduction video
-strategy: mr
+strategy: prk
 
 # preset: which preset of parameters under a strategy to use for timing
 preset: default
@@ -152,3 +154,7 @@ lcb-mech:
 pkm:
   default:
     dialogBgRect: [0.05, 0.95, 0.75, 0.95]
+
+prk:
+  default:
+    dialogRect: [0.00, 1.00, 0.88, 0.98]
