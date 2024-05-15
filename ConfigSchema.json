@@ -63,7 +63,7 @@
 
         "strategy": {
             "description": "which algorithm to use for timing",
-            "enum": ["mr", "mr-s0", "lcb", "lcb-mech"]
+            "enum": ["mr", "mr-s0", "lcb", "lcb-mech", "pkm"]
         },
         "preset": {
             "description": "which preset of parameters under a strategy to use for timing",
@@ -137,6 +137,22 @@
                         "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
                     },
                     "required": ["dialogRect"],
+                    "additionalProperties": false
+                }
+            }
+        }, 
+
+        "pkm": {
+            "description": "PekemonEmerald strategy",
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "description": "a preset for strategy pkm",
+                    "type": "object",
+                    "properties": {
+                        "dialogBgRect": {"$ref": "#/$defs/ratioRectangle"}
+                    },
+                    "required": ["dialogBgRect"],
                     "additionalProperties": false
                 }
             }

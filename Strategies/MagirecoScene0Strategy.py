@@ -278,10 +278,6 @@ class MagirecoScene0Strategy(AbstractStrategy):
         if hasDialog:
             framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.MeanTextColour, meanTextColour)
 
-        # framePoint.setDebugFlag(cc2NameLeagalAreaRatio, cc2ContentLeagalAreaRatio)
-        # framePoint.setDebugFlag(meanDialogText1BinOpen, num, stats)
-        framePoint.setDebugFrame(roiDialogContentText2Bin)
-
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Dialog, hasDialog)
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogNameVal, cc2NameLeagalAreaRatio)
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogContentVal, cc2ContentLeagalAreaRatio)
