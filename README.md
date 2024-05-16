@@ -14,10 +14,11 @@ Fans of RPGs would translate game videos when their native language is not suppo
 
 - [Magia Record 「マギアレコード」 《魔法纪录》](https://magireco.com/), for which this project was initially written
 - [Limbus Company 「림버스컴퍼니」 《边狱公司》](https://limbuscompany.com/)
+- [Parako 「私立パラの丸高校」 《超能力高校》](https://www.youtube.com/@parako), not necessarily a game
 
 ### Limitations
 
-Not supporting videos with no subtitle at all. Hard to support videos where subtitles appear at random places (possible if you add some kind of AI to your strategy, but that will be way slower). 
+Not supporting videos with no subtitle at all. Hard to support videos where subtitles appear at random places in the canvas. 
 
 ## Getting Started
 
@@ -38,13 +39,6 @@ Should also work on other versions, but not tested.
 
 ```
 python MagiaTimeline.py --help
-python PyrDown.py --help
-```
-
-**Compressing.** It is recommended to control the resolution of the video within 1280\*720 for performance. You can compress your video with `PyrDown.py`, which halves the width and height of a video by pyramiding down each frame. However, it is more recommended to compress with professional video editors for less compressing time and smaller video size. 
-
-```
-python PyrDown.py --src src.mp4 --dst pyrdown.mp4
 ```
 
 **Configuration.** Open `config.yml` to check out configurations for the main program. You can open this file with any text editor, but it is more recommended to open it with an IDE that provides syntax checking according to `ConfigSchema.json`. There are comments in `config.yml` to guide you through. 

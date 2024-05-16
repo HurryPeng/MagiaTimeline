@@ -22,27 +22,15 @@
 
 # source: paths of source mp4 video files
 source:
-# - Pokemon/wallacebattle.mp4
-# - Scene0/Scene0-Film3Side.mp4
-# - 202405/AlinaMajo2/Kako.mov
-# - 202405/AlinaMajo2/Konomi.mov
-# - 202405/AlinaMajo2/Meiyu.mov
-# - 202405/AlinaMajo2/Momoko.mov
-# - 202405/AlinaMajo2/Nanaka.mov
-# - 202405/LastBirdsHope-1.mp4
+# - parako/Parako-296-v.mp4
 # - parako/Parako-293.mp4
-- parako/Parako-287.mp4
+# - parako/Parako-287.mp4
+# - parako/Parako-31.mp4
+- parako/Parako-295-v.mp4
 
 # destination: paths of destination ass subtitle files
 destination:
 - MagiaTimelineOutput.ass
-# - 202405/AlinaMajo2/Kaede#20240501a.ass
-# - 202405/AlinaMajo2/Kako#20240501a.ass
-# - 202405/AlinaMajo2/Konomi#20240501a.ass
-# - 202405/AlinaMajo2/Meiyu#20240501a.ass
-# - 202405/AlinaMajo2/Momoko#20240501a.ass
-# - 202405/AlinaMajo2/Nanaka#20240501a.ass
-# - 202405/AlinaMajo2/Rena#20240501a.ass
 
 
 # assTemplate: template ass file defining the header of destination ass file, in asst format
@@ -60,7 +48,7 @@ assTemplate: template.asst
 #   - Short circuit mode accelerates the program by skipping detecting other types of subtitles 
 #     once one type has been confirmed.
 #     This should have no side-effect if different subtitles guarantee not to appear at the same time. 
-mode: shortcircuit
+mode: default
 
 # enableOpenCL: enable OpenCL acceleration
 enableOpenCL: true
@@ -95,10 +83,13 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 # - mr-s0: MagiaRecord Scene0 film
 # - lcb: LimbusCompany quest video
 # - lcb-mech: LimbusCompany mechanics introduction video
+# - pkm: PekemonEmerald quest video
+# - prk: Parako anime conte
 strategy: prk
 
 # preset: which preset of parameters under a strategy to use for timing
 preset: default
+# preset: vertical
 
 # MagiaRecord quest video strategy
 mr:
@@ -151,10 +142,14 @@ lcb-mech:
   default:
     dialogRect: [0.30, 0.70, 0.875, 0.915]
 
+# PekemonEmerald strategy
 pkm:
   default:
     dialogBgRect: [0.05, 0.95, 0.75, 0.95]
 
+# Parako strategy
 prk:
   default:
     dialogRect: [0.00, 1.00, 0.88, 0.98]
+  vertical:
+    dialogRect: [0.00, 1.00, 0.57, 0.69]
