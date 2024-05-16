@@ -11,12 +11,12 @@ from IR import *
 class ParakoStrategy(AbstractStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
-        DialogVal = enum.auto()
-        DialogValJump = enum.auto()
+        DialogFeat = enum.auto()
+        DialogFeatJump = enum.auto()
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False, (0.0, 0.0), False]
+            return [False, np.zeros(64), False]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
@@ -32,18 +32,18 @@ class ParakoStrategy(AbstractStrategy):
         self.fpirPasses = collections.OrderedDict()
 
         self.fpirPasses["fpirPassDetectDialogJump"] = FPIRPassDetectFeatureJump(
-            featFlag=ParakoStrategy.FlagIndex.DialogVal,
-            dstFlag=ParakoStrategy.FlagIndex.DialogValJump, 
+            featFlag=ParakoStrategy.FlagIndex.DialogFeat,
+            dstFlag=ParakoStrategy.FlagIndex.DialogFeatJump, 
             featOpMean=lambda feats : np.mean(feats, 0),
             featOpDist=lambda lhs, rhs : np.linalg.norm(lhs - rhs),
-            threshDist=1,
-            windowSize=2
+            threshDist=0.1,
+            windowSize=3
         )
 
         def breakDialogJump(framePoint: FramePoint):
             framePoint.setFlag(ParakoStrategy.FlagIndex.Dialog,
                 framePoint.getFlag(ParakoStrategy.FlagIndex.Dialog)
-                and not framePoint.getFlag(ParakoStrategy.FlagIndex.DialogValJump)
+                and not framePoint.getFlag(ParakoStrategy.FlagIndex.DialogFeatJump)
             )
         self.fpirPasses["fpirPassBreakDialogJump"] = FPIRPassFramewiseFunctional(
             func=breakDialogJump
@@ -55,7 +55,7 @@ class ParakoStrategy(AbstractStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(ParakoStrategy.FlagIndex.Dialog, 300, meetPoint=1.5)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(ParakoStrategy.FlagIndex.Dialog, 300, meetPoint=1.3)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -78,17 +78,21 @@ class ParakoStrategy(AbstractStrategy):
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)
-        roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
+        roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)
 
-        _, roiDialogShade = cv.threshold(roiDialogGray, 230, 255, cv.THRESH_BINARY)
+        # Select out the whitest part of the dialog
+        roiDialogShade = cv.inRange(roiDialogHSV, (0, 0, 240), (180, 16, 255))
 
         meanStdDevDialogShade = cv.meanStdDev(roiDialogShade)
         meanDialogShade = meanStdDevDialogShade[0][0][0]
-        devDialogShade = meanStdDevDialogShade[1][0][0]
+        # devDialogShade = meanStdDevDialogShade[1][0][0]
 
-        framePoint.setFlag(ParakoStrategy.FlagIndex.Dialog, meanDialogShade > 2.0)
-        framePoint.setFlag(ParakoStrategy.FlagIndex.DialogVal, (meanDialogShade, devDialogShade))
-        
-        # framePoint.setDebugFrame(roiDialogShade)
+        roiDialogShadeResized = cv.resize(roiDialogShade, (150, 50))
+        dctFeat = dctDescriptor(roiDialogShadeResized, 8, 8)
+
+        framePoint.setFlag(ParakoStrategy.FlagIndex.Dialog, meanDialogShade > 1.0)
+        framePoint.setFlag(ParakoStrategy.FlagIndex.DialogFeat, dctFeat)
+
+        framePoint.setDebugFrame(roiDialogShadeResized)
 
         return False
