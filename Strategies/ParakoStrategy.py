@@ -93,6 +93,6 @@ class ParakoStrategy(AbstractStrategy):
         framePoint.setFlag(ParakoStrategy.FlagIndex.Dialog, meanDialogShade > 1.0)
         framePoint.setFlag(ParakoStrategy.FlagIndex.DialogFeat, dctFeat)
 
-        framePoint.setDebugFrame(roiDialogShadeResized)
+        # framePoint.setDebugFrame(roiDialogShadeResized)
 
         return False
