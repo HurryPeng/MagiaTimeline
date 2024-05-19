@@ -3,93 +3,84 @@
 # MagiaTimeline config
 
 # This is the configuration file that defines the parameters required for the main program to run. 
-# To make the program work for your video, you should adjust the parameters here before running. 
+# In order for the program to work for your video, you should adjust the parameters here. 
 # The file is written in YAML format and constrained by JSON Schema in ConfigSchema.json. 
-# However, you do not need to know a lot about YAML or JSON Schema to modify this file. 
-# Any character after a "#" in a line is comment that will not be regarded as part of the config. 
+# However, you do not need to be an expert of YAML or JSON Schema to modify this file. 
+# Any characters after a "#" in a line are comments, which will be ignored by the program. 
 # There will be comments for entries below to help you understand and modify the parameters. 
 # If you are still not sure how to do it, just "do as Romans do": imitate existing defaults. 
-# Take it easy, the program will verify this file before running, so you are not likely 
-# to be able to harm the program with ill-formed parameters. 
+# Take it easy, the program will verify this file before running, so you are unlikely to 
+# harm the program with ill-formed parameters. 
 
 # Rectangles
 
 # Any rectangle (or "rect") to be mentioned below defines a rectangular area in a frame. 
-# It is described as a tuple of four decimals from 0.0 to 1.0, [left, right, top, bottom]. 
+# It is denoted in a tuple of four decimals from 0.0 to 1.0, [left, right, top, bottom]. 
 # Each decimal represents a width or height in ratio to the whole frame. 
 # For example, [0.0, 1.0, 0.0, 1.0] represents the whole frame, 
 # and [0.50, 1.0, 0.0, 1.0] represents the right half of the frame. 
 
-# source: paths of source mp4 video files
+# source: path(s) of source mp4 video files
 source:
-# - parako/Parako-296-v.mp4
-# - parako/Parako-293.mp4
-# - parako/Parako-287.mp4
-# - parako/Parako-31.mp4
-- parako/Parako-295-v.mp4
+- src.mp4
+# - src2.mp4
 
-# destination: paths of destination ass subtitle files
+# destination: path(s) of destination ass subtitle files
+# There must be equal number of source(s) and destination(s). 
 destination:
 - MagiaTimelineOutput.ass
-
+# - MagiaTimelineOutput2.ass
 
 # assTemplate: template ass file defining the header of destination ass file, in asst format
 # You do not need to modify this in most cases. 
 assTemplate: template.asst
 
-# mode: running mode that provides different performance and intermediate information
+# mode: running modes that provide different performance and debug information
 # - default: nothing special
-# - debug: shows a real-time window to preview alignments
-#   - It is recommended to run debug mode and adjust parameters before processing the whole video. 
-#     In debug mode, you can preview the cutting of black bars and the alignment of critical areas. 
+# - debug: shows a real-time window where you can preview alignments
+#   - It is recommended to run debug mode and adjust the parameters before processing the whole video. 
+#     In debug mode, you can check whether critical areas are aligned to rectangles
 #     However, debug mode slows down the program significantly, 
 #     so you should run in other modes after adjustment completes. 
 # - shortcircuit: accelerates running
 #   - Short circuit mode accelerates the program by skipping detecting other types of subtitles 
 #     once one type has been confirmed.
 #     This should have no side-effect if different subtitles guarantee not to appear at the same time. 
-mode: default
+mode: debug
 
 # enableOpenCL: enable OpenCL acceleration
-enableOpenCL: true
+# If you have a graphics card or other accelerators, enabling this option may speed up the program.
+# However, if you encounter problems or the program runs slower, you should disable this option.
+enableOpenCL: false
 
-# contentRect: rectangle that wraps the content of a frame, cutting away black bars around
+# contentRect: defines the rectangle that wraps the content of a frame, cutting away black bars around
 # If your video has black bars around the canvas, you should set this rectangle to cut them away. 
 # For example, if your video has 1% of black bar on left and right and 9% on top and bottom, 
 # then you should set this to [0.01, 0.99, 0.09, 0.91]. 
 contentRect: [0.0, 1.0, 0.0, 1.0]
-# contentRect: [0.0, 1.0, 0.05, 0.95]
-# contentRect: [0.0, 1.0, 0.09, 0.91]
-# contentRect: [0.1, 0.9, 0.03, 0.97]
-# contentRect: [0.01, 0.99, 0.0, 1.0]
-# contentRect: [0.0, 1.0, 0.05, 0.85]
-# contentRect: [0, 1, 0.09, 0.91]
-# contentRect: [0.11, 0.92, 0.0, 1.0]
-# contentRect: [0.12, 0.92, 0.10, 0.90]
 
 # Strategies and Presets
 
 # MagiaTimeline supports different games and scenes by providing sets of algorithms called Strategies. 
 # However, when recorded from devices of different resolutions, critical areas (e.g. dialog boxes) 
-# may appear in different places on the screen, even for the same game. 
-# Therefore, we also provide several presets under each Strategy to suit different resolutions. 
+# may appear at different places on the screen, even for the same game. 
+# Therefore, we also provide several presets under each Strategy to fit different resolutions. 
 # Before running the program, you should choose a Strategy and a preset under the chosen strategy. 
 # If this still does not work for your resolution, you can create and use your own preset. 
 # You can modify each rectangle so that they align with the critical areas in your video. 
-# To check the alignment, use debug mode. 
+# To check alignment, use debug mode. 
 
-# strategy: which algorithm to use for timing
+# strategy: which algorithm set to use
 # - mr: MagiaRecord quest video
 # - mr-s0: MagiaRecord Scene0 film
 # - lcb: LimbusCompany quest video
 # - lcb-mech: LimbusCompany mechanics introduction video
 # - pkm: PekemonEmerald quest video
 # - prk: Parako anime conte
-strategy: prk
+strategy: mr
 
-# preset: which preset of parameters under a strategy to use for timing
+# preset: which preset of parameters under a strategy to use
 preset: default
-# preset: vertical
 
 # MagiaRecord quest video strategy
 mr:
@@ -123,7 +114,6 @@ mr:
     cgSubTextRect: [0.3, 0.7, 0.70, 1.00]
 
 # MagiaRecord Scene0 film strategy
-
 mr-s0:
   default:
     dialogRect: [0.35, 0.65, 0.74, 0.93]
@@ -142,14 +132,14 @@ lcb-mech:
   default:
     dialogRect: [0.30, 0.70, 0.875, 0.915]
 
-# PekemonEmerald strategy
+# PekemonEmerald quest video strategy
 pkm:
   default:
     dialogBgRect: [0.05, 0.95, 0.75, 0.95]
 
-# Parako strategy
+# Parako anime conte strategy
 prk:
   default:
-    dialogRect: [0.00, 1.00, 0.88, 0.98]
+    dialogRect: [0.00, 1.00, 0.86, 1.00]
   vertical:
     dialogRect: [0.00, 1.00, 0.57, 0.69]
