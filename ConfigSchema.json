@@ -57,8 +57,12 @@
             "type": "boolean"
         },
         "contentRect": {
-            "description": "rectangle that wraps the content of a frame, cutting away black bars around",
+            "description": "defines the rectangle that wraps the content of a frame, cutting away black bars around",
             "$ref": "#/$defs/ratioRectangle"
+        },
+        "offset": {
+            "description": "global offset of the subtitles, in number of frames",
+            "type": "number"
         },
 
         "strategy": {
@@ -174,6 +178,6 @@
             }
         }
     },
-    "required": ["source", "destination", "assTemplate", "mode", "contentRect", "strategy", "preset"],
+    "required": ["source", "destination", "assTemplate", "mode", "contentRect", "offset", "strategy", "preset"],
     "additionalProperties": false
 }

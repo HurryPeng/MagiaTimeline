@@ -59,6 +59,13 @@ enableOpenCL: false
 # then you should set this to [0.01, 0.99, 0.09, 0.91]. 
 contentRect: [0.0, 1.0, 0.0, 1.0]
 
+# offset: global offset of the subtitles, in number of frames
+# If the subtitles are not aligned with the dialogues in the video, you can adjust this parameter.
+# The offset is the number of frames that the subtitles should be shifted forward or backward.
+# For example, if the subtitles are 1 frame ahead of the dialogues, you should set this to -1.0.
+# Can be fractional, e.g. 0.5
+offset: 1.0
+
 # Strategies and Presets
 
 # MagiaTimeline supports different games and scenes by providing sets of algorithms called Strategies. 

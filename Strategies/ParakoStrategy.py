@@ -85,7 +85,6 @@ class ParakoStrategy(AbstractStrategy):
 
         meanStdDevDialogShade = cv.meanStdDev(roiDialogShade)
         meanDialogShade = meanStdDevDialogShade[0][0][0]
-        # devDialogShade = meanStdDevDialogShade[1][0][0]
 
         roiDialogShadeResized = cv.resize(roiDialogShade, (150, 50))
         dctFeat = dctDescriptor(roiDialogShadeResized, 8, 8)
@@ -93,6 +92,5 @@ class ParakoStrategy(AbstractStrategy):
         framePoint.setFlag(ParakoStrategy.FlagIndex.Dialog, meanDialogShade > 1.0)
         framePoint.setFlag(ParakoStrategy.FlagIndex.DialogFeat, dctFeat)
 
-        # framePoint.setDebugFrame(roiDialogShadeResized)
 
         return False

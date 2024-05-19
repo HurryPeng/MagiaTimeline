@@ -82,7 +82,6 @@ class LimbusCompanyStrategy(AbstractStrategy):
         hasDialogText: bool = dialogTextVal > 1e-6 and dialogTextVal < 120e-6
 
         isValidDialog = hasDialogText and hasDialogBg
-        # framePoint.setDebugFrame(roiDialogTextBinTophat)
 
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogText, hasDialogText)
         framePoint.setFlag(LimbusCompanyStrategy.FlagIndex.DialogTextVal, dialogTextVal)

@@ -63,6 +63,7 @@ def main():
         dstAss = open(dst, "w")
 
         contentRect = RatioRectangle(srcRect, *config["contentRect"])
+        offset: int = config["offset"]
 
         strategy: AbstractStrategy | None = None
         print(config["strategy"])
@@ -144,9 +145,11 @@ def main():
         iir.sort()
 
         print("==== IIR Passes ====")
-        for name, iirPass in strategy.getIirPasses().items():
+        for name, iirPass in (strategy.getIirPasses()).items():
             print(name)
             iirPass.apply(iir)
+        print("iirPassOffset")
+        IIRPassOffset(offset / fps * 1000).apply(iir)
 
         print("==== IIR to ASS ====")
         assStr = assStr.format(styles = "".join(strategy.getStyles()), events = iir.toAss())

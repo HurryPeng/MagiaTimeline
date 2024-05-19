@@ -314,3 +314,12 @@ class IIRPassIntervalwiseFunctional(IIRPass):
     def apply(self, iir: IIR):
         for id, interval in enumerate(iir.intervals):
             self.func(interval)
+
+class IIRPassOffset(IIRPass):
+    def __init__(self, offset: int):
+        self.offset: int = offset
+
+    def apply(self, iir: IIR):
+        for id, interval in enumerate(iir.intervals):
+            interval.begin += self.offset
+            interval.end += self.offset
