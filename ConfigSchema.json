@@ -67,7 +67,7 @@
 
         "strategy": {
             "description": "which algorithm to use for timing",
-            "enum": ["mr", "mr-s0", "lcb", "lcb-mech", "pkm", "prk"]
+            "enum": ["mr", "mr-s0", "lcb", "lcb-mech", "pkm", "prk", "bdr"]
         },
         "preset": {
             "description": "which preset of parameters under a strategy to use for timing",
@@ -168,6 +168,22 @@
             "patternProperties": {
                 ".*": {
                     "description": "a preset for strategy prk",
+                    "type": "object",
+                    "properties": {
+                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                    },
+                    "required": ["dialogRect"],
+                    "additionalProperties": false
+                }
+            }
+        }, 
+
+        "bdr": {
+            "description": "BanG Dream strategy",
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "description": "a preset for strategy bdr",
                     "type": "object",
                     "properties": {
                         "dialogRect": {"$ref": "#/$defs/ratioRectangle"}

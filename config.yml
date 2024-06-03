@@ -64,7 +64,7 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 # The offset is the number of frames that the subtitles should be shifted forward or backward.
 # For example, if the subtitles are 1 frame ahead of the dialogues, you should set this to -1.0.
 # Can be fractional, e.g. 0.5
-offset: 1.0
+offset: 0.0
 
 # Strategies and Presets
 
@@ -84,6 +84,7 @@ offset: 1.0
 # - lcb-mech: LimbusCompany mechanics introduction video
 # - pkm: PekemonEmerald quest video
 # - prk: Parako anime conte
+# - bdr: BanG Dream
 strategy: mr
 
 # preset: which preset of parameters under a strategy to use
@@ -150,3 +151,8 @@ prk:
     dialogRect: [0.00, 1.00, 0.86, 1.00]
   vertical:
     dialogRect: [0.00, 1.00, 0.57, 0.69]
+
+# BanG Dream strategy
+bdr:
+  default:
+    dialogRect: [0.06, 0.94, 0.82, 0.96]

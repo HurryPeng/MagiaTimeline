@@ -16,6 +16,7 @@ from Strategies.LimbusCompanyStrategy import *
 from Strategies.LimbusCompanyMechanicsStrategy import *
 from Strategies.PokemonEmeraldStrategy import *
 from Strategies.ParakoStrategy import *
+from Strategies.BanGDreamStrategy import *
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -79,6 +80,8 @@ def main():
             strategy = PokemonEmeraldStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "prk":
             strategy = ParakoStrategy(strategyConfig, contentRect)
+        elif config["strategy"] == "bdr":
+            strategy = BanGDreamStrategy(strategyConfig, contentRect)
         else:
             raise Exception("Unknown strategy! ")
         flagIndexType = strategy.getFlagIndexType()
