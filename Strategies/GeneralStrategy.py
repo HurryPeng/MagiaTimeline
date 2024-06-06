@@ -8,7 +8,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class ParakoStrategy(AbstractStrategy):
+class GeneralStrategy(AbstractStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogFeat = enum.auto()
@@ -16,7 +16,7 @@ class ParakoStrategy(AbstractStrategy):
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False, np.zeros(64), False]
+            return [False, 0.0, False]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
@@ -32,18 +32,17 @@ class ParakoStrategy(AbstractStrategy):
         self.fpirPasses = collections.OrderedDict()
 
         self.fpirPasses["fpirPassDetectDialogJump"] = FPIRPassDetectFeatureJump(
-            featFlag=ParakoStrategy.FlagIndex.DialogFeat,
-            dstFlag=ParakoStrategy.FlagIndex.DialogFeatJump, 
+            featFlag=GeneralStrategy.FlagIndex.DialogFeat,
+            dstFlag=GeneralStrategy.FlagIndex.DialogFeatJump, 
             featOpMean=lambda feats : np.mean(feats, 0),
-            featOpDist=lambda lhs, rhs : np.linalg.norm(lhs - rhs),
-            threshDist=0.1,
-            windowSize=3
+            featOpDist=lambda lhs, rhs : abs(lhs-rhs),
+            threshDist=2.0
         )
 
         def breakDialogJump(framePoint: FramePoint):
-            framePoint.setFlag(ParakoStrategy.FlagIndex.Dialog,
-                framePoint.getFlag(ParakoStrategy.FlagIndex.Dialog)
-                and not framePoint.getFlag(ParakoStrategy.FlagIndex.DialogFeatJump)
+            framePoint.setFlag(GeneralStrategy.FlagIndex.Dialog,
+                framePoint.getFlag(GeneralStrategy.FlagIndex.Dialog)
+                and not framePoint.getFlag(GeneralStrategy.FlagIndex.DialogFeatJump)
             )
         self.fpirPasses["fpirPassBreakDialogJump"] = FPIRPassFramewiseFunctional(
             func=breakDialogJump
@@ -51,11 +50,11 @@ class ParakoStrategy(AbstractStrategy):
         
         self.fpirToIirPasses = collections.OrderedDict()
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
-            ParakoStrategy.FlagIndex.Dialog
+            GeneralStrategy.FlagIndex.Dialog
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(ParakoStrategy.FlagIndex.Dialog, 300, meetPoint=1.3)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(GeneralStrategy.FlagIndex.Dialog, 300, meetPoint=1.3)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -78,23 +77,12 @@ class ParakoStrategy(AbstractStrategy):
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)
-        roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)
+        roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
 
-        # Select out the whitest part of the dialog
-        roiDialogShade = cv.inRange(roiDialogHSV, (0, 0, 240), (180, 32, 255))
-
-        # Apply it to the dialog shade
-        roiDialogShadeDialate = cv.morphologyEx(roiDialogShade, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
-
-        meanStdDevDialogShade = cv.meanStdDev(roiDialogShadeDialate)
+        meanStdDevDialogShade = cv.meanStdDev(roiDialogGray)
         meanDialogShade = meanStdDevDialogShade[0][0][0]
 
-        roiDialogShadeOpenResized = cv.resize(roiDialogShadeDialate, (300, 50), interpolation=cv.INTER_AREA)
-        dctFeat = dctDescriptor(roiDialogShadeOpenResized, 8, 8)
-
-        framePoint.setFlag(ParakoStrategy.FlagIndex.Dialog, meanDialogShade > 1.0)
-        framePoint.setFlag(ParakoStrategy.FlagIndex.DialogFeat, dctFeat)
-
-        framePoint.setDebugFrame(roiDialogShadeDialate)
+        framePoint.setFlag(GeneralStrategy.FlagIndex.Dialog, True)
+        framePoint.setFlag(GeneralStrategy.FlagIndex.DialogFeat, meanDialogShade)
 
         return False

@@ -22,8 +22,10 @@
 
 # source: path(s) of source mp4 video files
 source:
-- src.mp4
+# - 202405/IrohaKuroe.mp4
 # - src2.mp4
+# - LCB/5.5-19.mp4
+- Pokemon/wallacebattle.mp4
 
 # destination: path(s) of destination ass subtitle files
 # There must be equal number of source(s) and destination(s). 
@@ -46,17 +48,18 @@ assTemplate: template.asst
 #   - Short circuit mode accelerates the program by skipping detecting other types of subtitles 
 #     once one type has been confirmed.
 #     This should have no side-effect if different subtitles guarantee not to appear at the same time. 
-mode: debug
+mode: default
 
 # enableOpenCL: enable OpenCL acceleration
 # If you have a graphics card or other accelerators, enabling this option may speed up the program.
 # However, if you encounter problems or the program runs slower, you should disable this option.
-enableOpenCL: false
+enableOpenCL: true
 
 # contentRect: defines the rectangle that wraps the content of a frame, cutting away black bars around
 # If your video has black bars around the canvas, you should set this rectangle to cut them away. 
 # For example, if your video has 1% of black bar on left and right and 9% on top and bottom, 
 # then you should set this to [0.01, 0.99, 0.09, 0.91]. 
+# contentRect: [0.0, 1.0, 0.05, 0.95]
 contentRect: [0.0, 1.0, 0.0, 1.0]
 
 # offset: global offset of the subtitles, in number of frames
@@ -64,7 +67,7 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 # The offset is the number of frames that the subtitles should be shifted forward or backward.
 # For example, if the subtitles are 1 frame ahead of the dialogues, you should set this to -1.0.
 # Can be fractional, e.g. 0.5
-offset: 1.0
+offset: 0.0
 
 # Strategies and Presets
 
@@ -84,7 +87,7 @@ offset: 1.0
 # - lcb-mech: LimbusCompany mechanics introduction video
 # - pkm: PekemonEmerald quest video
 # - prk: Parako anime conte
-strategy: mr
+strategy: gen
 
 # preset: which preset of parameters under a strategy to use
 preset: default
@@ -150,3 +153,9 @@ prk:
     dialogRect: [0.00, 1.00, 0.86, 1.00]
   vertical:
     dialogRect: [0.00, 1.00, 0.57, 0.69]
+
+# Parako anime conte strategy
+gen:
+  default:
+    # dialogRect: [0.20, 0.73, 0.80, 0.85]
+    dialogRect: [0.16, 0.68, 0.76, 0.82]
