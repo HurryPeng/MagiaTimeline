@@ -8,3 +8,4 @@ __pycache__
 *Output*.*
 *.yml
 !config.yml
+test*
