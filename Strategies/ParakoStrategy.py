@@ -34,11 +34,14 @@ class ParakoStrategy(AbstractStrategy):
         self.fpirPasses["fpirPassDetectDialogJump"] = FPIRPassDetectFeatureJump(
             featFlag=ParakoStrategy.FlagIndex.DialogFeat,
             dstFlag=ParakoStrategy.FlagIndex.DialogFeatJump, 
-            featOpMean=lambda feats : np.mean(feats, 0),
+            featOpMean=lambda feats : np.mean(feats, axis=0),
             featOpDist=lambda lhs, rhs : np.linalg.norm(lhs - rhs),
             threshDist=0.1,
-            windowSize=3
+            windowSize=5,
+            featOpStd=lambda feats: np.mean(np.std(feats, axis=0)),
+            threshStd=0.005
         )
+
 
         def breakDialogJump(framePoint: FramePoint):
             framePoint.setFlag(ParakoStrategy.FlagIndex.Dialog,
@@ -55,7 +58,7 @@ class ParakoStrategy(AbstractStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(ParakoStrategy.FlagIndex.Dialog, 300, meetPoint=1.3)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(ParakoStrategy.FlagIndex.Dialog, 300, meetPoint=1.0)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
