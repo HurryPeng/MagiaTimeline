@@ -100,9 +100,13 @@ class FPIRPassBooleanRemoveNoise(FPIRPass):
 
 class FPIRPassDetectFeatureJump(FPIRPass):
     def __init__(self, featFlag: AbstractFlagIndex, dstFlag: AbstractFlagIndex, \
-            featOpMean: typing.Callable[[typing.List[typing.Any]], typing.Any], \
-            featOpDist: typing.Callable[[typing.Any, typing.Any], float], \
-            threshDist: float = 0.5, windowSize: int = 3, inverse: bool = False):
+            featOpMean: typing.Callable[[typing.List[typing.Any]], typing.Any] = lambda feats : np.mean(feats, axis=0), \
+            featOpDist: typing.Callable[[typing.Any, typing.Any], float] = lambda lhs, rhs : np.linalg.norm(lhs - rhs), \
+            threshDist: float = 0.5, \
+            featOpStd: typing.Callable[[typing.List[typing.Any]], float] = lambda feats: np.mean(np.std(feats, axis=0)), \
+            threshStd: typing.Optional[float] = 0.0, \
+            windowSize: int = 3, inverse: bool = False
+            ):
         self.featFlag: AbstractFlagIndex = featFlag
         self.dstFlag: AbstractFlagIndex = dstFlag
         self.featOpMean: typing.Callable[[typing.List[typing.Any]], typing.Any] = featOpMean
@@ -110,6 +114,8 @@ class FPIRPassDetectFeatureJump(FPIRPass):
         self.threshDist: float = threshDist
         self.windowSize: int = windowSize
         self.inverse: bool = inverse
+        self.featOpStd: typing.Callable[[typing.List[typing.Any]], float] = featOpStd
+        self.threshStd: float = threshStd
 
     def apply(self, fpir: FPIR):
         framePointsExt = fpir.getFramePointsWithVirtualEnd(self.windowSize)
@@ -120,6 +126,11 @@ class FPIRPassDetectFeatureJump(FPIRPass):
 
             meanFeat = self.featOpMean(featsToBeMeant)
             dist = self.featOpDist(framePoint.getFlag(self.featFlag), meanFeat)
+
+            if self.threshStd > 0.0:
+                stdFeat: float = self.featOpStd(featsToBeMeant)
+                if stdFeat > self.threshStd:
+                    continue
 
             if dist >= self.threshDist:
                 framePoint.setFlag(self.dstFlag, not self.inverse)
