@@ -188,11 +188,15 @@ class Interval:
         self.style: str = "Default"
         self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
 
+    def getName(self, id: int = -1) -> str:
+        return f"Subtitle_{self.mainFlag.name}_{id}"
+
     def toAss(self, id: int = -1) -> str:
-        template = "Dialogue: 0,{},{},{},,0,0,100,,Subtitle_{}_{}"
+        template = "Dialogue: 0,{},{},{},,0,0,100,,{}"
         sBegin = formatTimestamp(self.begin)
         sEnd = formatTimestamp(self.end)
-        return template.format(sBegin, sEnd, self.style, self.mainFlag.name, id)
+        name = self.getName(id)
+        return template.format(sBegin, sEnd, self.style, name)
 
     def dist(self, other: Interval) -> int:
         l = self
@@ -207,6 +211,9 @@ class Interval:
 
     def touches(self, other: Interval) -> bool:
         return self.dist(other) == 0
+    
+    def getMidPoint(self) -> int:
+        return (self.begin + self.end) // 2
 
 class IIR: # Interval Intermediate Representation
     def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex]):
@@ -228,6 +235,15 @@ class IIR: # Interval Intermediate Representation
             mainFlagCounter[interval.mainFlag] = id + 1
             lines.append(interval.toAss(id) + "\n")
         return "".join(lines)
+    
+    def getMidpoints(self) -> typing.List[typing.Tuple[str, int]]:
+        midpoints: typing.List[typing.Tuple[str, int]] = []
+        mainFlagCounter: typing.Dict[int, int] = {}
+        for _, interval in enumerate(self.intervals):
+            id = mainFlagCounter.get(interval.mainFlag, 0)
+            mainFlagCounter[interval.mainFlag] = id + 1
+            midpoints.append((interval.getName(id), interval.getMidPoint()))
+        return midpoints
 
 class IIRPass(abc.ABC):
     @abc.abstractmethod

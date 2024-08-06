@@ -156,3 +156,8 @@ prk:
 bdr:
   default:
     dialogRect: [0.06, 0.94, 0.82, 0.96]
+
+# General outlined text strategy
+otl:
+  default:
+    dialogRect: [0.00, 1.00, 0.75, 1.00]

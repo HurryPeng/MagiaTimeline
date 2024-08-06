@@ -9,3 +9,6 @@ __pycache__
 *.yml
 !config.yml
 test*
+*.csv
+*.xlsx
+*.srt

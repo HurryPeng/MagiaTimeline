@@ -25,3 +25,38 @@ def dctDescriptor(image: cv.Mat, dctWidth=8, dctHeight=8) -> np.ndarray:
         return dctVec
     dctVec /= np.linalg.norm(dctVec)
     return dctVec
+
+def rgbSobel(image: cv.Mat, ksize: int) -> cv.Mat:
+    imageChannels = cv.split(image)
+    imageSobelRX = cv.Sobel(imageChannels[2], cv.CV_16S, 1, 0, ksize=ksize)
+    imageSobelRY = cv.Sobel(imageChannels[2], cv.CV_16S, 0, 1, ksize=ksize)
+    imageSobelGX = cv.Sobel(imageChannels[1], cv.CV_16S, 1, 0, ksize=ksize)
+    imageSobelGY = cv.Sobel(imageChannels[1], cv.CV_16S, 0, 1, ksize=ksize)
+    imageSobelBX = cv.Sobel(imageChannels[0], cv.CV_16S, 1, 0, ksize=ksize)
+    imageSobelBY = cv.Sobel(imageChannels[0], cv.CV_16S, 0, 1, ksize=ksize)
+    imageSobelR = cv.convertScaleAbs(cv.addWeighted(cv.convertScaleAbs(imageSobelRX), 1, cv.convertScaleAbs(imageSobelRY), 1, 0))
+    imageSobelG = cv.convertScaleAbs(cv.addWeighted(cv.convertScaleAbs(imageSobelGX), 1, cv.convertScaleAbs(imageSobelGY), 1, 0))
+    imageSobelB = cv.convertScaleAbs(cv.addWeighted(cv.convertScaleAbs(imageSobelBX), 1, cv.convertScaleAbs(imageSobelBY), 1, 0))
+    imageSobel = cv.convertScaleAbs(cv.addWeighted(cv.addWeighted(imageSobelR, 1/3, imageSobelG, 1/3, 0), 1, imageSobelB, 1/3, 0))
+    return imageSobel
+
+def ensureMat(frame):
+    if isinstance(frame, cv.UMat):
+        return frame.get()
+    return frame
+
+def morphologyWidthUpperBound(image: cv.Mat, erodeWidth: int, dilateWidth: int) -> cv.Mat:
+    imageErode = cv.morphologyEx(image, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (erodeWidth, erodeWidth)))
+    imageErodeDialate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWidth, dilateWidth)))
+    imageWidthUpperBound = cv.bitwise_and(image, cv.bitwise_not(imageErodeDialate))
+    return imageWidthUpperBound
+
+def morphologyWidthLowerBound(image: cv.Mat, erodeWidth: int, dilateWidth: int) -> cv.Mat:
+    imageErode = cv.morphologyEx(image, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (erodeWidth, erodeWidth)))
+    imageErodeDialate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWidth, dilateWidth)))
+    imageWidthLowerBound = cv.bitwise_and(image, imageErodeDialate)
+    return imageWidthLowerBound
+
+def morphologyNear(base: cv.Mat, ref: cv.Mat, width: int) -> cv.Mat:
+    refDialate = cv.morphologyEx(ref, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (width, width)))
+    return cv.bitwise_and(base, refDialate)

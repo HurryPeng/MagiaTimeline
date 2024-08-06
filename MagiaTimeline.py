@@ -6,6 +6,7 @@ import json
 import jsonschema
 import yaml
 import time
+import pytesseract
 
 from Rectangle import *
 from IR import *
@@ -171,6 +172,21 @@ def main():
         
         print("Elapsed", timeElapsed, "s")
         print("Speed", (frameIndex / fps) / timeElapsed, "x")
+
+        doOcr = True
+
+        if doOcr:
+            sampleTimestamps: typing.List[typing.Tuple[str, int]] = iir.getMidpoints()
+            # sampleTimestamps: typing.List[typing.Tuple[str, int]] = [("sub1", 100), ("sub2", 200), ("sub3", 300)]
+            srcMp4 = cv.VideoCapture(src)
+
+            for name, timestamp in sampleTimestamps:
+                srcMp4.set(cv.CAP_PROP_POS_MSEC, timestamp)
+                _, frame = srcMp4.read()
+                ocrFrame = ensureMat(strategy.ocrPass(frame))
+                ocrRes: str = pytesseract.image_to_string(ocrFrame, config=r' -l jpn --psm 6')
+                print(name, ocrRes[:-1].replace('\n', '\\n'))
+            srcMp4.release()
 
 if __name__ == "__main__":
     main()
