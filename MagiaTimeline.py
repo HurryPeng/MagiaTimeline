@@ -17,6 +17,7 @@ from Strategies.LimbusCompanyMechanicsStrategy import *
 from Strategies.PokemonEmeraldStrategy import *
 from Strategies.ParakoStrategy import *
 from Strategies.BanGDreamStrategy import *
+from Strategies.OutlineStrategy import *
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -56,8 +57,6 @@ def main():
         size: typing.Tuple[int, int] = srcRect.getSizeInt()
 
         debugMp4: typing.Any = None
-        if config["mode"] == "debug":
-            debugMp4 = cv.VideoWriter("debug.mp4", cv.VideoWriter_fourcc('m','p','4','v'), fps, size)
         templateAsst = open(config["assTemplate"], "r")
         assStr: str = templateAsst.read()
         templateAsst.close()
@@ -82,12 +81,15 @@ def main():
             strategy = ParakoStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "bdr":
             strategy = BanGDreamStrategy(strategyConfig, contentRect)
+        elif config["strategy"] == "otl":
+            strategy = OutlineStrategy(strategyConfig, contentRect)
         else:
             raise Exception("Unknown strategy! ")
         flagIndexType = strategy.getFlagIndexType()
 
         print("==== FPIR Building ====")
         fpir = FPIR(flagIndexType)
+        frameIndex: int = 0
         while True: # Process each frame to build FPIR
 
             # Frame reading
@@ -124,15 +126,19 @@ def main():
                     frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                     height += 20
                 print("debug frame", frameIndex, formatTimestamp(timestamp), framePoint.getDebugFlag())
-                debugMp4.write(frameOut)
                 if framePoint.getDebugFrame() is not None:
-                    frameOut = framePoint.getDebugFrame()
+                    frameOut = ensureMat(framePoint.getDebugFrame())
+                    if len(frameOut.shape) == 2:
+                        frameOut = cv.cvtColor(frameOut, cv.COLOR_GRAY2BGR)
+                if debugMp4 is None:
+                    debugMp4 = cv.VideoWriter("debug.mp4", cv.VideoWriter_fourcc('m','p','4','v'), fps, (frameOut.shape[1], frameOut.shape[0]))
+                debugMp4.write(frameOut)
                 if cv.waitKey(1) == ord('q'):
                     break
                 cv.imshow("show", frameOut)
             framePoint.clearDebugFrame()
         srcMp4.release()
-        if config["mode"] == "debug":
+        if config["mode"] == "debug" and debugMp4 is not None:
             debugMp4.release()
 
         print("==== FPIR Passes ====")
@@ -164,7 +170,7 @@ def main():
         timeElapsed = timeEnd - timeStart
         
         print("Elapsed", timeElapsed, "s")
-        print("Speed", (frameCount / fps) / timeElapsed, "x")
+        print("Speed", (frameIndex / fps) / timeElapsed, "x")
 
 if __name__ == "__main__":
     main()
