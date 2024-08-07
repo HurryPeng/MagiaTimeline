@@ -41,16 +41,17 @@ class FramePoint:
     def getDebugFrame(self) -> cv.Mat | None:
         return self.debugFrame
 
-    def toString(self) -> str:
-        return "frame {} {}".format(self.index, formatTimestamp(self.timestamp))
+    def toString(self, sampleRate: int) -> str:
+        return "frame {} {}".format(self.index * sampleRate, formatTimestamp(self.timestamp))
 
-    def toStringFull(self) -> str:
-        return "frame {} {} {}".format(self.index, formatTimestamp(self.timestamp), self.flags)
+    def toStringFull(self, sampleRate: int) -> str:
+        return "frame {} {} {}".format(self.index * sampleRate, formatTimestamp(self.timestamp), self.flags)
 
 class FPIR: # Frame Point Intermediate Representation
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex]):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], sampleRate: int):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.framePoints: typing.List[FramePoint] = []
+        self.sampleRate: int = sampleRate
 
     def genVirtualEnd(self) -> FramePoint:
         index: int = len(self.framePoints)
@@ -63,7 +64,7 @@ class FPIR: # Frame Point Intermediate Representation
     def toStringFull(self) -> str:
         lines = []
         for framePoint in self.framePoints:
-            lines.append(framePoint.toStringFull() + "\n")
+            lines.append(framePoint.toStringFull(self.sampleRate) + "\n")
         return "".join(lines)
 
 class FPIRPass(abc.ABC):

@@ -14,11 +14,11 @@ def inRange(frame, lower: typing.List[int], upper: typing.List[int]):
 def cosineSimilarity(lhs: np.ndarray, rhs: np.ndarray):
     return np.dot(lhs, rhs) / (np.linalg.norm(lhs) * np.linalg.norm(rhs))
 
-def dctDescriptor(image: cv.Mat, dctWidth=8, dctHeight=8) -> np.ndarray:
+def dctDescriptor(image: cv.Mat, dctWeight=8, dctHeight=8) -> np.ndarray:
     dct: cv.Mat = cv.dct(np.float32(image))
-    dctLowFreq = dct[:dctHeight, :dctWidth]
+    dctLowFreq = dct[:dctHeight, :dctWeight]
     # Double the weight of the top-left quarter of the DCT
-    # dctLowFreq[:dctHeight//2, :dctWidth//2] *= 2
+    # dctLowFreq[:dctHeight//2, :dctWeight//2] *= 2
     dctVec = dctLowFreq.flatten()
     # Handle when the image is all black
     if np.linalg.norm(dctVec) == 0:
@@ -45,18 +45,18 @@ def ensureMat(frame):
         return frame.get()
     return frame
 
-def morphologyWidthUpperBound(image: cv.Mat, erodeWidth: int, dilateWidth: int) -> cv.Mat:
-    imageErode = cv.morphologyEx(image, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (erodeWidth, erodeWidth)))
-    imageErodeDialate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWidth, dilateWidth)))
-    imageWidthUpperBound = cv.bitwise_and(image, cv.bitwise_not(imageErodeDialate))
-    return imageWidthUpperBound
+def morphologyWeightUpperBound(image: cv.Mat, erodeWeight: int, dilateWeight: int) -> cv.Mat:
+    imageErode = cv.morphologyEx(image, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (erodeWeight, erodeWeight)))
+    imageErodeDialate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWeight, dilateWeight)))
+    imageWeightUpperBound = cv.bitwise_and(image, cv.bitwise_not(imageErodeDialate))
+    return imageWeightUpperBound
 
-def morphologyWidthLowerBound(image: cv.Mat, erodeWidth: int, dilateWidth: int) -> cv.Mat:
-    imageErode = cv.morphologyEx(image, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (erodeWidth, erodeWidth)))
-    imageErodeDialate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWidth, dilateWidth)))
-    imageWidthLowerBound = cv.bitwise_and(image, imageErodeDialate)
-    return imageWidthLowerBound
+def morphologyWeightLowerBound(image: cv.Mat, erodeWeight: int, dilateWeight: int) -> cv.Mat:
+    imageErode = cv.morphologyEx(image, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (erodeWeight, erodeWeight)))
+    imageErodeDialate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWeight, dilateWeight)))
+    imageWeightLowerBound = cv.bitwise_and(image, imageErodeDialate)
+    return imageWeightLowerBound
 
-def morphologyNear(base: cv.Mat, ref: cv.Mat, width: int) -> cv.Mat:
-    refDialate = cv.morphologyEx(ref, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (width, width)))
+def morphologyNear(base: cv.Mat, ref: cv.Mat, Weight: int) -> cv.Mat:
+    refDialate = cv.morphologyEx(ref, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (Weight, Weight)))
     return cv.bitwise_and(base, refDialate)

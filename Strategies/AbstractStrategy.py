@@ -33,5 +33,9 @@ class AbstractStrategy(abc.ABC):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         pass
 
+    @abc.abstractmethod
+    def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, cv.Mat]: # (ocrFrame, debugFrame)
+        pass
+
     def getStyles(self) -> typing.List[str]:
         return []

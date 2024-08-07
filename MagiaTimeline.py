@@ -41,6 +41,8 @@ def main():
             raise Exception("No preset \"" + config["preset"] + "\" found for strategy \"" + config["strategy"] + "\"")
     strategyConfig = config[config["strategy"]][config["preset"]]
 
+    sampleRate: int = 2
+
     cv.ocl.setUseOpenCL(config["enableOpenCL"])
 
     for nTask, src in enumerate(config["source"]):
@@ -89,7 +91,7 @@ def main():
         flagIndexType = strategy.getFlagIndexType()
 
         print("==== FPIR Building ====")
-        fpir = FPIR(flagIndexType)
+        fpir = FPIR(flagIndexType, sampleRate)
         frameIndex: int = 0
         while True: # Process each frame to build FPIR
 
@@ -101,9 +103,12 @@ def main():
             if not validFrame:
                 break
 
+            if frameIndex % sampleRate != 0:
+                continue
+
             # CV and frame point building
 
-            framePoint = FramePoint(flagIndexType, frameIndex, timestamp)
+            framePoint = FramePoint(flagIndexType, frameIndex // sampleRate, timestamp)
             for cvPass in strategy.getCvPasses():
                 mayShortcircuit = cvPass(frame, framePoint)
                 if mayShortcircuit and config["mode"] == "shortcircuit":
@@ -112,8 +117,8 @@ def main():
 
             # Outputs
 
-            if frameIndex % 1000 == 0:
-                print(framePoint.toString())
+            if frameIndex % 720 == 0:
+                print(framePoint.toString(sampleRate))
 
             if config["mode"] == "debug":
                 frameOut = frame
@@ -183,9 +188,11 @@ def main():
             for name, timestamp in sampleTimestamps:
                 srcMp4.set(cv.CAP_PROP_POS_MSEC, timestamp)
                 _, frame = srcMp4.read()
-                ocrFrame = ensureMat(strategy.ocrPass(frame))
+                ocrFrame, _ = strategy.ocrPass(frame)
+                ocrFrame = ensureMat(ocrFrame)
                 ocrRes: str = pytesseract.image_to_string(ocrFrame, config=r' -l jpn --psm 6')
-                print(name, ocrRes[:-1].replace('\n', '\\n'))
+                ocrRes = ocrRes[:-1].replace('\n', '')
+                print(f"{name},{ocrRes}")
             srcMp4.release()
 
 if __name__ == "__main__":
