@@ -99,12 +99,12 @@ def main():
 
             frameIndex: int = int(srcMp4.get(cv.CAP_PROP_POS_FRAMES))
             timestamp: int = int(srcMp4.get(cv.CAP_PROP_POS_MSEC))
-            validFrame, frame = srcMp4.read()
-            if not validFrame:
-                break
-
+            srcMp4.grab()
             if frameIndex % sampleRate != 0:
                 continue
+            validFrame, frame = srcMp4.retrieve()
+            if not validFrame:
+                break
 
             # CV and frame point building
 
@@ -189,6 +189,7 @@ def main():
                 srcMp4.set(cv.CAP_PROP_POS_MSEC, timestamp)
                 _, frame = srcMp4.read()
                 ocrFrame, _ = strategy.ocrPass(frame)
+                # _, ocrFrame = strategy.ocrPass(frame)
                 ocrFrame = ensureMat(ocrFrame)
                 ocrRes: str = pytesseract.image_to_string(ocrFrame, config=r' -l jpn --psm 6')
                 ocrRes = ocrRes[:-1].replace('\n', '')

@@ -80,7 +80,7 @@ class OutlineStrategy(AbstractStrategy):
         return self.iirPasses
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
-        roiDialogText, debugFrame = self.ocrPass(frame)
+        roiDialogText, debugFrame = self.ocrPass(frame, fastMode=True)
 
         framePoint.setDebugFrame(debugFrame)
 
@@ -94,20 +94,22 @@ class OutlineStrategy(AbstractStrategy):
 
         return False
 
-    def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, cv.Mat]:
+    def ocrPass(self, frame: cv.Mat, fastMode: bool = False) -> typing.Tuple[cv.Mat, cv.Mat]:
         debugFrame = None
 
-        # # Yukkuri Museum
-        # textWeightMin = 3
-        # textWeightMax = 25
-        # textHSVRanges = [((0, 0, 250), (180, 16, 255))]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
-        # boundCompensation = 4
-        # sobelThreshold = 250
+        # Yukkuri Museum
+        # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        textWeightMin = 3
+        textWeightMax = 25
+        textHSVRanges = [((0, 0, 240), (180, 16, 255))]
+        outlineWeightMin = 1
+        outlineWeightMax = 15
+        outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
+        boundCompensation = 4
+        sobelThreshold = 250
 
         # # Yukkuri Kakueki
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
         # textWeightMin = 5
         # textWeightMax = 25
         # textHSVRanges = [
@@ -122,6 +124,7 @@ class OutlineStrategy(AbstractStrategy):
         # sobelThreshold = 192
 
         # # Hotel Zundamon
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
         # textWeightMin = 5
         # textWeightMax = 19
         # textHSVRanges = [
@@ -135,18 +138,41 @@ class OutlineStrategy(AbstractStrategy):
         # boundCompensation = 2
         # sobelThreshold = 200
 
-        # Zunda House
-        textWeightMin = 3
-        textWeightMax = 17
-        textHSVRanges = [
-            ((155, 100, 200), (180, 200, 255)),
-            ((55, 150, 150), (75, 220, 220))
-        ]
-        outlineWeightMin = 1
-        outlineWeightMax = 13
-        outlineHSVRanges = [((0, 0, 200), (180, 64, 255))]
-        boundCompensation = 4
-        sobelThreshold = 200
+        # # Zunda House
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 5
+        # textWeightMax = 19
+        # textHSVRanges = [
+        #     ((155, 100, 200), (180, 200, 255)),
+        #     ((55, 150, 150), (75, 220, 220))
+        # ]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # outlineHSVRanges = [((0, 0, 200), (180, 64, 255))]
+        # boundCompensation = 0
+        # sobelThreshold = 200
+
+        # # Shioneru
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 1
+        # textWeightMax = 9
+        # textHSVRanges = [((0, 0, 0), (180, 255, 16))]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # outlineHSVRanges = [((0, 0, 200), (180, 64, 255))]
+        # boundCompensation = 4
+        # sobelThreshold = 200
+
+        # # JapanTrafficLab
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 1
+        # textWeightMax = 15
+        # textHSVRanges = [((70, 180, 180), (100, 255, 255))]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # outlineHSVRanges = [((100, 180, 180), (140, 255, 255))]
+        # boundCompensation = 4
+        # sobelThreshold = 100
 
         roiDialog = self.dialogRect.cutRoiToUmat(frame)
         roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)
@@ -167,31 +193,28 @@ class OutlineStrategy(AbstractStrategy):
             else:
                 roiDialogOutline = cv.bitwise_or(roiDialogOutline, temp)
 
-        roiDialogSobel = rgbSobel(roiDialog, ksize=3)
-        roiDialogSobelBin = cv.threshold(roiDialogSobel, sobelThreshold, 255, cv.THRESH_BINARY)[1]
-
-        roiDialogSobelBinClose = cv.morphologyEx(roiDialogSobelBin, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
+        if not fastMode:
+            roiDialogSobel = rgbSobel(roiDialog, ksize=3)
+            roiDialogSobelBin = cv.threshold(roiDialogSobel, sobelThreshold, 255, cv.THRESH_BINARY)[1]
+            roiDialogSobelBinClose = cv.morphologyEx(roiDialogSobelBin, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
 
         # roiDialogOutlineLB = morphologyWeightLowerBound(roiDialogOutline, erodeWeight=outlineWeightMin, dilateWeight=outlineWeightMin + boundCompensation)
         # roiDialogOutlineUB = morphologyWeightUpperBound(roiDialogOutlineLB, erodeWeight=outlineWeightMax, dilateWeight=outlineWeightMax + boundCompensation)
         roiDialogOutlineUB = roiDialogOutline
-        
-        # debugFrame = roiDialogOutlineUB
 
         roiDialogTextLB = morphologyWeightLowerBound(roiDialogText, erodeWeight=textWeightMin, dilateWeight=textWeightMin + boundCompensation)
         # roiDialogTextUB = morphologyWeightUpperBound(roiDialogTextLB, erodeWeight=textWeightMax, dilateWeight=textWeightMax + boundCompensation)
         roiDialogTextUB = roiDialogTextLB
 
-        roiDialogOutlineNearSobel = morphologyNear(roiDialogOutlineUB, roiDialogSobelBinClose, outlineWeightMax)
-        roiDialogTextNearSobel = morphologyNear(roiDialogTextUB, roiDialogSobelBinClose, textWeightMax)
+        if not fastMode:
+            roiDialogOutlineNearSobel = morphologyNear(roiDialogOutlineUB, roiDialogSobelBinClose, outlineWeightMax)
+            roiDialogTextNearSobel = morphologyNear(roiDialogTextUB, roiDialogSobelBinClose, textWeightMax)
 
-        roiDialogOutlineNearSobelClose = cv.morphologyEx(roiDialogOutlineNearSobel, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (textWeightMax + boundCompensation, textWeightMax + boundCompensation)))
-        roiDialogTextClosedByOutline = cv.bitwise_and(roiDialogOutlineNearSobelClose, roiDialogTextNearSobel)
-
-        # roiDialogOutlineNearText = morphologyNear(roiDialogOutlineNearSobel, roiDialogTextClosedByOutline, outlineWeightMax)
-        # roiDialogTextNearOutline = morphologyNear(roiDialogTextClosedByOutline, roiDialogOutlineNearText, textWeightMax)
-
-        # roiDialogTextNearOutline = cv.bitwise_and(roiDialogTextNearOutline, roiDialogOutlineNearSobelClose)
+            roiDialogOutlineNearSobelClose = cv.morphologyEx(roiDialogOutlineNearSobel, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (textWeightMax + boundCompensation, textWeightMax + boundCompensation)))
+            roiDialogTextClosedByOutline = cv.bitwise_and(roiDialogOutlineNearSobelClose, roiDialogTextNearSobel)
+        else:
+            roiDialogTextNearOutline = morphologyNear(roiDialogTextUB, roiDialogOutlineUB, textWeightMax + boundCompensation)
+            roiDialogTextClosedByOutline = roiDialogTextNearOutline
 
         debugFrame = roiDialogTextClosedByOutline
 
