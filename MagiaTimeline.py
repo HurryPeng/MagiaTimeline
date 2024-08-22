@@ -7,6 +7,7 @@ import jsonschema
 import yaml
 import time
 import pytesseract
+import paddleocr
 
 from Rectangle import *
 from IR import *
@@ -99,7 +100,9 @@ def main():
 
             frameIndex: int = int(srcMp4.get(cv.CAP_PROP_POS_FRAMES))
             timestamp: int = int(srcMp4.get(cv.CAP_PROP_POS_MSEC))
-            srcMp4.grab()
+            validFrame = srcMp4.grab()
+            if not validFrame:
+                break
             if frameIndex % sampleRate != 0:
                 continue
             validFrame, frame = srcMp4.retrieve()
@@ -185,15 +188,29 @@ def main():
             # sampleTimestamps: typing.List[typing.Tuple[str, int]] = [("sub1", 100), ("sub2", 200), ("sub3", 300)]
             srcMp4 = cv.VideoCapture(src)
 
+            paddle = paddleocr.PaddleOCR(use_angle_cls=True, lang='japan', show_log=False) 
+
             for name, timestamp in sampleTimestamps:
                 srcMp4.set(cv.CAP_PROP_POS_MSEC, timestamp)
                 _, frame = srcMp4.read()
-                ocrFrame, _ = strategy.ocrPass(frame)
-                # _, ocrFrame = strategy.ocrPass(frame)
-                ocrFrame = ensureMat(ocrFrame)
-                ocrRes: str = pytesseract.image_to_string(ocrFrame, config=r' -l jpn --psm 6')
-                ocrRes = ocrRes[:-1].replace('\n', '')
-                print(f"{name},{ocrRes}")
+
+                # Tesseract
+                tesseractFrame, _ = strategy.ocrPass(frame)
+                tesseractFrame = ensureMat(tesseractFrame)
+                tesseractText: str = pytesseract.image_to_string(tesseractFrame, config=" -l jpn --psm 6")
+                tesseractText = tesseractText[:-1].replace("\n", "")
+
+                # PaddleOCR
+                paddleResult = paddle.ocr(strategy.dialogRect.cutRoi(frame), cls=False, bin=False)
+                paddleText: str = ""
+                for line in paddleResult:
+                    if line is None:
+                        continue
+                    lineText = "".join([wordInfo[1][0] for wordInfo in line])
+                    paddleText += lineText + '\n'
+                paddleText = paddleText.strip()
+
+                print(f"{name},{tesseractText}@{paddleText}")
             srcMp4.release()
 
 if __name__ == "__main__":

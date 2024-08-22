@@ -4,7 +4,7 @@ import time
 
 client = OpenAI()
 
-groupLimit = 40
+groupLimit = 20
 
 # Read instructions from Instructions.txt into a single string. Ignore lines that start with #
 with open("Instructions.txt", "r") as file:

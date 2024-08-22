@@ -97,31 +97,35 @@ class OutlineStrategy(AbstractStrategy):
     def ocrPass(self, frame: cv.Mat, fastMode: bool = False) -> typing.Tuple[cv.Mat, cv.Mat]:
         debugFrame = None
 
-        # Yukkuri Museum
-        # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        textWeightMin = 3
-        textWeightMax = 25
-        textHSVRanges = [((0, 0, 240), (180, 16, 255))]
-        outlineWeightMin = 1
-        outlineWeightMax = 15
-        outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
-        boundCompensation = 4
-        sobelThreshold = 250
+        nestingSuppression = 0
 
-        # # Yukkuri Kakueki
+        # # Yukkuri Museum
         # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 5
+        # textWeightMin = 3
         # textWeightMax = 25
-        # textHSVRanges = [
-        #     ((0, 200, 128), (10, 255, 255)),
-        #     ((170, 200, 128), (180, 255, 255)),
-        #     ((115, 200, 128), (135, 255, 255))
-        # ]
+        # textHSVRanges = [((0, 0, 240), (180, 16, 255))]
         # outlineWeightMin = 1
-        # outlineWeightMax = 5
-        # outlineHSVRanges = [((0, 0, 180), (180, 64, 255))]
+        # outlineWeightMax = 15
+        # outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
         # boundCompensation = 4
-        # sobelThreshold = 192
+        # sobelThreshold = 250
+        # nestingSuppression = 0
+
+        # Yukkuri Kakueki
+        # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        textWeightMin = 5
+        textWeightMax = 25
+        textHSVRanges = [
+            ((0, 200, 128), (30, 255, 255)),
+            ((170, 200, 128), (180, 255, 255)),
+            ((105, 100, 128), (135, 255, 255))
+        ]
+        outlineWeightMin = 1
+        outlineWeightMax = 5
+        outlineHSVRanges = [((0, 0, 180), (180, 64, 255))]
+        boundCompensation = 4
+        sobelThreshold = 192
+        nestingSuppression = 9
 
         # # Hotel Zundamon
         # # dialogRect: [0.00, 1.00, 0.75, 1.00]
@@ -140,17 +144,18 @@ class OutlineStrategy(AbstractStrategy):
 
         # # Zunda House
         # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 5
-        # textWeightMax = 19
+        # textWeightMin = 1
+        # textWeightMax = 25
         # textHSVRanges = [
         #     ((155, 100, 200), (180, 200, 255)),
         #     ((55, 150, 150), (75, 220, 220))
         # ]
         # outlineWeightMin = 1
         # outlineWeightMax = 15
-        # outlineHSVRanges = [((0, 0, 200), (180, 64, 255))]
-        # boundCompensation = 0
-        # sobelThreshold = 200
+        # outlineHSVRanges = [((0, 0, 240), (180, 64, 255))]
+        # boundCompensation = 4
+        # sobelThreshold = 230
+        # nestingSuppression = 23
 
         # # Shioneru
         # # dialogRect: [0.00, 1.00, 0.75, 1.00]
@@ -166,13 +171,43 @@ class OutlineStrategy(AbstractStrategy):
         # # JapanTrafficLab
         # # dialogRect: [0.00, 1.00, 0.75, 1.00]
         # textWeightMin = 1
-        # textWeightMax = 15
+        # textWeightMax = 19
         # textHSVRanges = [((70, 180, 180), (100, 255, 255))]
         # outlineWeightMin = 1
         # outlineWeightMax = 15
-        # outlineHSVRanges = [((100, 180, 180), (140, 255, 255))]
+        # outlineHSVRanges = [((95, 180, 180), (140, 255, 255))]
         # boundCompensation = 4
         # sobelThreshold = 100
+        # nestingSuppression = 0
+
+        # # Uemon
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 1
+        # textWeightMax = 25
+        # textHSVRanges = [((0, 0, 230), (180, 64, 255))]
+        # # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # outlineHSVRanges = [((0, 0, 0), (180, 255, 128))]
+        # boundCompensation = 4
+        # sobelThreshold = 200
+        # nestingSuppression = 0
+
+        # # Haruki
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 1
+        # textWeightMax = 25
+        # textHSVRanges = [
+        #     ((75, 100, 210), (95, 230, 255)),
+        #     ((140, 100, 210), (180, 230, 255)),
+        #     ((50, 100, 210), (70, 150, 255))
+        # ]
+        # # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # # outlineHSVRanges = [((0, 0, 0), (180, 255, 32))]
+        # outlineHSVRanges = [((0, 0, 0), (180, 255, 32))]
+        # boundCompensation = 4
+        # sobelThreshold = 240
+        # nestingSuppression = 0
 
         roiDialog = self.dialogRect.cutRoiToUmat(frame)
         roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)
@@ -205,6 +240,12 @@ class OutlineStrategy(AbstractStrategy):
         roiDialogTextLB = morphologyWeightLowerBound(roiDialogText, erodeWeight=textWeightMin, dilateWeight=textWeightMin + boundCompensation)
         # roiDialogTextUB = morphologyWeightUpperBound(roiDialogTextLB, erodeWeight=textWeightMax, dilateWeight=textWeightMax + boundCompensation)
         roiDialogTextUB = roiDialogTextLB
+
+        if not fastMode and nestingSuppression > 0:
+            roiDialogOutlineOrText = cv.bitwise_or(roiDialogOutlineUB, roiDialogTextUB)
+            roiDialogOutlineOrTextDialate = cv.dilate(roiDialogOutlineOrText, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (boundCompensation + 1, boundCompensation + 1)))
+            roiDialogOutlineOrTextErode = cv.erode(roiDialogOutlineOrTextDialate, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (nestingSuppression, nestingSuppression)))
+            roiDialogTextUB = cv.bitwise_and(roiDialogTextUB, roiDialogOutlineOrTextErode)
 
         if not fastMode:
             roiDialogOutlineNearSobel = morphologyNear(roiDialogOutlineUB, roiDialogSobelBinClose, outlineWeightMax)
