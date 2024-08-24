@@ -2,9 +2,10 @@ import datetime
 import typing
 import cv2 as cv
 import numpy as np
+import fractions
 
-def formatTimestamp(timestamp: float) -> str:
-    dTimestamp = datetime.datetime.fromtimestamp(timestamp / 1000, datetime.timezone(datetime.timedelta()))
+def formatTimestamp(timeBase: fractions.Fraction, timestamp: int) -> str:
+    dTimestamp = datetime.datetime.fromtimestamp(float(timestamp * timeBase), datetime.timezone(datetime.timedelta()))
     return dTimestamp.strftime("%H:%M:%S.%f")[:-4]
 
 def inRange(frame, lower: typing.List[int], upper: typing.List[int]):

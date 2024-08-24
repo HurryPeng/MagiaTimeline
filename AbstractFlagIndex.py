@@ -7,7 +7,6 @@ class AbstractFlagIndex(enum.IntEnum):
     # but does not forbid this abstract class from being inherited
     # concrete method
     @classmethod
-    @property
     def Debug(cls) -> int:
         return 0
 

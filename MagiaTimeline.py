@@ -1,13 +1,16 @@
-from __future__ import annotations
-import typing
 import cv2 as cv
+import av
+import av.container
+import av.video
+import av.video.stream
 import argparse
 import json
 import jsonschema
 import yaml
-import time
 import pytesseract
 import paddleocr
+import fractions
+import time
 
 from Rectangle import *
 from IR import *
@@ -54,11 +57,13 @@ def main():
         print("")
         print("Task {}: {} -> {}".format(nTask, src, dst))
 
-        srcMp4 = cv.VideoCapture(src)
-        srcRect = SrcRectangle(srcMp4)
-        fps: float = srcMp4.get(cv.CAP_PROP_FPS)
-        frameCount: float = srcMp4.get(cv.CAP_PROP_FRAME_COUNT)
-        size: typing.Tuple[int, int] = srcRect.getSizeInt()
+        srcContainer: av.container.InputContainer = av.open(src)
+        srcStream: av.video.stream.VideoStream = srcContainer.streams.video[0]
+        timeBase: fractions.Fraction = srcStream.time_base
+        srcStream.thread_type = 'FRAME'
+        fps: float = float(srcStream.average_rate)
+        frameCount: float = srcStream.frames
+        size: typing.Tuple[int, int] = (srcStream.codec_context.width, srcStream.codec_context.height)
 
         debugMp4: typing.Any = None
         templateAsst = open(config["assTemplate"], "r")
@@ -66,7 +71,7 @@ def main():
         templateAsst.close()
         dstAss = open(dst, "w")
 
-        contentRect = RatioRectangle(srcRect, *config["contentRect"])
+        contentRect = RatioRectangle(SrcRectangle(*size), *config["contentRect"])
         offset: int = config["offset"]
 
         strategy: AbstractStrategy | None = None
@@ -94,37 +99,30 @@ def main():
         print("==== FPIR Building ====")
         fpir = FPIR(flagIndexType, sampleRate)
         frameIndex: int = 0
-        while True: # Process each frame to build FPIR
 
-            # Frame reading
-
-            frameIndex: int = int(srcMp4.get(cv.CAP_PROP_POS_FRAMES))
-            timestamp: int = int(srcMp4.get(cv.CAP_PROP_POS_MSEC))
-            validFrame = srcMp4.grab()
-            if not validFrame:
-                break
+        for frame in srcContainer.decode(srcStream):
             if frameIndex % sampleRate != 0:
+                frameIndex += 1
                 continue
-            validFrame, frame = srcMp4.retrieve()
-            if not validFrame:
-                break
+
+            timestamp: int = frame.pts
+            img: cv.Mat = frame.to_ndarray(format='bgr24')
 
             # CV and frame point building
-
-            framePoint = FramePoint(flagIndexType, frameIndex // sampleRate, timestamp)
+            framePoint = FramePoint(flagIndexType, int(frameIndex // sampleRate), timestamp)
             for cvPass in strategy.getCvPasses():
-                mayShortcircuit = cvPass(frame, framePoint)
+                mayShortcircuit = cvPass(img, framePoint)
                 if mayShortcircuit and config["mode"] == "shortcircuit":
+                    doubleBreak = True
                     break
             fpir.framePoints.append(framePoint)
 
             # Outputs
-
             if frameIndex % 720 == 0:
-                print(framePoint.toString(sampleRate))
+                print(framePoint.toString(timeBase, sampleRate))
 
             if config["mode"] == "debug":
-                frameOut = frame
+                frameOut = img
                 frameOut = contentRect.draw(frameOut)
                 for name, rect in strategy.getRectangles().items():
                     frameOut = rect.draw(frameOut)
@@ -134,7 +132,7 @@ def main():
                     frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 3)
                     frameOut = cv.putText(frameOut, name + ": " + str(value), (50, height), cv.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                     height += 20
-                print("debug frame", frameIndex, formatTimestamp(timestamp), framePoint.getDebugFlag())
+                print("debug frame", frameIndex, formatTimestamp(timeBase, timestamp), framePoint.getDebugFlag())
                 if framePoint.getDebugFrame() is not None:
                     frameOut = ensureMat(framePoint.getDebugFrame())
                     if len(frameOut.shape) == 2:
@@ -146,7 +144,8 @@ def main():
                     break
                 cv.imshow("show", frameOut)
             framePoint.clearDebugFrame()
-        srcMp4.release()
+            frameIndex += 1
+
         if config["mode"] == "debug" and debugMp4 is not None:
             debugMp4.release()
 
@@ -170,7 +169,7 @@ def main():
         IIRPassOffset(offset / fps * 1000).apply(iir)
 
         print("==== IIR to ASS ====")
-        assStr = assStr.format(styles = "".join(strategy.getStyles()), events = iir.toAss())
+        assStr = assStr.format(styles = "".join(strategy.getStyles()), events = iir.toAss(timeBase))
 
         dstAss.write(assStr)
         dstAss.close()
@@ -183,35 +182,47 @@ def main():
 
         doOcr = True
 
-        if doOcr:
+        if doOcr and isinstance(strategy, OcrStrategy):
+            decodedFrameCount = 0
             sampleTimestamps: typing.List[typing.Tuple[str, int]] = iir.getMidpoints()
-            # sampleTimestamps: typing.List[typing.Tuple[str, int]] = [("sub1", 100), ("sub2", 200), ("sub3", 300)]
-            srcMp4 = cv.VideoCapture(src)
-
             paddle = paddleocr.PaddleOCR(use_angle_cls=True, lang='japan', show_log=False) 
 
             for name, timestamp in sampleTimestamps:
-                srcMp4.set(cv.CAP_PROP_POS_MSEC, timestamp)
-                _, frame = srcMp4.read()
-
-                # Tesseract
-                tesseractFrame, _ = strategy.ocrPass(frame)
-                tesseractFrame = ensureMat(tesseractFrame)
-                tesseractText: str = pytesseract.image_to_string(tesseractFrame, config=" -l jpn --psm 6")
-                tesseractText = tesseractText[:-1].replace("\n", "")
-
-                # PaddleOCR
-                paddleResult = paddle.ocr(strategy.dialogRect.cutRoi(frame), cls=False, bin=False)
-                paddleText: str = ""
-                for line in paddleResult:
-                    if line is None:
+                srcContainer.seek(timestamp, backward=True, any_frame=False, stream=srcStream)
+                for frame in srcContainer.decode(srcStream):
+                    decodedFrameCount += 1
+                    thisTimestamp: int = frame.pts
+                    if thisTimestamp < timestamp:
                         continue
-                    lineText = "".join([wordInfo[1][0] for wordInfo in line])
-                    paddleText += lineText + '\n'
-                paddleText = paddleText.strip()
 
-                print(f"{name},{tesseractText}@{paddleText}")
-            srcMp4.release()
+                    img: cv.Mat = frame.to_ndarray(format='bgr24')
+
+                    # Tesseract
+                    tesseractFrame = strategy.cutCleanOcrFrame(img)
+                    tesseractFrame = ensureMat(tesseractFrame)
+                    tesseractText: str = pytesseract.image_to_string(tesseractFrame, config="-l jpn --psm 6")
+                    tesseractText = tesseractText[:-1].replace("\n", "")
+
+                    # PaddleOCR
+                    paddleFrame = strategy.cutOcrFrame(img)
+                    paddleResult = paddle.ocr(paddleFrame, cls=False, bin=False)
+                    paddleText: str = ""
+                    for line in paddleResult:
+                        if line is None:
+                            continue
+                        lineText = "".join([wordInfo[1][0] for wordInfo in line])
+                        paddleText += lineText + '\n'
+                    paddleText = paddleText.strip()
+
+                    print(f"{name},{tesseractText}@{paddleText}")
+
+                    break
+
+            print("All frame count", frameCount)
+            print("Decoded frame count", decodedFrameCount)
+
+        srcContainer.close()
+
 
 if __name__ == "__main__":
     main()

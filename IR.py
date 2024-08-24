@@ -1,6 +1,7 @@
 from __future__ import annotations
 import abc
 import typing
+import fractions
 
 from Util import *
 from AbstractFlagIndex import *
@@ -8,7 +9,7 @@ from AbstractFlagIndex import *
 class FramePoint:
     def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], index: int, timestamp: int):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
-        self.index: int = index
+        self.index: int = index # Always keep this index consistent with the list index in FPIR
         self.timestamp: int = timestamp
         self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
         self.debugFrame: cv.Mat | None = None
@@ -24,10 +25,10 @@ class FramePoint:
             self.flags[k] = v
 
     def setDebugFlag(self, *val: typing.Any):
-        self.flags[self.flagIndexType.Debug] = val
+        self.flags[self.flagIndexType.Debug()] = val
 
     def getDebugFlag(self) -> typing.Any:
-        return self.flags[self.flagIndexType.Debug]
+        return self.flags[self.flagIndexType.Debug()]
     
     def setDebugFrame(self, debugFrame):
         self.debugFrame = debugFrame
@@ -41,11 +42,11 @@ class FramePoint:
     def getDebugFrame(self) -> cv.Mat | None:
         return self.debugFrame
 
-    def toString(self, sampleRate: int) -> str:
-        return "frame {} {}".format(self.index * sampleRate, formatTimestamp(self.timestamp))
+    def toString(self, timeBase: fractions.Fraction, sampleRate: int) -> str:
+        return "frame {} {}".format(self.index * sampleRate, formatTimestamp(timeBase, self.timestamp))
 
-    def toStringFull(self, sampleRate: int) -> str:
-        return "frame {} {} {}".format(self.index * sampleRate, formatTimestamp(self.timestamp), self.flags)
+    def toStringFull(self, timeBase: fractions.Fraction, sampleRate: int) -> str:
+        return "frame {} {} {}".format(self.index * sampleRate, formatTimestamp(timeBase, self.timestamp), self.flags)
 
 class FPIR: # Frame Point Intermediate Representation
     def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], sampleRate: int):
@@ -183,7 +184,7 @@ class Interval:
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.mainFlag: AbstractFlagIndex = mainFlag
         self.framePoints: typing.List[FramePoint] = framePoints
-        # begin and end are not promised to align with underlying framePoints
+        # begin and end are not promised to align with underlying framePoints after applying IIRPass
         self.begin: int = begin # timestamp
         self.end: int = end # timestamp
         self.style: str = "Default"
@@ -192,10 +193,10 @@ class Interval:
     def getName(self, id: int = -1) -> str:
         return f"Subtitle_{self.mainFlag.name}_{id}"
 
-    def toAss(self, id: int = -1) -> str:
+    def toAss(self, timeBase: fractions.Fraction, id: int = -1) -> str:
         template = "Dialogue: 0,{},{},{},,0,0,100,,{}"
-        sBegin = formatTimestamp(self.begin)
-        sEnd = formatTimestamp(self.end)
+        sBegin = formatTimestamp(timeBase, self.begin)
+        sEnd = formatTimestamp(timeBase, self.end)
         name = self.getName(id)
         return template.format(sBegin, sEnd, self.style, name)
 
@@ -214,7 +215,7 @@ class Interval:
         return self.dist(other) == 0
     
     def getMidPoint(self) -> int:
-        return (self.begin + self.end) // 2
+        return int((self.begin + self.end) // 2)
 
 class IIR: # Interval Intermediate Representation
     def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex]):
@@ -228,13 +229,13 @@ class IIR: # Interval Intermediate Representation
     def sort(self):
         self.intervals.sort(key=lambda interval : interval.begin)
 
-    def toAss(self) -> str:
+    def toAss(self, timeBase: fractions.Fraction) -> str:
         lines: typing.List[str] = []
         mainFlagCounter: typing.Dict[int, int] = {}
         for _, interval in enumerate(self.intervals):
             id = mainFlagCounter.get(interval.mainFlag, 0)
             mainFlagCounter[interval.mainFlag] = id + 1
-            lines.append(interval.toAss(id) + "\n")
+            lines.append(interval.toAss(timeBase, id) + "\n")
         return "".join(lines)
     
     def getMidpoints(self) -> typing.List[typing.Tuple[str, int]]:

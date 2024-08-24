@@ -8,7 +8,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class OutlineStrategy(AbstractStrategy):
+class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogFeat = enum.auto()
@@ -78,6 +78,21 @@ class OutlineStrategy(AbstractStrategy):
 
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
+    
+    def genFeature(self, frame: cv.Mat) -> typing.Any:
+        roiDialogText, debugFrame = self.ocrPass(frame, fastMode=True)
+        roiDialogTextResized = cv.resize(roiDialogText, (150, 50)).get()
+        dctFeat = dctDescriptor(roiDialogTextResized, 8, 8)
+        return dctFeat
+    
+    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeature: typing.Any) -> bool:
+        return np.linalg.norm(np.mean(oldFeatures, axis=0) - newFeature) < 0.1
+    
+    def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
+        return self.dialogRect.cutRoi(frame)
+    
+    def cutCleanOcrFrame(self, frame: cv.Mat) -> cv.Mat:
+        return self.ocrPass(frame, fastMode=False)[0]
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialogText, debugFrame = self.ocrPass(frame, fastMode=True)
@@ -99,33 +114,33 @@ class OutlineStrategy(AbstractStrategy):
 
         nestingSuppression = 0
 
-        # # Yukkuri Museum
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 3
-        # textWeightMax = 25
-        # textHSVRanges = [((0, 0, 240), (180, 16, 255))]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
-        # boundCompensation = 4
-        # sobelThreshold = 250
-        # nestingSuppression = 0
-
-        # Yukkuri Kakueki
+        # Yukkuri Museum
         # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        textWeightMin = 5
+        textWeightMin = 3
         textWeightMax = 25
-        textHSVRanges = [
-            ((0, 200, 128), (30, 255, 255)),
-            ((170, 200, 128), (180, 255, 255)),
-            ((105, 100, 128), (135, 255, 255))
-        ]
+        textHSVRanges = [((0, 0, 240), (180, 16, 255))]
         outlineWeightMin = 1
-        outlineWeightMax = 5
-        outlineHSVRanges = [((0, 0, 180), (180, 64, 255))]
+        outlineWeightMax = 15
+        outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
         boundCompensation = 4
-        sobelThreshold = 192
-        nestingSuppression = 9
+        sobelThreshold = 250
+        nestingSuppression = 0
+
+        # # Yukkuri Kakueki
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 5
+        # textWeightMax = 25
+        # textHSVRanges = [
+        #     ((0, 200, 128), (30, 255, 255)),
+        #     ((170, 200, 128), (180, 255, 255)),
+        #     ((105, 100, 128), (135, 255, 255))
+        # ]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 5
+        # outlineHSVRanges = [((0, 0, 180), (180, 64, 255))]
+        # boundCompensation = 4
+        # sobelThreshold = 192
+        # nestingSuppression = 9
 
         # # Hotel Zundamon
         # # dialogRect: [0.00, 1.00, 0.75, 1.00]

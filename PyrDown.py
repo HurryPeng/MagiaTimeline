@@ -39,7 +39,7 @@ def main():
             break
 
         if frameIndex % 1000 == 0:
-            print("frame {} {}".format(frameIndex, formatTimestamp(timestamp)))
+            print("frame {} {}".format(frameIndex, formatTimestamp(1000, timestamp)))
 
         frameOut = frameOrig
         for _ in range(args.pyrdown):

@@ -89,9 +89,9 @@ class RatioRectangle(AbstractRectangle):
         return left, right, top, bottom
 
 class SrcRectangle(AbstractRectangle):
-    def __init__(self, src: cv.VideoCapture):
-        self.width: float = float(src.get(cv.CAP_PROP_FRAME_WIDTH))
-        self.height: float = float(src.get(cv.CAP_PROP_FRAME_HEIGHT))
+    def __init__(self, width: float, height: float) -> None:
+        self.width: float = width
+        self.height: float = height
 
     def getParent(self) -> typing.Optional[AbstractRectangle]:
         return None

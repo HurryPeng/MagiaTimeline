@@ -38,4 +38,25 @@ class AbstractStrategy(abc.ABC):
     
     def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, cv.Mat]: # (ocrFrame, debugFrame)
         return frame, None
-    
+
+class SpeculativeStrategy(abc.ABC):
+    @abc.abstractmethod
+    def genFeature(self, frame: cv.Mat) -> typing.Any:
+        pass
+
+    @abc.abstractmethod
+    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeature: typing.Any) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
+        pass
+
+class OcrStrategy(abc.ABC):
+    @abc.abstractmethod
+    def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
+        pass
+
+    @abc.abstractmethod
+    def cutCleanOcrFrame(self, frame: cv.Mat) -> cv.Mat:
+        pass
