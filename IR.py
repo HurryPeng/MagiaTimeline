@@ -42,10 +42,10 @@ class FramePoint:
     def getDebugFrame(self) -> cv.Mat | None:
         return self.debugFrame
 
-    def toString(self, timeBase: fractions.Fraction, sampleRate: int) -> str:
+    def toString(self, timeBase: fractions.Fraction, sampleRate: int = 1) -> str:
         return "frame {} {}".format(self.index * sampleRate, formatTimestamp(timeBase, self.timestamp))
 
-    def toStringFull(self, timeBase: fractions.Fraction, sampleRate: int) -> str:
+    def toStringFull(self, timeBase: fractions.Fraction, sampleRate: int = 1) -> str:
         return "frame {} {} {}".format(self.index * sampleRate, formatTimestamp(timeBase, self.timestamp), self.flags)
 
 class FPIR: # Frame Point Intermediate Representation
@@ -218,8 +218,10 @@ class Interval:
         return int((self.begin + self.end) // 2)
 
 class IIR: # Interval Intermediate Representation
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex]):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], fps: fractions.Fraction, unitTimestamp: int):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
+        self.fps: fractions.Fraction = fps
+        self.unitTimestamp: int = unitTimestamp
         self.intervals: typing.List[Interval] = []
 
     def appendFromFpir(self, fpir: FPIR, fpirPassBuildIntervals: FPIRPassBuildIntervals):
@@ -246,6 +248,9 @@ class IIR: # Interval Intermediate Representation
             mainFlagCounter[interval.mainFlag] = id + 1
             midpoints.append((interval.getName(id), interval.getMidPoint()))
         return midpoints
+    
+    def ms2Timestamp(self, ms: int) -> int:
+        return int(ms / 1000 * self.fps * self.unitTimestamp)
 
 class IIRPass(abc.ABC):
     @abc.abstractmethod
@@ -269,7 +274,7 @@ class IIRPassFillGap(IIRPass):
                 if otherInterval.mainFlag != self.flag:
                     otherId += 1
                     continue
-                if interval.dist(otherInterval) > self.maxGap:
+                if interval.dist(otherInterval) > iir.ms2Timestamp(self.maxGap):
                     break
                 if interval.dist(otherInterval) <= 0:
                     otherId += 1
@@ -311,7 +316,7 @@ class IIRPassAlign(IIRPass):
             dist = lDist
             if rDist < -lDist:
                 dist = rDist
-            if abs(dist) <= self.maxGap:
+            if abs(dist) <= iir.ms2Timestamp(self.maxGap):
                 interval.begin += dist
             
             r = 0
@@ -324,7 +329,7 @@ class IIRPassAlign(IIRPass):
             dist = lDist
             if rDist < -lDist:
                 dist = rDist
-            if abs(dist) <= self.maxGap:
+            if abs(dist) <= iir.ms2Timestamp(self.maxGap):
                 interval.end += dist
             
         iir.sort()
@@ -352,3 +357,18 @@ class IIRPassOffset(IIRPass):
         for id, interval in enumerate(iir.intervals):
             interval.begin += self.offset
             interval.end += self.offset
+
+class IIRPassRemovePredicate(IIRPass):
+    def __init__(self, pred: typing.Callable[[Interval], bool]):
+        self.pred = pred
+
+    def apply(self, iir: IIR):
+        iir.intervals = [interval for interval in iir.intervals if not self.pred(interval)]
+
+class IIRPassDenoise(IIRPass):
+    def __init__(self, flag: AbstractFlagIndex, minTime: int):
+        self.flag: AbstractFlagIndex = flag
+        self.minTime: int = minTime
+
+    def apply(self, iir: IIR):
+        iir.intervals = [interval for interval in iir.intervals if not (interval.mainFlag == self.flag and interval.end - interval.begin < iir.ms2Timestamp(self.minTime))]

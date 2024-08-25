@@ -13,12 +13,14 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
         Dialog = enum.auto()
         DialogFeat = enum.auto()
         DialogFeatJump = enum.auto()
+        OcrFrame = enum.auto()
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False, np.zeros(64), False]
+            return [False, np.zeros(64), False, None]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
+        SpeculativeStrategy.__init__(self)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
@@ -59,10 +61,23 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
 
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(OutlineStrategy.FlagIndex.Dialog, 300, meetPoint=1.0)
+        self.iirPasses["iirPassDenoise"] = IIRPassDenoise(OutlineStrategy.FlagIndex.Dialog, 100)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
+    
+    @classmethod
+    def getMainFlagIndex(cls) -> AbstractFlagIndex:
+        return cls.FlagIndex.Dialog
+
+    @classmethod
+    def getFeatureFlagIndex(cls) -> AbstractFlagIndex:
+        return cls.FlagIndex.DialogFeat
+    
+    @classmethod
+    def getOcrFrameFlagIndex(cls) -> AbstractFlagIndex:
+        return cls.FlagIndex.OcrFrame
 
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
@@ -79,14 +94,8 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
     
-    def genFeature(self, frame: cv.Mat) -> typing.Any:
-        roiDialogText, debugFrame = self.ocrPass(frame, fastMode=True)
-        roiDialogTextResized = cv.resize(roiDialogText, (150, 50)).get()
-        dctFeat = dctDescriptor(roiDialogTextResized, 8, 8)
-        return dctFeat
-    
     def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeature: typing.Any) -> bool:
-        return np.linalg.norm(np.mean(oldFeatures, axis=0) - newFeature) < 0.1
+        return np.linalg.norm(np.mean(oldFeatures, axis=0) - newFeature) < 0.2
     
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
@@ -101,8 +110,11 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
 
         meanDialogText = cv.mean(roiDialogText)[0]
 
-        roiDialogTextResized = cv.resize(roiDialogText, (150, 50)).get()
-        dctFeat = dctDescriptor(roiDialogTextResized, 8, 8)
+        hasDialog = meanDialogText > 1.0
+        dctFeat = np.zeros(64)
+        if hasDialog:
+            roiDialogTextResized = cv.resize(roiDialogText, (150, 50)).get()
+            dctFeat = dctDescriptor(roiDialogTextResized, 8, 8)
 
         framePoint.setFlag(OutlineStrategy.FlagIndex.Dialog, meanDialogText > 1.0)
         framePoint.setFlag(OutlineStrategy.FlagIndex.DialogFeat, dctFeat)

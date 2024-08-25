@@ -3,6 +3,8 @@ import typing
 import cv2 as cv
 import numpy as np
 import fractions
+import av
+import av.frame
 
 def formatTimestamp(timeBase: fractions.Fraction, timestamp: int) -> str:
     dTimestamp = datetime.datetime.fromtimestamp(float(timestamp * timeBase), datetime.timezone(datetime.timedelta()))
@@ -61,3 +63,6 @@ def morphologyWeightLowerBound(image: cv.Mat, erodeWeight: int, dilateWeight: in
 def morphologyNear(base: cv.Mat, ref: cv.Mat, Weight: int) -> cv.Mat:
     refDialate = cv.morphologyEx(ref, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (Weight, Weight)))
     return cv.bitwise_and(base, refDialate)
+
+def avFrame2CvMat(frame: av.frame.Frame) -> cv.Mat:
+    return frame.to_ndarray(format='bgr24')
