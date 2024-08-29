@@ -67,7 +67,7 @@
 
         "strategy": {
             "description": "which algorithm to use for timing",
-            "enum": ["mr", "mr-s0", "lcb", "lcb-mech", "pkm", "prk", "bdr", "otl"]
+            "enum": ["mr", "mr-s0", "lcb", "lcb-mech", "pkm", "prk", "bdr", "otl", "bcs"]
         },
         "preset": {
             "description": "which preset of parameters under a strategy to use for timing",
@@ -199,7 +199,23 @@
             "type": "object",
             "patternProperties": {
                 ".*": {
-                    "description": "a preset for strategy stk",
+                    "description": "a preset for strategy otl",
+                    "type": "object",
+                    "properties": {
+                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                    },
+                    "required": ["dialogRect"],
+                    "additionalProperties": false
+                }
+            }
+        },
+
+        "bcs": {
+            "description": "Box colour stat strategy",
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "description": "a preset for strategy bcs",
                     "type": "object",
                     "properties": {
                         "dialogRect": {"$ref": "#/$defs/ratioRectangle"}

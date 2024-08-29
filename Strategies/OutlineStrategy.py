@@ -74,6 +74,10 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
     @classmethod
     def getFeatureFlagIndex(cls) -> AbstractFlagIndex:
         return cls.FlagIndex.DialogFeat
+
+    @classmethod
+    def isEmptyFeature(cls, feature: np.ndarray) -> bool:
+        return np.all(feature == 0)
     
     @classmethod
     def getOcrFrameFlagIndex(cls) -> AbstractFlagIndex:
@@ -95,7 +99,7 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
         return self.iirPasses
     
     def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeature: typing.Any) -> bool:
-        return np.linalg.norm(np.mean(oldFeatures, axis=0) - newFeature) < 0.2
+        return np.linalg.norm(np.mean(oldFeatures, axis=0) - newFeature) < 0.1
     
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
@@ -104,7 +108,7 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
         return self.ocrPass(frame, fastMode=False)[0]
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
-        roiDialogText, debugFrame = self.ocrPass(frame, fastMode=True)
+        roiDialogText, debugFrame = self.ocrPass(frame, fastMode=False)
 
         framePoint.setDebugFrame(debugFrame)
 
@@ -126,17 +130,17 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
 
         nestingSuppression = 0
 
-        # Yukkuri Museum
-        # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        textWeightMin = 3
-        textWeightMax = 25
-        textHSVRanges = [((0, 0, 240), (180, 16, 255))]
-        outlineWeightMin = 1
-        outlineWeightMax = 15
-        outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
-        boundCompensation = 4
-        sobelThreshold = 250
-        nestingSuppression = 0
+        # # Yukkuri Museum
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 3
+        # textWeightMax = 25
+        # textHSVRanges = [((0, 0, 240), (180, 16, 255))]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
+        # boundCompensation = 4
+        # sobelThreshold = 250
+        # nestingSuppression = 0
 
         # # Yukkuri Kakueki
         # # dialogRect: [0.00, 1.00, 0.75, 1.00]
@@ -235,6 +239,25 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
         # boundCompensation = 4
         # sobelThreshold = 240
         # nestingSuppression = 0
+
+        # Fushigi
+        # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        textWeightMin = 3
+        textWeightMax = 29
+        textHSVRanges = [
+            ((0, 200, 180), (10, 255, 255)),
+            ((160, 200, 180), (180, 255, 255)),
+            ((15, 150, 200), (45, 255, 255)),
+        ]
+        outlineWeightMin = 1
+        outlineWeightMax = 11
+        outlineHSVRanges = [
+            ((0, 0, 180), (180, 64, 255)),
+            ((0, 0, 0), (180, 255, 16))
+        ]
+        boundCompensation = 4
+        sobelThreshold = 150
+        nestingSuppression = 0
 
         roiDialog = self.dialogRect.cutRoiToUmat(frame)
         roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)

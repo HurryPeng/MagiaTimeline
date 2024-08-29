@@ -29,6 +29,13 @@ def dctDescriptor(image: cv.Mat, dctWeight=8, dctHeight=8) -> np.ndarray:
     dctVec /= np.linalg.norm(dctVec)
     return dctVec
 
+def inverseDctDescriptor(dctVec: np.ndarray, originalWidth: int, originalHeight: int, dctWeight=8, dctHeight=8) -> cv.Mat:
+    dctLowFreq = dctVec.reshape((dctHeight, dctWeight))
+    dct = np.zeros((originalHeight, originalWidth), dtype=np.float32)
+    dct[:dctHeight, :dctWeight] = dctLowFreq
+    reconstructedImage = cv.idct(dct)
+    return cv.normalize(reconstructedImage, None, 0, 255, cv.NORM_MINMAX, cv.CV_8U)
+
 def rgbSobel(image: cv.Mat, ksize: int) -> cv.Mat:
     imageChannels = cv.split(image)
     imageSobelRX = cv.Sobel(imageChannels[2], cv.CV_16S, 1, 0, ksize=ksize)
@@ -66,3 +73,6 @@ def morphologyNear(base: cv.Mat, ref: cv.Mat, Weight: int) -> cv.Mat:
 
 def avFrame2CvMat(frame: av.frame.Frame) -> cv.Mat:
     return frame.to_ndarray(format='bgr24')
+
+def ms2Timestamp(ms: int, fps: fractions.Fraction, unitTimestamp: int) -> int:
+    return int(ms / 1000 * fps * unitTimestamp)

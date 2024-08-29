@@ -25,6 +25,7 @@ from Strategies.PokemonEmeraldStrategy import *
 from Strategies.ParakoStrategy import *
 from Strategies.BanGDreamStrategy import *
 from Strategies.OutlineStrategy import *
+from Strategies.BoxColourStatStrategy import *
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -47,7 +48,7 @@ def main():
             raise Exception("No preset \"" + config["preset"] + "\" found for strategy \"" + config["strategy"] + "\"")
     strategyConfig = config[config["strategy"]][config["preset"]]
 
-    sampleRate: int = 1
+    sampleRate: int = 4
 
     cv.ocl.setUseOpenCL(config["enableOpenCL"])
 
@@ -91,6 +92,8 @@ def main():
             strategy = BanGDreamStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "otl":
             strategy = OutlineStrategy(strategyConfig, contentRect)
+        elif config["strategy"] == "bcs":
+            strategy = BoxColourStat(strategyConfig, contentRect)
         else:
             raise Exception("Unknown strategy! ")
         
@@ -193,7 +196,7 @@ def main():
         print("Timeline Elapsed", timeTimelineElapsed, "s")
         print("Timeline Speed", float(frameIndex / fps) / timeTimelineElapsed, "x")
 
-        doOcr = True
+        doOcr = False
 
         if doOcr and isinstance(strategy, OcrStrategy):
             paddle = paddleocr.PaddleOCR(use_angle_cls=True, lang='japan', show_log=False)
@@ -201,8 +204,19 @@ def main():
 
             for i, interval in enumerate(iir.intervals):
                 name: str = interval.getName(i)
-                frame: av.frame.Frame = interval.flags[ocrFrameFlagIndex]
-                img: cv.Mat = frame.to_ndarray(format='bgr24')
+                frame: typing.Optional[av.frame.Frame] = interval.flags[ocrFrameFlagIndex]
+
+                if frame is None:
+                    timestamp = interval.getMidPoint()
+                    srcContainer.seek(timestamp, backward=True, any_frame=False, stream=srcStream)
+                    for curFrame in srcContainer.decode(srcStream):
+                        thisTimestamp: int = curFrame.pts
+                        if thisTimestamp < timestamp:
+                            continue
+                        frame = curFrame
+                        break
+
+                img: cv.Mat = avFrame2CvMat(frame)
 
                 # Tesseract
                 tesseractFrame = strategy.cutCleanOcrFrame(img)

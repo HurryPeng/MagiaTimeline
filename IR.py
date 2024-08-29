@@ -207,6 +207,13 @@ class Interval:
             l = other
             r = self
         return r.begin - l.end
+    
+    def distFramePoint(self, framePoint: FramePoint) -> int:
+        if framePoint.timestamp < self.begin:
+            return self.begin - framePoint.timestamp
+        if framePoint.timestamp > self.end:
+            return framePoint.timestamp - self.end
+        return 0
 
     def intersects(self, other: Interval) -> bool:
         return self.dist(other) < 0
@@ -250,7 +257,7 @@ class IIR: # Interval Intermediate Representation
         return midpoints
     
     def ms2Timestamp(self, ms: int) -> int:
-        return int(ms / 1000 * self.fps * self.unitTimestamp)
+        return ms2Timestamp(ms, self.fps, self.unitTimestamp)
 
 class IIRPass(abc.ABC):
     @abc.abstractmethod

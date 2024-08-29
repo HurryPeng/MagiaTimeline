@@ -161,3 +161,8 @@ bdr:
 otl:
   default:
     dialogRect: [0.00, 1.00, 0.75, 1.00]
+
+# Adaptive median colour strategy
+bcs:
+  default:
+    dialogRect: [0.00, 1.00, 0.75, 1.00]

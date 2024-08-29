@@ -24,6 +24,10 @@ class IntervalGrower(IIR):
 
         self.proposalStride: fractions.Fraction = fractions.Fraction(1, 2)
 
+        self.processedFrames: typing.Set[int] = set()
+
+        self.verbose = True
+
     def propose(self) -> typing.Tuple[int, typing.Optional[Interval], typing.Optional[Interval]]:
         # returns: proposed timestamp (-1 for no proposal), previous interval, next interval
 
@@ -57,15 +61,26 @@ class IntervalGrower(IIR):
             interval.flags[self.ocrFrameFlagIndex] = frame
         self.intervals.append(interval)
         self.sort()
+        self.processedFrames.add(framePoint.timestamp)
+        if self.verbose:
+            print("insertInterval       ", f"({interval.begin // self.unitTimestamp}, {interval.end // self.unitTimestamp}) {(interval.end - interval.begin) // self.unitTimestamp}", framePoint.toString(1 / self.unitTimestamp / self.fps, 1))
         return interval
 
     def extendInterval(self, interval: Interval, framePoint: FramePoint):
         if interval.begin > framePoint.timestamp:
             interval.begin = framePoint.timestamp
+            if self.verbose:
+                print("extendIntervalToLeft ", f"<{interval.begin // self.unitTimestamp}, {interval.end // self.unitTimestamp}] {(interval.end - interval.begin) // self.unitTimestamp}", framePoint.toString(1 / self.unitTimestamp / self.fps, 1))
         elif interval.end < framePoint.timestamp + self.unitTimestamp:
             interval.end = framePoint.timestamp + self.unitTimestamp
+            if self.verbose:
+                print("extendIntervalToRight", f"[{interval.begin // self.unitTimestamp}, {interval.end // self.unitTimestamp}> {(interval.end - interval.begin) // self.unitTimestamp}", framePoint.toString(1 / self.unitTimestamp / self.fps, 1))
         interval.framePoints.append(framePoint)
+        self.processedFrames.add(framePoint.timestamp)
         self.sort()
+
+    def isProcessed(self, timestamp: int) -> bool:
+        return timestamp in self.processedFrames
 
 class FrameCache:
     def __init__(self, container: av.container.InputContainer, stream: av.video.stream.VideoStream) -> None:
@@ -82,10 +97,16 @@ class FrameCache:
 
         self.statDecodedFrames: int = 0
 
+    def canGetFrame(self, timestamp: int) -> bool:
+        index: int = int(timestamp // self.unitTimestamp)
+        return index >= self.indexBegin and index < self.indexNextI
+
     def getFrame(self, timestamp: int) -> av.frame.Frame:
         index: int = int(timestamp // self.unitTimestamp)
         if index < self.indexBegin:
-            raise Exception("FrameCache: timestamp too early")
+            raise Exception("FrameCache: timestamp earlier than the previous I-frame")
+        if index > self.indexNextI and self.indexNextI != -1:
+            raise Exception("FrameCache: timestamp later than the next I-frame")
         if index >= self.indexEnd:
             self.proceedTo(timestamp)
         assert index >= self.indexBegin and index < self.indexEnd
@@ -131,11 +152,14 @@ class FrameCache:
             self.indexNextI = int(frameI2.pts // self.unitTimestamp)
             self.cache = [frameI1] + [None] * (self.indexNextI - self.indexBegin - 1)
         else:
-            self.indexNextI = 0
+            self.indexNextI = -1
             self.cache = [frameI1] + [None] * (self.stream.frames - self.indexBegin - 1)
         return frameI2
 
 class SpeculativeEngine:
+    def __init__(self) -> None:
+        self.emptyFeatureMaxTime: int = 1000
+
     def run(self, strategy: SpeculativeStrategy, container: av.container.InputContainer, stream: av.video.stream.VideoStream) -> IIR:
         strategy: SpeculativeStrategy = strategy
         container: av.container.InputContainer = container
@@ -151,6 +175,8 @@ class SpeculativeEngine:
         ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None
         if isinstance(strategy, OcrStrategy):
             ocrFrameFlagIndex = strategy.getOcrFrameFlagIndex()
+
+        self.emptyFeatureMaxTimestamp: int = ms2Timestamp(self.emptyFeatureMaxTime, fps, unitTimestamp)
 
         intervalGrower: IntervalGrower = IntervalGrower(strategy.getFlagIndexType(), fps, unitTimestamp, mainFlagIndex, ocrFrameFlagIndex)
         frameCache: FrameCache = FrameCache(container, stream)
@@ -194,24 +220,24 @@ class SpeculativeEngine:
                 framePoint2 = strategy.genFramePoint(avFrame2CvMat(frameI2), int(frameI2.pts // unitTimestamp), frameI2.pts)
                 print(framePoint2.toString(timeBase, 1))
                 merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], framePoint2.getFlag(featureFlagIndex))
-                if merge:
+                dist = prev.distFramePoint(framePoint2)
+                if merge and not (strategy.isEmptyFeature(framePoint2.getFlag(featureFlagIndex)) and dist > self.emptyFeatureMaxTimestamp):
                     intervalGrower.extendInterval(prev, framePoint2)
                 else:
                     intervalGrower.insertInterval(framePoint2, frameI2)
             else: # reasonable proposal
-                # print(formatTimestamp(timeBase, timestamp), timestamp, timestamp / unitTimestamp)
-                # print(frameCache.indexBegin, frameCache.indexEnd, frameCache.indexNextI)
-                # print([frame is not None for frame in frameCache.cache])
                 frame = frameCache.getFrame(timestamp)
-                # print([frame is not None for frame in frameCache.cache])
-                
                 framePoint = strategy.genFramePoint(avFrame2CvMat(frame), int(frame.pts // unitTimestamp), frame.pts)
+                isEmptyFeature = strategy.isEmptyFeature(framePoint.getFlag(featureFlagIndex))
+
                 mergeLeft = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], framePoint.getFlag(featureFlagIndex))
-                if mergeLeft:
+                distLeft = prev.distFramePoint(framePoint)
+                if mergeLeft and not (isEmptyFeature and distLeft > self.emptyFeatureMaxTimestamp):
                     intervalGrower.extendInterval(prev, framePoint)
                 else:
                     mergeRight = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in next.framePoints], framePoint.getFlag(featureFlagIndex))
-                    if mergeRight:
+                    distRight = next.distFramePoint(framePoint)
+                    if mergeRight and not (isEmptyFeature and distRight > self.emptyFeatureMaxTimestamp):
                         intervalGrower.extendInterval(next, framePoint)
                     else:
                         intervalGrower.insertInterval(framePoint, frame)

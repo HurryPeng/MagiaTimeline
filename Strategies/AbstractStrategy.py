@@ -55,6 +55,11 @@ class SpeculativeStrategy(abc.ABC):
     def getFeatureFlagIndex(cls) -> AbstractFlagIndex:
         pass
 
+    @classmethod
+    @abc.abstractmethod
+    def isEmptyFeature(cls, feature) -> bool:
+        pass
+
     @abc.abstractmethod
     def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
         pass
