@@ -98,8 +98,8 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
     
-    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeature: typing.Any) -> bool:
-        return np.linalg.norm(np.mean(oldFeatures, axis=0) - newFeature) < 0.1
+    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.Any) -> bool:
+        return np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < 0.1
     
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)

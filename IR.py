@@ -223,6 +223,9 @@ class Interval:
     
     def getMidPoint(self) -> int:
         return int((self.begin + self.end) // 2)
+    
+    def merge(self, other: Interval) -> Interval:
+        return Interval(self.flagIndexType, self.mainFlag, min(self.begin, other.begin), max(self.end, other.end), self.framePoints + other.framePoints)
 
 class IIR: # Interval Intermediate Representation
     def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], fps: fractions.Fraction, unitTimestamp: int):
@@ -379,3 +382,19 @@ class IIRPassDenoise(IIRPass):
 
     def apply(self, iir: IIR):
         iir.intervals = [interval for interval in iir.intervals if not (interval.mainFlag == self.flag and interval.end - interval.begin < iir.ms2Timestamp(self.minTime))]
+
+class IIRPassMerge(IIRPass):
+    def __init__(self, pred: typing.Callable[[Interval, Interval], bool]):
+        self.pred = pred
+
+    def apply(self, iir: IIR):
+        newIntervals: typing.List[Interval] = []
+        for i in range(len(iir.intervals)):
+            if len(newIntervals) == 0:
+                newIntervals.append(iir.intervals[i])
+                continue
+            if self.pred(newIntervals[-1], iir.intervals[i]):
+                newIntervals[-1] = newIntervals[-1].merge(iir.intervals[i])
+            else:
+                newIntervals.append(iir.intervals[i])
+        iir.intervals = newIntervals

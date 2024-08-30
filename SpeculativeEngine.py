@@ -207,7 +207,7 @@ class SpeculativeEngine:
                 interval1 = intervalGrower.insertInterval(framePoint1, frameI1)
                 prev = interval1
                 framePoint2 = strategy.genFramePoint(avFrame2CvMat(frameI2), int(frameI2.pts // unitTimestamp), frameI2.pts)
-                merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in interval1.framePoints], framePoint2.getFlag(featureFlagIndex))
+                merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in interval1.framePoints], [framePoint2.getFlag(featureFlagIndex)])
                 if merge:
                     intervalGrower.extendInterval(interval1, framePoint2)
                 else:
@@ -219,7 +219,7 @@ class SpeculativeEngine:
                     frameI2 = frameCache.getFrame((stream.frames - 1) * unitTimestamp)
                 framePoint2 = strategy.genFramePoint(avFrame2CvMat(frameI2), int(frameI2.pts // unitTimestamp), frameI2.pts)
                 print(framePoint2.toString(timeBase, 1))
-                merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], framePoint2.getFlag(featureFlagIndex))
+                merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint2.getFlag(featureFlagIndex)])
                 dist = prev.distFramePoint(framePoint2)
                 if merge and not (strategy.isEmptyFeature(framePoint2.getFlag(featureFlagIndex)) and dist > self.emptyFeatureMaxTimestamp):
                     intervalGrower.extendInterval(prev, framePoint2)
@@ -230,12 +230,12 @@ class SpeculativeEngine:
                 framePoint = strategy.genFramePoint(avFrame2CvMat(frame), int(frame.pts // unitTimestamp), frame.pts)
                 isEmptyFeature = strategy.isEmptyFeature(framePoint.getFlag(featureFlagIndex))
 
-                mergeLeft = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], framePoint.getFlag(featureFlagIndex))
+                mergeLeft = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint.getFlag(featureFlagIndex)])
                 distLeft = prev.distFramePoint(framePoint)
                 if mergeLeft and not (isEmptyFeature and distLeft > self.emptyFeatureMaxTimestamp):
                     intervalGrower.extendInterval(prev, framePoint)
                 else:
-                    mergeRight = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in next.framePoints], framePoint.getFlag(featureFlagIndex))
+                    mergeRight = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in next.framePoints], [framePoint.getFlag(featureFlagIndex)])
                     distRight = next.distFramePoint(framePoint)
                     if mergeRight and not (isEmptyFeature and distRight > self.emptyFeatureMaxTimestamp):
                         intervalGrower.extendInterval(next, framePoint)

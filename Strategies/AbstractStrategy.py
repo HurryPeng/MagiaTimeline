@@ -69,7 +69,7 @@ class SpeculativeStrategy(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeature: typing.Any) -> bool:
+    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeature: typing.List[typing.Any]) -> bool:
         pass
 
     def genFramePoint(self, frame: cv.Mat, index: int, timestamp: int) -> FramePoint:
