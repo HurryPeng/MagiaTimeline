@@ -8,7 +8,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class LimbusCompanyMechanicsStrategy(AbstractStrategy):
+class LimbusCompanyMechanicsStrategy(AbstractFramewiseStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogBgColour = enum.auto()
@@ -23,6 +23,8 @@ class LimbusCompanyMechanicsStrategy(AbstractStrategy):
             return [False, False, False, False, np.array([1.0] * 4), None]
 
     def __init__(self, config, contentRect: AbstractRectangle) -> None:
+        AbstractStrategy.__init__(self, contentRect)
+
         self.pcaParams: np.ndarray = np.load("./Strategies/Models/lcb-mech-dialog-pca.npz")
         
         self.rectangles = collections.OrderedDict()

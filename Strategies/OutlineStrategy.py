@@ -2,13 +2,14 @@ import typing
 import enum
 import collections
 
+from IR import IIRPass
 from Util import *
 from Strategies.AbstractStrategy import *
 from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
+class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractOcrStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogFeat = enum.auto()
@@ -20,7 +21,8 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
             return [False, np.zeros(64), False, None]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
-        SpeculativeStrategy.__init__(self)
+        AbstractStrategy.__init__(self, contentRect)
+        AbstractSpeculativeStrategy.__init__(self)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
@@ -98,6 +100,9 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
     
+    def getSpecIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
+        return self.iirPasses
+    
     def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.Any) -> bool:
         return np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < 0.1
     
@@ -130,17 +135,17 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
 
         nestingSuppression = 0
 
-        # # Yukkuri Museum
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 3
-        # textWeightMax = 25
-        # textHSVRanges = [((0, 0, 240), (180, 16, 255))]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
-        # boundCompensation = 4
-        # sobelThreshold = 250
-        # nestingSuppression = 0
+        # Yukkuri Museum
+        # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        textWeightMin = 3
+        textWeightMax = 25
+        textHSVRanges = [((0, 0, 240), (180, 16, 255))]
+        outlineWeightMin = 1
+        outlineWeightMax = 15
+        outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
+        boundCompensation = 4
+        sobelThreshold = 250
+        nestingSuppression = 0
 
         # # Yukkuri Kakueki
         # # dialogRect: [0.00, 1.00, 0.75, 1.00]
@@ -242,22 +247,22 @@ class OutlineStrategy(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
 
         # Fushigi
         # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        textWeightMin = 3
-        textWeightMax = 29
-        textHSVRanges = [
-            ((0, 200, 180), (10, 255, 255)),
-            ((160, 200, 180), (180, 255, 255)),
-            ((15, 150, 200), (45, 255, 255)),
-        ]
-        outlineWeightMin = 1
-        outlineWeightMax = 11
-        outlineHSVRanges = [
-            ((0, 0, 180), (180, 64, 255)),
-            ((0, 0, 0), (180, 255, 16))
-        ]
-        boundCompensation = 4
-        sobelThreshold = 150
-        nestingSuppression = 0
+        # textWeightMin = 3
+        # textWeightMax = 29
+        # textHSVRanges = [
+        #     ((0, 200, 180), (10, 255, 255)),
+        #     ((160, 200, 180), (180, 255, 255)),
+        #     ((15, 150, 200), (45, 255, 255)),
+        # ]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 11
+        # outlineHSVRanges = [
+        #     ((0, 0, 180), (180, 64, 255)),
+        #     ((0, 0, 0), (180, 255, 16))
+        # ]
+        # boundCompensation = 4
+        # sobelThreshold = 150
+        # nestingSuppression = 0
 
         roiDialog = self.dialogRect.cutRoiToUmat(frame)
         roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)

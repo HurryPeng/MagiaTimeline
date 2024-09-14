@@ -8,7 +8,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class LimbusCompanyStrategy(AbstractStrategy):
+class LimbusCompanyStrategy(AbstractFramewiseStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogText = enum.auto()
@@ -21,6 +21,7 @@ class LimbusCompanyStrategy(AbstractStrategy):
             return [False, False, 0.0, False, 0.0]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
+        AbstractStrategy.__init__(self, contentRect)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)

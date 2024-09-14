@@ -2,7 +2,6 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "https://magiatimeline.tech/schemas/ConfigSchema.json",
     "title": "MagiaTimeline configuration schema",
-
     "$defs": {
         "ratio": {
             "description": "a nuber between 0 and 1 representing a relative width or height in a frame",
@@ -14,21 +13,28 @@
             "description": "a rectangular area in a frame described by ratios of [left, right, top, bottom]",
             "type": "array",
             "items": [
-                {"$ref": "#/$defs/ratio"},
-                {"$ref": "#/$defs/ratio"},
-                {"$ref": "#/$defs/ratio"},
-                {"$ref": "#/$defs/ratio"}
+                {
+                    "$ref": "#/$defs/ratio"
+                },
+                {
+                    "$ref": "#/$defs/ratio"
+                },
+                {
+                    "$ref": "#/$defs/ratio"
+                },
+                {
+                    "$ref": "#/$defs/ratio"
+                }
             ],
             "minItems": 4,
             "maxItems": 4,
             "additionalItems": false
         }
     },
-
     "type": "object",
     "properties": {
         "source": {
-            "description": "paths of source mp4 video files",
+            "description": "paths of source video files",
             "type": "array",
             "items": {
                 "type": "string"
@@ -47,11 +53,6 @@
             "description": "template ass file defining the header of destination ass file, in asst format",
             "type": "string"
         },
-        "mode": {
-            "description": "running mode that provides different performance and intermediate information",
-            "type": "string",
-            "enum": ["default", "debug", "shortcircuit"]
-        },
         "enableOpenCL": {
             "description": "enable OpenCL acceleration",
             "type": "boolean"
@@ -60,20 +61,24 @@
             "description": "defines the rectangle that wraps the content of a frame, cutting away black bars around",
             "$ref": "#/$defs/ratioRectangle"
         },
-        "offset": {
-            "description": "global offset of the subtitles, in number of frames",
-            "type": "number"
-        },
-
         "strategy": {
             "description": "which algorithm to use for timing",
-            "enum": ["mr", "mr-s0", "lcb", "lcb-mech", "pkm", "prk", "bdr", "otl", "bcs"]
+            "enum": [
+                "mr",
+                "mr-s0",
+                "lcb",
+                "lcb-mech",
+                "pkm",
+                "prk",
+                "bdr",
+                "otl",
+                "bcs"
+            ]
         },
         "preset": {
             "description": "which preset of parameters under a strategy to use for timing",
             "type": "string"
-        }, 
-
+        },
         "mr": {
             "description": "MagiaRecord quest video strategy",
             "type": "object",
@@ -82,21 +87,45 @@
                     "description": "a preset for strategy mr",
                     "type": "object",
                     "properties": {
-                        "dialogOutlineRect": {"$ref": "#/$defs/ratioRectangle"},
-                        "dialogBgRect": {"$ref": "#/$defs/ratioRectangle"},
-                        "blackscreenRect": {"$ref": "#/$defs/ratioRectangle"},
-                        "whitescreenRect": {"$ref": "#/$defs/ratioRectangle"},
-                        "cgSubAboveRect": {"$ref": "#/$defs/ratioRectangle"},
-                        "cgSubBorderRect": {"$ref": "#/$defs/ratioRectangle"},
-                        "cgSubBelowRect": {"$ref": "#/$defs/ratioRectangle"},
-                        "cgSubTextRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogOutlineRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "dialogBgRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "blackscreenRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "whitescreenRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "cgSubAboveRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "cgSubBorderRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "cgSubBelowRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "cgSubTextRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        }
                     },
-                    "required": ["dialogOutlineRect", "dialogBgRect", "blackscreenRect", "whitescreenRect", "cgSubAboveRect", "cgSubBorderRect", "cgSubBelowRect", "cgSubTextRect"],
+                    "required": [
+                        "dialogOutlineRect",
+                        "dialogBgRect",
+                        "blackscreenRect",
+                        "whitescreenRect",
+                        "cgSubAboveRect",
+                        "cgSubBorderRect",
+                        "cgSubBelowRect",
+                        "cgSubTextRect"
+                    ],
                     "additionalProperties": false
                 }
             }
         },
-
         "mr-s0": {
             "description": "MagiaRecord Scene0 film strategy",
             "type": "object",
@@ -105,15 +134,21 @@
                     "description": "a preset for strategy mr",
                     "type": "object",
                     "properties": {
-                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"},
-                        "blackscreenRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "blackscreenRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        }
                     },
-                    "required": ["dialogRect", "blackscreenRect"],
+                    "required": [
+                        "dialogRect",
+                        "blackscreenRect"
+                    ],
                     "additionalProperties": false
                 }
             }
         },
-        
         "lcb": {
             "description": "LimbusCompany quest video strategy",
             "type": "object",
@@ -122,14 +157,17 @@
                     "type": "object",
                     "description": "a preset for strategy lcb",
                     "properties": {
-                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        }
                     },
-                    "required": ["dialogRect"],
+                    "required": [
+                        "dialogRect"
+                    ],
                     "additionalProperties": false
                 }
             }
         },
-
         "lcb-mech": {
             "description": "LimbusCompany mechanics introduction video strategy",
             "type": "object",
@@ -138,14 +176,17 @@
                     "type": "object",
                     "description": "a preset for strategy lcb-mech",
                     "properties": {
-                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        }
                     },
-                    "required": ["dialogRect"],
+                    "required": [
+                        "dialogRect"
+                    ],
                     "additionalProperties": false
                 }
             }
-        }, 
-
+        },
         "pkm": {
             "description": "PekemonEmerald strategy",
             "type": "object",
@@ -154,14 +195,17 @@
                     "description": "a preset for strategy pkm",
                     "type": "object",
                     "properties": {
-                        "dialogBgRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogBgRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        }
                     },
-                    "required": ["dialogBgRect"],
+                    "required": [
+                        "dialogBgRect"
+                    ],
                     "additionalProperties": false
                 }
             }
         },
-
         "prk": {
             "description": "Parako strategy",
             "type": "object",
@@ -170,14 +214,17 @@
                     "description": "a preset for strategy prk",
                     "type": "object",
                     "properties": {
-                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        }
                     },
-                    "required": ["dialogRect"],
+                    "required": [
+                        "dialogRect"
+                    ],
                     "additionalProperties": false
                 }
             }
-        }, 
-
+        },
         "bdr": {
             "description": "BanG Dream strategy",
             "type": "object",
@@ -186,14 +233,17 @@
                     "description": "a preset for strategy bdr",
                     "type": "object",
                     "properties": {
-                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        }
                     },
-                    "required": ["dialogRect"],
+                    "required": [
+                        "dialogRect"
+                    ],
                     "additionalProperties": false
                 }
             }
         },
-
         "otl": {
             "description": "Outline strategy",
             "type": "object",
@@ -202,14 +252,17 @@
                     "description": "a preset for strategy otl",
                     "type": "object",
                     "properties": {
-                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        }
                     },
-                    "required": ["dialogRect"],
+                    "required": [
+                        "dialogRect"
+                    ],
                     "additionalProperties": false
                 }
             }
         },
-
         "bcs": {
             "description": "Box colour stat strategy",
             "type": "object",
@@ -218,14 +271,76 @@
                     "description": "a preset for strategy bcs",
                     "type": "object",
                     "properties": {
-                        "dialogRect": {"$ref": "#/$defs/ratioRectangle"}
+                        "dialogRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        }
                     },
-                    "required": ["dialogRect"],
+                    "required": [
+                        "dialogRect"
+                    ],
                     "additionalProperties": false
                 }
             }
+        },
+        "engine": {
+            "description": "which sampling pipeline to use",
+            "type": "string",
+            "enum": [
+                "framewise",
+                "speculative"
+            ]
+        },
+        "framewise": {
+            "description": "Parameters for the framewise engine",
+            "type": "object",
+            "properties": {
+                "sampleInterval": {
+                    "description": "in how many frames to sample a frame",
+                    "type": "number",
+                    "minimum": 1
+                },
+                "debug": {
+                    "description": "enable debug mode",
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "sampleInterval",
+                "debug"
+            ],
+            "additionalProperties": false
+        },
+        "speculative": {
+            "description": "Parameters for the speculative engine",
+            "type": "object",
+            "properties": {
+                "emptyGapForceCheck": {
+                    "description": "in how many milliseconds to force check for existence of subtitles (0 to disable)",
+                    "type": "number",
+                    "minimum": 0
+                },
+                "debug": {
+                    "description": "enable debug mode",
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "emptyGapForceCheck",
+                "debug"
+            ],
+            "additionalProperties": false
         }
     },
-    "required": ["source", "destination", "assTemplate", "mode", "contentRect", "offset", "strategy", "preset"],
+    "required": [
+        "source",
+        "destination",
+        "assTemplate",
+        "contentRect",
+        "strategy",
+        "preset",
+        "engine",
+        "framewise",
+        "speculative"
+    ],
     "additionalProperties": false
 }

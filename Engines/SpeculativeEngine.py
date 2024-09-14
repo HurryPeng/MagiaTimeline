@@ -1,13 +1,16 @@
-import av
-import av.container
 from IR import *
 from Strategies.AbstractStrategy import *
+from Strategies.AbstractStrategy import AbstractStrategy
+from Util import *
+from Engines.AbstractEngine import *
+
 import av.container
 import av.container.input
 import av.video
 import av.video.stream
 import av.frame
-from Util import *
+import typing
+import fractions
 
 class IntervalGrower(IIR):
     def __init__(
@@ -16,7 +19,8 @@ class IntervalGrower(IIR):
         fps: fractions.Fraction,
         unitTimestamp: int,
         mainFlagIndex: AbstractFlagIndex,
-        ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None
+        ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None,
+        verbose: bool = False
     ) -> None:
         super().__init__(flagIndexType, fps, unitTimestamp)
         self.mainFlag: AbstractFlagIndex = mainFlagIndex
@@ -26,7 +30,7 @@ class IntervalGrower(IIR):
 
         self.processedFrames: typing.Set[int] = set()
 
-        self.verbose = True
+        self.verbose = verbose
 
     def propose(self) -> typing.Tuple[int, typing.Optional[Interval], typing.Optional[Interval]]:
         # returns: proposed timestamp (-1 for no proposal), previous interval, next interval
@@ -58,7 +62,7 @@ class IntervalGrower(IIR):
     def insertInterval(self, framePoint: FramePoint, frame: typing.Optional[av.frame.Frame] = None) -> Interval:
         interval = Interval(self.flagIndexType, self.mainFlag, framePoint.timestamp, framePoint.timestamp + self.unitTimestamp, [framePoint])
         if self.ocrFrameFlagIndex is not None and frame is not None:
-            interval.flags[self.ocrFrameFlagIndex] = frame
+            interval.setFlag(self.ocrFrameFlagIndex, frame)
         self.intervals.append(interval)
         self.sort()
         self.processedFrames.add(framePoint.timestamp)
@@ -83,9 +87,9 @@ class IntervalGrower(IIR):
         return timestamp in self.processedFrames
 
 class FrameCache:
-    def __init__(self, container: av.container.InputContainer, stream: av.video.stream.VideoStream) -> None:
-        self.container: av.container.InputContainer = container
-        self.stream: av.video.stream.VideoStream = stream
+    def __init__(self, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> None:
+        self.container: "av.container.InputContainer" = container
+        self.stream: "av.video.stream.VideoStream" = stream
         self.cache: typing.List[av.frame.Frame] = []
         self.indexBegin: int = 0
         self.indexEnd: int = 0
@@ -156,15 +160,16 @@ class FrameCache:
             self.cache = [frameI1] + [None] * (self.stream.frames - self.indexBegin - 1)
         return frameI2
 
-class SpeculativeEngine:
-    def __init__(self) -> None:
-        self.emptyFeatureMaxTime: int = 1000
+class SpeculativeEngine(AbstractEngine):
+    def __init__(self, config: dict) -> None:
+        self.config: dict = config
+        self.emptyGapForceCheck: int = config["emptyGapForceCheck"]
+        self.debug: bool = config["debug"]
 
-    def run(self, strategy: SpeculativeStrategy, container: av.container.InputContainer, stream: av.video.stream.VideoStream) -> IIR:
-        strategy: SpeculativeStrategy = strategy
-        container: av.container.InputContainer = container
-        stream: av.video.stream.VideoStream = stream
+    def getRequiredAbstractStrategyType(self) -> type[AbstractStrategy]:
+        return AbstractSpeculativeStrategy
 
+    def runImpl(self, strategy: AbstractSpeculativeStrategy, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> IIR:
         timeBase: fractions.Fraction = stream.time_base
         fps: fractions.Fraction = stream.average_rate
         frameCount: float = stream.frames
@@ -173,12 +178,12 @@ class SpeculativeEngine:
         mainFlagIndex: AbstractFlagIndex = strategy.getMainFlagIndex()
         featureFlagIndex: AbstractFlagIndex = strategy.getFeatureFlagIndex()
         ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None
-        if isinstance(strategy, OcrStrategy):
+        if isinstance(strategy, AbstractOcrStrategy):
             ocrFrameFlagIndex = strategy.getOcrFrameFlagIndex()
 
-        self.emptyFeatureMaxTimestamp: int = ms2Timestamp(self.emptyFeatureMaxTime, fps, unitTimestamp)
+        self.emptyFeatureMaxTimestamp: int = ms2Timestamp(self.emptyGapForceCheck, fps, unitTimestamp)
 
-        intervalGrower: IntervalGrower = IntervalGrower(strategy.getFlagIndexType(), fps, unitTimestamp, mainFlagIndex, ocrFrameFlagIndex)
+        intervalGrower: IntervalGrower = IntervalGrower(strategy.getFlagIndexType(), fps, unitTimestamp, mainFlagIndex, ocrFrameFlagIndex, self.debug)
         frameCache: FrameCache = FrameCache(container, stream)
 
         print("==== IIR Building ====")
@@ -198,6 +203,7 @@ class SpeculativeEngine:
             if lastSegment and timestamp == -1:
                 break
             if timestamp == 0: # Init
+                assert prev is None and next is None
                 frameI2 = frameCache.leap()
                 if frameI2 is None:
                     lastSegment = True
@@ -213,6 +219,7 @@ class SpeculativeEngine:
                 else:
                     intervalGrower.insertInterval(framePoint2, frameI2)
             elif timestamp == -1: # leap to the next next I-frame
+                assert prev is not None and next is None
                 frameI2 = frameCache.leap()
                 if frameI2 is None:
                     lastSegment = True
@@ -226,6 +233,7 @@ class SpeculativeEngine:
                 else:
                     intervalGrower.insertInterval(framePoint2, frameI2)
             else: # reasonable proposal
+                assert prev is not None and next is not None
                 frame = frameCache.getFrame(timestamp)
                 framePoint = strategy.genFramePoint(avFrame2CvMat(frame), int(frame.pts // unitTimestamp), frame.pts)
                 isEmptyFeature = strategy.isEmptyFeature(framePoint.getFlag(featureFlagIndex))
@@ -247,7 +255,7 @@ class SpeculativeEngine:
         print("iirPassSuppressNonMain")
         iirPassSuppressNonMain = IIRPassRemovePredicate(lambda interval: not interval.framePoints[0].getFlag(mainFlagIndex))
         iirPassSuppressNonMain.apply(intervalGrower)
-        for name, iirPass in (strategy.getIirPasses()).items():
+        for name, iirPass in (strategy.getSpecIirPasses()).items():
             print(name)
             iirPass.apply(intervalGrower)
 

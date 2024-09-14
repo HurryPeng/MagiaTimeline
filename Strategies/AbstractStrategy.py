@@ -8,6 +8,16 @@ from AbstractFlagIndex import *
 from IR import *
 
 class AbstractStrategy(abc.ABC):
+    def __init__(self, contentRect: AbstractRectangle) -> None:
+        self.contentRect = contentRect
+
+    def getContentRect(self) -> AbstractRectangle:
+        return self.contentRect
+    
+    def getStyles(self) -> typing.List[str]:
+        return []
+
+class AbstractFramewiseStrategy(AbstractStrategy, abc.ABC):
     @classmethod
     @abc.abstractmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -33,13 +43,7 @@ class AbstractStrategy(abc.ABC):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         pass
 
-    def getStyles(self) -> typing.List[str]:
-        return []
-
-class SpeculativeStrategy(abc.ABC):
-    def __init__(self):
-        self.statAnalyzedFrames: int = 0
-
+class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
     @classmethod
     @abc.abstractmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -60,12 +64,15 @@ class SpeculativeStrategy(abc.ABC):
     def isEmptyFeature(cls, feature) -> bool:
         pass
 
+    def __init__(self) -> None:
+        self.statAnalyzedFrames: int = 0
+
     @abc.abstractmethod
     def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
         pass
 
     @abc.abstractmethod
-    def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
+    def getSpecIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         pass
 
     @abc.abstractmethod
@@ -78,8 +85,11 @@ class SpeculativeStrategy(abc.ABC):
         for cvPass in self.getCvPasses():
             cvPass(frame, framePoint)
         return framePoint
+    
+    def getStatAnalyzedFrames(self) -> int:
+        return self.statAnalyzedFrames
 
-class OcrStrategy(abc.ABC):
+class AbstractOcrStrategy(abc.ABC):
     @abc.abstractmethod
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         pass

@@ -3,7 +3,6 @@ import typing
 import cv2 as cv
 import numpy as np
 import fractions
-import av
 import av.frame
 
 def formatTimestamp(timeBase: fractions.Fraction, timestamp: int) -> str:

@@ -14,7 +14,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class BoxColourStat(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
+class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractOcrStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogFeat = enum.auto()
@@ -26,7 +26,7 @@ class BoxColourStat(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
             return [False, np.zeros(64), False, None]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
-        SpeculativeStrategy.__init__(self)
+        AbstractStrategy.__init__(self, contentRect)
 
         self.ocr = paddleocr.PaddleOCR(use_angle_cls=False, det_algorithm="DB", show_log=False)
 
@@ -70,14 +70,17 @@ class BoxColourStat(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
 
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BoxColourStat.FlagIndex.Dialog, 300, meetPoint=1.0)
-        self.iirPasses["iirPassMerge"] = IIRPassMerge(
+        
+        self.specIirPasses = collections.OrderedDict()
+        self.specIirPasses["iirPassMerge"] = IIRPassMerge(
             lambda interval0, interval1:
                 self.decideFeatureMerge(
                     [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval0.framePoints],
                     [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval1.framePoints]
                 )
         )
-        self.iirPasses["iirPassDenoise"] = IIRPassDenoise(BoxColourStat.FlagIndex.Dialog, 300)
+        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(BoxColourStat.FlagIndex.Dialog, 300)
+        self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -114,8 +117,11 @@ class BoxColourStat(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
     
+    def getSpecIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
+        return self.specIirPasses
+    
     def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.List[typing.Any]) -> bool:
-        return np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < 0.1
+        return bool(np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < 0.1)
     
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
@@ -145,7 +151,7 @@ class BoxColourStat(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
 
             wordInfo = np.array(wordInfo, np.int32).reshape((-1, 1, 2))
             x0, y0, w0, h0 = cv.boundingRect(wordInfo)
-            expand = int(h0 * 0.1)
+            expand = int(h0 * 0.10)
             x = max(0, x0 - expand)
             y = max(0, y0 - expand)
             w = min(imgW, w0 + 2 * expand)
@@ -159,53 +165,53 @@ class BoxColourStat(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
         imageSobel = rgbSobel(image, 1)
         imageSobelBin = cv.threshold(imageSobel, 32, 255, cv.THRESH_BINARY_INV)[1]
 
-        meanAreaRatio = 0.0001
-        maxAreaRatio = 0.2
+        minCcAreaRatio = 0.0
+        maxCcAreaRatio = 0.3
 
-        meanAcceptedMean = 3.0
         minFinalMean = 3.0
         maxStd = 10
 
-        tolerance = 30
+        colourTolerance = 30
 
         area = image.shape[0] * image.shape[1]
-        minArea = meanAreaRatio * area
-        if minArea < 30:
-            minArea = 30
-        maxArea = maxAreaRatio * area
+        minCcArea = minCcAreaRatio * area
+        if minCcArea < 10:
+            minCcArea = 10
+        maxCcArea = maxCcAreaRatio * area
 
         nLabels, labels, stats, centroids = cv.connectedComponentsWithStats(imageSobelBin, connectivity=4, ltype=cv.CV_32S)
         acceptedMask = np.zeros_like(imageSobelBin)
         acceptedIds = []
-        means = []
-        stds = []
+        ccMeans = []
+        ccStds = []
         acceptedArea = 0
         for i in range(0, nLabels):
-            if stats[i][cv.CC_STAT_AREA] >= minArea and stats[i][cv.CC_STAT_AREA] <= maxArea:
+            if stats[i][cv.CC_STAT_AREA] >= minCcArea and stats[i][cv.CC_STAT_AREA] <= maxCcArea:
                 mask = np.where(labels == i, 255, 0).astype(np.uint8)
                 mean, std = cv.meanStdDev(image, mask=mask)
                 std = np.mean(std)
                 if std < maxStd:
                     acceptedMask = np.where(labels == i, 255, acceptedMask)
                     acceptedIds.append(i)
-                    means.append(mean)
-                    stds.append(std)
+                    ccMeans.append(mean)
+                    ccStds.append(std)
                     acceptedArea += stats[i][cv.CC_STAT_AREA]
 
         if len(acceptedIds) <= 1:
             return np.zeros_like(image[:, :, 0])
 
-        means = np.array(means).reshape(len(means), -1)
-        areas = np.array([stats[i][cv.CC_STAT_AREA] for i in acceptedIds]).reshape(-1, 1)
+        ccMeans = np.array(ccMeans).reshape(len(ccMeans), -1)
+        ccAreas = np.array([stats[i][cv.CC_STAT_AREA] for i in acceptedIds]).reshape(-1, 1)
         scaler = sklearn.preprocessing.StandardScaler()
-        meansScaled = scaler.fit_transform(means)
-        weightedMeans = meansScaled * np.sqrt(areas)
-        distMat = scipy.spatial.distance.pdist(weightedMeans, metric='euclidean')
-        Z = scipy.cluster.hierarchy.linkage(distMat, method='ward')
+        ccMeansScaled = scaler.fit_transform(ccMeans)
+        # weightedMeans = meansScaled * np.sqrt(areas)
+        distMat = scipy.spatial.distance.pdist(ccMeansScaled, metric='euclidean')
+        Z = scipy.cluster.hierarchy.linkage(distMat, method='weighted')
 
-        threshold = 30 
-        minAreaRatio = 0.05
-        clusters = scipy.cluster.hierarchy.fcluster(Z, threshold, criterion='distance')
+        clusterThreshold = 1
+        minColourAreaRatio = 0.01
+        maxPenalty = 0.95
+        clusters = scipy.cluster.hierarchy.fcluster(Z, clusterThreshold, criterion="distance")
 
         clusterColours = {}
         clusterAreas = {}
@@ -214,8 +220,8 @@ class BoxColourStat(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
             if clusterId not in clusterColours:
                 clusterColours[clusterId] = []
                 clusterAreas[clusterId] = 0
-            clusterColours[clusterId].append((means[i], areas[i][0]))
-            clusterAreas[clusterId] += areas[i][0]
+            clusterColours[clusterId].append((ccMeans[i], ccAreas[i][0]))
+            clusterAreas[clusterId] += ccAreas[i][0]
 
         finalClusters = []
 
@@ -223,28 +229,32 @@ class BoxColourStat(AbstractStrategy, SpeculativeStrategy, OcrStrategy):
             totalArea = clusterAreas[clusterId]
             weightedColourSum = np.sum([mean * area for mean, area in colors], axis=0)
             avgColour = weightedColourSum / totalArea
-            avgColour = np.round(avgColour).astype(np.uint8)
+            
             areaRatio = totalArea / acceptedArea
 
-            if areaRatio >= minAreaRatio:
-                # Convert avgColour to HSV
-                avgColourHSV = cv.cvtColor(np.uint8([[avgColour]]), cv.COLOR_BGR2HSV)[0][0]
+            if areaRatio >= minColourAreaRatio:
                 score = areaRatio
-                # Adjust score based on saturation and value. Too low saturation or value will reduce the score
-                score *= (avgColourHSV[1] / 255) * (avgColourHSV[2] / 255)
-                finalClusters.append((avgColour, score))
+                # Adjust score based on how close the colour is to grayscale, in L1 distance
+                b, g, r = avgColour
+                t = (b + g + r) / 3
+                dist = np.abs(b - t) + np.abs(g - t) + np.abs(r - t)
+                penalty = dist / 340
+                
+                avgColour = np.round(avgColour).astype(np.uint8)
+                score *= (1 - maxPenalty) + maxPenalty * penalty
+                finalClusters.append((avgColour, score, areaRatio))
 
         finalClusters.sort(key=lambda x: x[1], reverse=True)
 
         pickedColour = finalClusters[0][0]
 
-        lowerBound = np.array([max(pickedColour[0] - tolerance, 0),
-                                max(pickedColour[1] - tolerance, 0),
-                                max(pickedColour[2] - tolerance, 0)])
+        lowerBound = np.array([max(pickedColour[0] - colourTolerance, 0),
+                                max(pickedColour[1] - colourTolerance, 0),
+                                max(pickedColour[2] - colourTolerance, 0)])
 
-        upperBound = np.array([min(pickedColour[0] + tolerance, 255),
-                                min(pickedColour[1] + tolerance, 255),
-                                min(pickedColour[2] + tolerance, 255)])
+        upperBound = np.array([min(pickedColour[0] + colourTolerance, 255),
+                                min(pickedColour[1] + colourTolerance, 255),
+                                min(pickedColour[2] + colourTolerance, 255)])
         
         colourMask = cv.inRange(image, lowerBound, upperBound)
 

@@ -192,9 +192,15 @@ class Interval:
 
     def getName(self, id: int = -1) -> str:
         return f"Subtitle_{self.mainFlag.name}_{id}"
+    
+    def getFlag(self, index: AbstractFlagIndex) -> typing.Any:
+        return self.flags[index]
+    
+    def setFlag(self, index: AbstractFlagIndex, val: typing.Any):
+        self.flags[index] = val
 
     def toAss(self, timeBase: fractions.Fraction, id: int = -1) -> str:
-        template = "Dialogue: 0,{},{},{},,0,0,100,,{}"
+        template = "Dialogue: 0,{},{},{},,0,0,0,,{}"
         sBegin = formatTimestamp(timeBase, self.begin)
         sEnd = formatTimestamp(timeBase, self.end)
         name = self.getName(id)

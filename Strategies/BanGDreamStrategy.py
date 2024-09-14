@@ -8,7 +8,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class BanGDreamStrategy(AbstractStrategy):
+class BanGDreamStrategy(AbstractFramewiseStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogBgVal = enum.auto()
@@ -20,6 +20,7 @@ class BanGDreamStrategy(AbstractStrategy):
             return [False, 0.0, 0.0, False]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
+        AbstractStrategy.__init__(self, contentRect)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)

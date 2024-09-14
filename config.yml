@@ -20,33 +20,23 @@
 # For example, [0.0, 1.0, 0.0, 1.0] represents the whole frame, 
 # and [0.50, 1.0, 0.0, 1.0] represents the right half of the frame. 
 
-# source: path(s) of source mp4 video files
+# source: path(s) of source video files
 source:
-- src.mp4
+- ./otl/yukkuri-chubukuko/yukkuri-chubukuko.mp4
+# - src.mp4
 # - src2.mp4
 
-# destination: path(s) of destination ass subtitle files
+# destination: path(s) of destination subtitle files
+# Include only the name of the file, without the extension,
+# because they may also be used by extra jobs.
 # There must be equal number of source(s) and destination(s). 
 destination:
-- MagiaTimelineOutput.ass
-# - MagiaTimelineOutput2.ass
+- MagiaTimelineOutput
+# - MagiaTimelineOutput2
 
 # assTemplate: template ass file defining the header of destination ass file, in asst format
 # You do not need to modify this in most cases. 
 assTemplate: template.asst
-
-# mode: running modes that provide different performance and debug information
-# - default: nothing special
-# - debug: shows a real-time window where you can preview alignments
-#   - It is recommended to run debug mode and adjust the parameters before processing the whole video. 
-#     In debug mode, you can check whether critical areas are aligned to rectangles
-#     However, debug mode slows down the program significantly, 
-#     so you should run in other modes after adjustment completes. 
-# - shortcircuit: accelerates running
-#   - Short circuit mode accelerates the program by skipping detecting other types of subtitles 
-#     once one type has been confirmed.
-#     This should have no side-effect if different subtitles guarantee not to appear at the same time. 
-mode: debug
 
 # enableOpenCL: enable OpenCL acceleration
 # If you have a graphics card or other accelerators, enabling this option may speed up the program.
@@ -59,12 +49,12 @@ enableOpenCL: false
 # then you should set this to [0.01, 0.99, 0.09, 0.91]. 
 contentRect: [0.0, 1.0, 0.0, 1.0]
 
-# offset: global offset of the subtitles, in number of frames
-# If the subtitles are not aligned with the dialogues in the video, you can adjust this parameter.
-# The offset is the number of frames that the subtitles should be shifted forward or backward.
-# For example, if the subtitles are 1 frame ahead of the dialogues, you should set this to -1.0.
-# Can be fractional, e.g. 0.5
-offset: 0.0
+# # offset: global offset of the subtitles, in number of frames
+# # If the subtitles are not aligned with the dialogues in the video, you can adjust this parameter.
+# # The offset is the number of frames that the subtitles should be shifted forward or backward.
+# # For example, if the subtitles are 1 frame ahead of the dialogues, you should set this to -1.0.
+# # Can be fractional, e.g. 0.5
+# offset: 0.0
 
 # Strategies and Presets
 
@@ -75,7 +65,7 @@ offset: 0.0
 # Before running the program, you should choose a Strategy and a preset under the chosen strategy. 
 # If this still does not work for your resolution, you can create and use your own preset. 
 # You can modify each rectangle so that they align with the critical areas in your video. 
-# To check alignment, use debug mode. 
+# To check alignment, use debug mode in framewise engine. 
 
 # strategy: which algorithm set to use
 # - mr: MagiaRecord quest video
@@ -85,7 +75,9 @@ offset: 0.0
 # - pkm: PekemonEmerald quest video
 # - prk: Parako anime conte
 # - bdr: BanG Dream
-strategy: mr
+# - otl: Outlined text
+# - bcs: Box colour stat
+strategy: otl
 
 # preset: which preset of parameters under a strategy to use
 preset: default
@@ -157,7 +149,7 @@ bdr:
   default:
     dialogRect: [0.06, 0.94, 0.82, 0.96]
 
-# General outlined text strategy
+# Outlined text strategy
 otl:
   default:
     dialogRect: [0.00, 1.00, 0.75, 1.00]
@@ -166,3 +158,35 @@ otl:
 bcs:
   default:
     dialogRect: [0.00, 1.00, 0.75, 1.00]
+
+# Engines
+
+# Engines decide how frames are sampled before they are processed by Strategies.
+# This affects the performance and accuracy of the program.
+# A Strategy must implement an Engine's required methods to work with it.
+# Not all Engines are compatible with all Strategies.
+# By default, all Strategies are compatible with the Framewise Engine.
+# Slower strategies typically also support the Specilative Engine for faster processing.
+# Each Engine has its own parameters that can be adjusted.
+
+# engine: which sampling pipeline to use
+# - framewise: samples every frame or every n-th frame
+# - speculative: skips frames where subtitles do not change and performs binary search for change points
+
+engine: speculative
+
+framewise:
+  # sampleInterval: in how many frames to sample a frame
+  # If you have a high-resolution or high-fps video, you can increase this number to speed up the program.
+  # However, this will reduce the accuracy of the subtitles.
+  sampleInterval: 1
+  debug: false
+
+speculative:
+  # emptyGapForceCheck: in how many milliseconds to force check for existence of subtitles
+  # If two frames were sampled where none of them had subtitles,
+  # the program will force check the existence of subtitles in this number of milliseconds,
+  # instead of considering there are no subtitles in the gap.
+  # If this is set to 0, the program will not force check. 
+  emptyGapForceCheck: 1000
+  debug: true

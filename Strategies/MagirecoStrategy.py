@@ -8,7 +8,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class MagirecoStrategy(AbstractStrategy):
+class MagirecoStrategy(AbstractFramewiseStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogBg = enum.auto()
@@ -33,6 +33,7 @@ class MagirecoStrategy(AbstractStrategy):
             return [False] * cls.getNum()
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
+        AbstractStrategy.__init__(self, contentRect)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
