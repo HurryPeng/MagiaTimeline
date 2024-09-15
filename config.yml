@@ -22,7 +22,6 @@
 
 # source: path(s) of source video files
 source:
-- ./otl/yukkuri-chubukuko/yukkuri-chubukuko.mp4
 # - src.mp4
 # - src2.mp4
 
@@ -77,7 +76,7 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 # - bdr: BanG Dream
 # - otl: Outlined text
 # - bcs: Box colour stat
-strategy: otl
+strategy: bcs
 
 # preset: which preset of parameters under a strategy to use
 preset: default
@@ -149,15 +148,160 @@ bdr:
   default:
     dialogRect: [0.06, 0.94, 0.82, 0.96]
 
+        # # Hotel Zundamon
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 5
+        # textWeightMax = 19
+        # textHSVRanges = [
+        #     ((0, 200, 100), (10, 255, 180)),
+        #     ((170, 200, 100), (180, 255, 180)),
+        #     ((25, 100, 100), (55, 200, 200))
+        # ]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 5
+        # outlineHSVRanges = [((0, 0, 200), (180, 32, 255))]
+        # boundCompensation = 2
+        # sobelThreshold = 200
+
+        # # Zunda House
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 1
+        # textWeightMax = 25
+        # textHSVRanges = [
+        #     ((155, 100, 200), (180, 200, 255)),
+        #     ((55, 150, 150), (75, 220, 220))
+        # ]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # outlineHSVRanges = [((0, 0, 240), (180, 64, 255))]
+        # boundCompensation = 4
+        # sobelThreshold = 230
+        # nestingSuppression = 23
+
+        # # Shioneru
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 1
+        # textWeightMax = 9
+        # textHSVRanges = [((0, 0, 0), (180, 255, 16))]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # outlineHSVRanges = [((0, 0, 200), (180, 64, 255))]
+        # boundCompensation = 4
+        # sobelThreshold = 200
+
+        # # JapanTrafficLab
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 1
+        # textWeightMax = 19
+        # textHSVRanges = [((70, 180, 180), (100, 255, 255))]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # outlineHSVRanges = [((95, 180, 180), (140, 255, 255))]
+        # boundCompensation = 4
+        # sobelThreshold = 100
+        # nestingSuppression = 0
+
+        # # Uemon
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 1
+        # textWeightMax = 25
+        # textHSVRanges = [((0, 0, 230), (180, 64, 255))]
+        # # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # outlineHSVRanges = [((0, 0, 0), (180, 255, 128))]
+        # boundCompensation = 4
+        # sobelThreshold = 200
+        # nestingSuppression = 0
+
+        # # Haruki
+        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 1
+        # textWeightMax = 25
+        # textHSVRanges = [
+        #     ((75, 100, 210), (95, 230, 255)),
+        #     ((140, 100, 210), (180, 230, 255)),
+        #     ((50, 100, 210), (70, 150, 255))
+        # ]
+        # # outlineWeightMin = 1
+        # outlineWeightMax = 15
+        # # outlineHSVRanges = [((0, 0, 0), (180, 255, 32))]
+        # outlineHSVRanges = [((0, 0, 0), (180, 255, 32))]
+        # boundCompensation = 4
+        # sobelThreshold = 240
+        # nestingSuppression = 0
+
+        # Fushigi
+        # dialogRect: [0.00, 1.00, 0.75, 1.00]
+        # textWeightMin = 3
+        # textWeightMax = 29
+        # textHSVRanges = [
+        #     ((0, 200, 180), (10, 255, 255)),
+        #     ((160, 200, 180), (180, 255, 255)),
+        #     ((15, 150, 200), (45, 255, 255)),
+        # ]
+        # outlineWeightMin = 1
+        # outlineWeightMax = 11
+        # outlineHSVRanges = [
+        #     ((0, 0, 180), (180, 64, 255)),
+        #     ((0, 0, 0), (180, 255, 16))
+        # ]
+        # boundCompensation = 4
+        # sobelThreshold = 150
+        # nestingSuppression = 0
+
+
 # Outlined text strategy
 otl:
-  default:
+  yukkurirailways:
     dialogRect: [0.00, 1.00, 0.75, 1.00]
+    fastMode: false
+    textWeightMin: 3
+    textWeightMax: 25
+    textHSVRanges:
+      - [0, 0, 240, 180, 16, 255]
+    outlineWeightMax: 15
+    outlineHSVRanges:
+      - [0, 0, 0, 180, 255, 16]
+    boundCompensation: 4
+    sobelThreshold: 250
+    nestingSuppression: 0
+    featureThreshold: 1.0
+    featureJumpThreshold: 0.1
+    featureJumpStddevThreshold: 0.005
+  
+  japantrafficlab:
+    dialogRect: [0.00, 1.00, 0.75, 1.00]
+    fastMode: false
+    textWeightMin: 1
+    textWeightMax: 19
+    textHSVRanges:
+      - [70, 180, 180, 100, 255, 255]
+    outlineWeightMax: 15
+    outlineHSVRanges:
+      - [95, 180, 180, 140, 255, 255]
+    boundCompensation: 4
+    sobelThreshold: 100
+    nestingSuppression: 0
+    featureThreshold: 1.0
+    featureJumpThreshold: 0.1
+    featureJumpStddevThreshold: 0.005
 
 # Adaptive median colour strategy
 bcs:
   default:
     dialogRect: [0.00, 1.00, 0.75, 1.00]
+    sobelThreshold: 32
+    featureThreshold: 0.3
+    featureJumpThreshold: 0.1
+    featureJumpStddevThreshold: 0.005
+    minCcAreaRatio: 0.0
+    maxCcAreaRatio: 0.3
+    minCcFinalMean: 3.0
+    maxCcStddev: 10
+    colourTolerance: 30
+    clusterThreshold: 1
+    minColourAreaRatio: 0.01
+    maxGreyscalePenalty: 0.95
 
 # Engines
 
@@ -179,8 +323,8 @@ framewise:
   # sampleInterval: in how many frames to sample a frame
   # If you have a high-resolution or high-fps video, you can increase this number to speed up the program.
   # However, this will reduce the accuracy of the subtitles.
-  sampleInterval: 1
-  debug: false
+  sampleInterval: 8
+  debug: true
 
 speculative:
   # emptyGapForceCheck: in how many milliseconds to force check for existence of subtitles
@@ -189,4 +333,4 @@ speculative:
   # instead of considering there are no subtitles in the gap.
   # If this is set to 0, the program will not force check. 
   emptyGapForceCheck: 1000
-  debug: true
+  debug: false

@@ -254,10 +254,74 @@
                     "properties": {
                         "dialogRect": {
                             "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "fastMode": {
+                            "type": "boolean"
+                        },
+                        "textWeightMin": {
+                            "type": "number"
+                        },
+                        "textWeightMax": {
+                            "type": "number"
+                        },
+                        "textHSVRanges": {
+                            "type": "array",
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "number"
+                                },
+                                "minItems": 6,
+                                "maxItems": 6
+                            }
+                        },
+                        "outlineWeightMax": {
+                            "type": "number"
+                        },
+                        "outlineHSVRanges": {
+                            "type": "array",
+                            "items": {
+                                "type": "array",
+                                "items": {
+                                    "type": "number"
+                                },
+                                "minItems": 6,
+                                "maxItems": 6
+                            }
+                        },
+                        "boundCompensation": {
+                            "type": "number"
+                        },
+                        "sobelThreshold": {
+                            "type": "number"
+                        },
+                        "nestingSuppression": {
+                            "type": "number"
+                        },
+                        "featureThreshold": {
+                            "type": "number"
+                        },
+                        "featureJumpThreshold": {
+                            "type": "number"
+                        },
+                        "featureJumpStddevThreshold": {
+                            "type": "number"
                         }
                     },
                     "required": [
-                        "dialogRect"
+                        "dialogRect",
+                        "fastMode",
+                        "textWeightMin",
+                        "textWeightMax",
+                        "textHSVRanges",
+                        "outlineWeightMax",
+                        "outlineHSVRanges",
+                        "boundCompensation",
+                        "sobelThreshold",
+                        "nestingSuppression",
+                        "featureThreshold",
+                        "featureJumpThreshold",
+                        "featureJumpStddevThreshold"
                     ],
                     "additionalProperties": false
                 }
@@ -273,10 +337,58 @@
                     "properties": {
                         "dialogRect": {
                             "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "sobelThreshold": {
+                            "type": "number"
+                        },
+                        "featureThreshold": {
+                            "type": "number"
+                        },
+                        "featureJumpThreshold": {
+                            "type": "number"
+                        },
+                        "featureJumpStddevThreshold": {
+                            "type": "number"
+                        },
+                        "minCcAreaRatio": {
+                            "type": "number"
+                        },
+                        "maxCcAreaRatio": {
+                            "type": "number"
+                        },
+                        "minCcFinalMean": {
+                            "type": "number"
+                        },
+                        "maxCcStddev": {
+                            "type": "number"
+                        },
+                        "colourTolerance": {
+                            "type": "number"
+                        },
+                        "clusterThreshold": {
+                            "type": "number"
+                        },
+                        "minColourAreaRatio": {
+                            "type": "number"
+                        },
+                        "maxGreyscalePenalty": {
+                            "type": "number"
                         }
                     },
                     "required": [
-                        "dialogRect"
+                        "dialogRect",
+                        "sobelThreshold",
+                        "featureThreshold",
+                        "featureJumpThreshold",
+                        "featureJumpStddevThreshold",
+                        "minCcAreaRatio",
+                        "maxCcAreaRatio",
+                        "minCcFinalMean",
+                        "maxCcStddev",
+                        "colourTolerance",
+                        "clusterThreshold",
+                        "minColourAreaRatio",
+                        "maxGreyscalePenalty"
                     ],
                     "additionalProperties": false
                 }

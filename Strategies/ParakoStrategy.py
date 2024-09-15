@@ -24,8 +24,6 @@ class ParakoStrategy(AbstractFramewiseStrategy):
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
 
-        self.rectangles["dialogRect"] = self.rectangles["dialogRect"]
-
         self.dialogRect = self.rectangles["dialogRect"]
 
         self.cvPasses = [self.cvPassDialog]

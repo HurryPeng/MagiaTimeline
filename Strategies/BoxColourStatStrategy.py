@@ -14,7 +14,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractOcrStrategy):
+class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractOcrStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogFeat = enum.auto()
@@ -27,14 +27,25 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         AbstractStrategy.__init__(self, contentRect)
+        AbstractSpeculativeStrategy.__init__(self)
 
         self.ocr = paddleocr.PaddleOCR(use_angle_cls=False, det_algorithm="DB", show_log=False)
 
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
-        for k, v in config.items():
-            self.rectangles[k] = RatioRectangle(contentRect, *v)
+        self.rectangles["dialogRect"] = RatioRectangle(contentRect, *config["dialogRect"])
 
-        self.rectangles["dialogRect"] = self.rectangles["dialogRect"]
+        self.sobelThreshold: int = config["sobelThreshold"]
+        self.featureThreshold: float = config["featureThreshold"]
+        self.featureJumpThreshold: float = config["featureJumpThreshold"]
+        self.featureJumpStddevThreshold: float = config["featureJumpStddevThreshold"]
+        self.minCcAreaRatio: float = config["minCcAreaRatio"]
+        self.maxCcAreaRatio: float = config["maxCcAreaRatio"]
+        self.minCcFinalMean: float = config["minCcFinalMean"]
+        self.maxCcStddev: float = config["maxCcStddev"]
+        self.colourTolerance: int = config["colourTolerance"]
+        self.clusterThreshold: float = config["clusterThreshold"]
+        self.minColourAreaRatio: float = config["minColourAreaRatio"]
+        self.maxGreyscalePenalty: float = config["maxGreyscalePenalty"]
 
         self.dialogRect = self.rectangles["dialogRect"]
 
@@ -43,8 +54,8 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
         self.fpirPasses = collections.OrderedDict()
 
         self.fpirPasses["fpirPassDetectDialogJump"] = FPIRPassDetectFeatureJump(
-            featFlag=BoxColourStat.FlagIndex.DialogFeat,
-            dstFlag=BoxColourStat.FlagIndex.DialogFeatJump, 
+            featFlag=BoxColourStatStrategy.FlagIndex.DialogFeat,
+            dstFlag=BoxColourStatStrategy.FlagIndex.DialogFeatJump, 
             featOpMean=lambda feats : np.mean(feats, axis=0),
             featOpDist=lambda lhs, rhs : np.linalg.norm(lhs - rhs),
             threshDist=0.1,
@@ -55,9 +66,9 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
 
 
         def breakDialogJump(framePoint: FramePoint):
-            framePoint.setFlag(BoxColourStat.FlagIndex.Dialog,
-                framePoint.getFlag(BoxColourStat.FlagIndex.Dialog)
-                and not framePoint.getFlag(BoxColourStat.FlagIndex.DialogFeatJump)
+            framePoint.setFlag(BoxColourStatStrategy.FlagIndex.Dialog,
+                framePoint.getFlag(BoxColourStatStrategy.FlagIndex.Dialog)
+                and not framePoint.getFlag(BoxColourStatStrategy.FlagIndex.DialogFeatJump)
             )
         self.fpirPasses["fpirPassBreakDialogJump"] = FPIRPassFramewiseFunctional(
             func=breakDialogJump
@@ -65,11 +76,11 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
         
         self.fpirToIirPasses = collections.OrderedDict()
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
-            BoxColourStat.FlagIndex.Dialog
+            BoxColourStatStrategy.FlagIndex.Dialog
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BoxColourStat.FlagIndex.Dialog, 300, meetPoint=1.0)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BoxColourStatStrategy.FlagIndex.Dialog, 300, meetPoint=1.0)
         
         self.specIirPasses = collections.OrderedDict()
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
@@ -79,7 +90,7 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
                     [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval1.framePoints]
                 )
         )
-        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(BoxColourStat.FlagIndex.Dialog, 300)
+        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(BoxColourStatStrategy.FlagIndex.Dialog, 300)
         self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
     @classmethod
@@ -121,7 +132,7 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
         return self.specIirPasses
     
     def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.List[typing.Any]) -> bool:
-        return bool(np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < 0.1)
+        return bool(np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < self.featureJumpThreshold)
     
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
@@ -165,13 +176,13 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
         imageSobel = rgbSobel(image, 1)
         imageSobelBin = cv.threshold(imageSobel, 32, 255, cv.THRESH_BINARY_INV)[1]
 
-        minCcAreaRatio = 0.0
-        maxCcAreaRatio = 0.3
+        minCcAreaRatio = self.minCcAreaRatio
+        maxCcAreaRatio = self.maxCcAreaRatio
 
-        minFinalMean = 3.0
-        maxStd = 10
+        minCcFinalMean = self.minCcFinalMean
+        maxCcStddev = self.maxCcStddev
 
-        colourTolerance = 30
+        colourTolerance = self.colourTolerance
 
         area = image.shape[0] * image.shape[1]
         minCcArea = minCcAreaRatio * area
@@ -190,7 +201,7 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
                 mask = np.where(labels == i, 255, 0).astype(np.uint8)
                 mean, std = cv.meanStdDev(image, mask=mask)
                 std = np.mean(std)
-                if std < maxStd:
+                if std < maxCcStddev:
                     acceptedMask = np.where(labels == i, 255, acceptedMask)
                     acceptedIds.append(i)
                     ccMeans.append(mean)
@@ -208,9 +219,9 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
         distMat = scipy.spatial.distance.pdist(ccMeansScaled, metric='euclidean')
         Z = scipy.cluster.hierarchy.linkage(distMat, method='weighted')
 
-        clusterThreshold = 1
-        minColourAreaRatio = 0.01
-        maxPenalty = 0.95
+        clusterThreshold = self.clusterThreshold
+        minColourAreaRatio = self.minColourAreaRatio
+        maxGreyscalePenalty = self.maxGreyscalePenalty
         clusters = scipy.cluster.hierarchy.fcluster(Z, clusterThreshold, criterion="distance")
 
         clusterColours = {}
@@ -241,7 +252,7 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
                 penalty = dist / 340
                 
                 avgColour = np.round(avgColour).astype(np.uint8)
-                score *= (1 - maxPenalty) + maxPenalty * penalty
+                score *= (1 - maxGreyscalePenalty) + maxGreyscalePenalty * penalty
                 finalClusters.append((avgColour, score, areaRatio))
 
         finalClusters.sort(key=lambda x: x[1], reverse=True)
@@ -259,7 +270,7 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
         colourMask = cv.inRange(image, lowerBound, upperBound)
 
         meanfinalMask = cv.mean(colourMask)[0]
-        hasDialog = meanfinalMask > minFinalMean
+        hasDialog = meanfinalMask > minCcFinalMean
         
         if hasDialog:
             return colourMask
@@ -280,8 +291,8 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
 
         framePoint.setDebugFrame(debugFrame)
 
-        framePoint.setFlag(BoxColourStat.FlagIndex.Dialog, hasDialog)
-        framePoint.setFlag(BoxColourStat.FlagIndex.DialogFeat, dctFeat)
+        framePoint.setFlag(BoxColourStatStrategy.FlagIndex.Dialog, hasDialog)
+        framePoint.setFlag(BoxColourStatStrategy.FlagIndex.DialogFeat, dctFeat)
 
         return False
 
@@ -314,7 +325,7 @@ class BoxColourStat(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Abst
                 mask = self.filterText(roi)
             finalMask[y:y+h, x:x+w] = mask
 
-        hasDialog = np.mean(finalMask) > 0.3
+        hasDialog = np.mean(finalMask) > self.featureThreshold
 
         debugFrame = finalMask
 

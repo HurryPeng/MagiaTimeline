@@ -24,12 +24,21 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
         AbstractStrategy.__init__(self, contentRect)
         AbstractSpeculativeStrategy.__init__(self)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
-        for k, v in config.items():
-            self.rectangles[k] = RatioRectangle(contentRect, *v)
-
-        self.rectangles["dialogRect"] = self.rectangles["dialogRect"]
+        self.rectangles["dialogRect"] = RatioRectangle(contentRect, *config["dialogRect"])
 
         self.dialogRect = self.rectangles["dialogRect"]
+        self.fastMode: bool = config["fastMode"]
+        self.textWeightMin: int = config["textWeightMin"]
+        self.textWeightMax: int = config["textWeightMax"]
+        self.textHSVRanges: typing.List[typing.List[int]] = config["textHSVRanges"]
+        self.outlineWeightMax: int = config["outlineWeightMax"]
+        self.outlineHSVRanges: typing.List[typing.List[int]] = config["outlineHSVRanges"]
+        self.boundCompensation: int = config["boundCompensation"]
+        self.sobelThreshold: int = config["sobelThreshold"]
+        self.nestingSuppression: int = config["nestingSuppression"]
+        self.featureThreshold: float = config["featureThreshold"]
+        self.featureJumpThreshold: float = config["featureJumpThreshold"]
+        self.featureJumpStddevThreshold: float = config["featureJumpStddevThreshold"]
 
         self.cvPasses = [self.cvPassDialog]
 
@@ -40,10 +49,10 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
             dstFlag=OutlineStrategy.FlagIndex.DialogFeatJump, 
             featOpMean=lambda feats : np.mean(feats, axis=0),
             featOpDist=lambda lhs, rhs : np.linalg.norm(lhs - rhs),
-            threshDist=0.1,
+            threshDist=self.featureJumpThreshold,
             windowSize=5,
             featOpStd=lambda feats: np.mean(np.std(feats, axis=0)),
-            threshStd=0.005
+            threshStd=self.featureJumpStddevThreshold
         )
 
 
@@ -64,6 +73,17 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(OutlineStrategy.FlagIndex.Dialog, 300, meetPoint=1.0)
         self.iirPasses["iirPassDenoise"] = IIRPassDenoise(OutlineStrategy.FlagIndex.Dialog, 100)
+
+        self.specIirPasses = collections.OrderedDict()
+        self.specIirPasses["iirPassMerge"] = IIRPassMerge(
+            lambda interval0, interval1:
+                self.decideFeatureMerge(
+                    [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval0.framePoints],
+                    [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval1.framePoints]
+                )
+        )
+        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(OutlineStrategy.FlagIndex.Dialog, 300)
+        self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -101,10 +121,10 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
         return self.iirPasses
     
     def getSpecIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
-        return self.iirPasses
+        return self.specIirPasses
     
     def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.Any) -> bool:
-        return np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < 0.1
+        return np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < self.featureJumpThreshold
     
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
@@ -119,13 +139,13 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
 
         meanDialogText = cv.mean(roiDialogText)[0]
 
-        hasDialog = meanDialogText > 1.0
+        hasDialog = meanDialogText > self.featureThreshold
         dctFeat = np.zeros(64)
         if hasDialog:
             roiDialogTextResized = cv.resize(roiDialogText, (150, 50)).get()
             dctFeat = dctDescriptor(roiDialogTextResized, 8, 8)
 
-        framePoint.setFlag(OutlineStrategy.FlagIndex.Dialog, meanDialogText > 1.0)
+        framePoint.setFlag(OutlineStrategy.FlagIndex.Dialog, hasDialog)
         framePoint.setFlag(OutlineStrategy.FlagIndex.DialogFeat, dctFeat)
 
         return False
@@ -133,136 +153,14 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
     def ocrPass(self, frame: cv.Mat, fastMode: bool = False) -> typing.Tuple[cv.Mat, cv.Mat]:
         debugFrame = None
 
-        nestingSuppression = 0
-
-        # Yukkuri Museum
-        # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        textWeightMin = 3
-        textWeightMax = 25
-        textHSVRanges = [((0, 0, 240), (180, 16, 255))]
-        outlineWeightMin = 1
-        outlineWeightMax = 15
-        outlineHSVRanges = [((0, 0, 0), (180, 255, 16))]
-        boundCompensation = 4
-        sobelThreshold = 250
-        nestingSuppression = 0
-
-        # # Yukkuri Kakueki
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 5
-        # textWeightMax = 25
-        # textHSVRanges = [
-        #     ((0, 200, 128), (30, 255, 255)),
-        #     ((170, 200, 128), (180, 255, 255)),
-        #     ((105, 100, 128), (135, 255, 255))
-        # ]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 5
-        # outlineHSVRanges = [((0, 0, 180), (180, 64, 255))]
-        # boundCompensation = 4
-        # sobelThreshold = 192
-        # nestingSuppression = 9
-
-        # # Hotel Zundamon
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 5
-        # textWeightMax = 19
-        # textHSVRanges = [
-        #     ((0, 200, 100), (10, 255, 180)),
-        #     ((170, 200, 100), (180, 255, 180)),
-        #     ((25, 100, 100), (55, 200, 200))
-        # ]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 5
-        # outlineHSVRanges = [((0, 0, 200), (180, 32, 255))]
-        # boundCompensation = 2
-        # sobelThreshold = 200
-
-        # # Zunda House
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 1
-        # textWeightMax = 25
-        # textHSVRanges = [
-        #     ((155, 100, 200), (180, 200, 255)),
-        #     ((55, 150, 150), (75, 220, 220))
-        # ]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((0, 0, 240), (180, 64, 255))]
-        # boundCompensation = 4
-        # sobelThreshold = 230
-        # nestingSuppression = 23
-
-        # # Shioneru
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 1
-        # textWeightMax = 9
-        # textHSVRanges = [((0, 0, 0), (180, 255, 16))]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((0, 0, 200), (180, 64, 255))]
-        # boundCompensation = 4
-        # sobelThreshold = 200
-
-        # # JapanTrafficLab
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 1
-        # textWeightMax = 19
-        # textHSVRanges = [((70, 180, 180), (100, 255, 255))]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((95, 180, 180), (140, 255, 255))]
-        # boundCompensation = 4
-        # sobelThreshold = 100
-        # nestingSuppression = 0
-
-        # # Uemon
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 1
-        # textWeightMax = 25
-        # textHSVRanges = [((0, 0, 230), (180, 64, 255))]
-        # # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((0, 0, 0), (180, 255, 128))]
-        # boundCompensation = 4
-        # sobelThreshold = 200
-        # nestingSuppression = 0
-
-        # # Haruki
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 1
-        # textWeightMax = 25
-        # textHSVRanges = [
-        #     ((75, 100, 210), (95, 230, 255)),
-        #     ((140, 100, 210), (180, 230, 255)),
-        #     ((50, 100, 210), (70, 150, 255))
-        # ]
-        # # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # # outlineHSVRanges = [((0, 0, 0), (180, 255, 32))]
-        # outlineHSVRanges = [((0, 0, 0), (180, 255, 32))]
-        # boundCompensation = 4
-        # sobelThreshold = 240
-        # nestingSuppression = 0
-
-        # Fushigi
-        # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 3
-        # textWeightMax = 29
-        # textHSVRanges = [
-        #     ((0, 200, 180), (10, 255, 255)),
-        #     ((160, 200, 180), (180, 255, 255)),
-        #     ((15, 150, 200), (45, 255, 255)),
-        # ]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 11
-        # outlineHSVRanges = [
-        #     ((0, 0, 180), (180, 64, 255)),
-        #     ((0, 0, 0), (180, 255, 16))
-        # ]
-        # boundCompensation = 4
-        # sobelThreshold = 150
-        # nestingSuppression = 0
+        textWeightMin = self.textWeightMin
+        textWeightMax = self.textWeightMax
+        textHSVRanges = [np.array([range[:3], range[3:]]) for range in self.textHSVRanges]
+        outlineWeightMax = self.outlineWeightMax
+        outlineHSVRanges = [np.array([range[:3], range[3:]]) for range in self.outlineHSVRanges]
+        boundCompensation = self.boundCompensation
+        sobelThreshold = self.sobelThreshold
+        nestingSuppression = self.nestingSuppression
 
         roiDialog = self.dialogRect.cutRoiToUmat(frame)
         roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)
@@ -292,7 +190,10 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
         # roiDialogOutlineUB = morphologyWeightUpperBound(roiDialogOutlineLB, erodeWeight=outlineWeightMax, dilateWeight=outlineWeightMax + boundCompensation)
         roiDialogOutlineUB = roiDialogOutline
 
-        roiDialogTextLB = morphologyWeightLowerBound(roiDialogText, erodeWeight=textWeightMin, dilateWeight=textWeightMin + boundCompensation)
+        if textWeightMin > 0:
+            roiDialogTextLB = morphologyWeightLowerBound(roiDialogText, erodeWeight=textWeightMin, dilateWeight=textWeightMin + boundCompensation)
+        else:
+            roiDialogTextLB = roiDialog
         # roiDialogTextUB = morphologyWeightUpperBound(roiDialogTextLB, erodeWeight=textWeightMax, dilateWeight=textWeightMax + boundCompensation)
         roiDialogTextUB = roiDialogTextLB
 

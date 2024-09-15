@@ -95,7 +95,7 @@ def main():
         elif config["strategy"] == "otl":
             strategy = OutlineStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "bcs":
-            strategy = BoxColourStat(strategyConfig, contentRect)
+            strategy = BoxColourStatStrategy(strategyConfig, contentRect)
         else:
             raise Exception("Unknown strategy! ")
         assert strategy is not None
@@ -170,7 +170,7 @@ def main():
             timeOverallElapsed = timeOverallEnd - timeStart
                 
             print("Overall Elapsed", timeOverallElapsed, "s")
-            print("Overall Speed", float(framesProcessed / fps) / timeOverallElapsed, "x")
+            print("Overall Speed", float(srcStream.frames / fps) / timeOverallElapsed, "x")
 
         srcContainer.close()
 
