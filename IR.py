@@ -180,7 +180,7 @@ class FPIRPassBooleanBuildIntervals(FPIRPassBuildIntervals):
         return intervals
 
 class Interval:
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], mainFlag: AbstractFlagIndex, begin: int, end: int, framePoints: typing.List[FramePoint]):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], mainFlag: AbstractFlagIndex, begin: int, end: int, framePoints: typing.List[FramePoint], flags: typing.List[typing.Any] = []):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.mainFlag: AbstractFlagIndex = mainFlag
         self.framePoints: typing.List[FramePoint] = framePoints
@@ -188,7 +188,9 @@ class Interval:
         self.begin: int = begin # timestamp
         self.end: int = end # timestamp
         self.style: str = "Default"
-        self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
+        self.flags: typing.List[typing.Any] = flags
+        if len(self.flags) == 0:
+            self.flags = self.flagIndexType.getDefaultFlags()
 
     def getName(self, id: int = -1) -> str:
         return f"Subtitle_{self.mainFlag.name}_{id}"
@@ -231,7 +233,7 @@ class Interval:
         return int((self.begin + self.end) // 2)
     
     def merge(self, other: Interval) -> Interval:
-        return Interval(self.flagIndexType, self.mainFlag, min(self.begin, other.begin), max(self.end, other.end), self.framePoints + other.framePoints)
+        return Interval(self.flagIndexType, self.mainFlag, min(self.begin, other.begin), max(self.end, other.end), self.framePoints + other.framePoints, self.flags)
 
 class IIR: # Interval Intermediate Representation
     def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], fps: fractions.Fraction, unitTimestamp: int):

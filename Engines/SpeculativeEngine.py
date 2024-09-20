@@ -169,7 +169,7 @@ class SpeculativeEngine(AbstractEngine):
     def getRequiredAbstractStrategyType(self) -> type[AbstractStrategy]:
         return AbstractSpeculativeStrategy
 
-    def runImpl(self, strategy: AbstractSpeculativeStrategy, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> IIR:
+    def run(self, strategy: AbstractSpeculativeStrategy, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> IIR:
         timeBase: fractions.Fraction = stream.time_base
         fps: fractions.Fraction = stream.average_rate
         frameCount: float = stream.frames

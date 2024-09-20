@@ -350,6 +350,15 @@
                         "featureJumpStddevThreshold": {
                             "type": "number"
                         },
+                        "boxVerticalExpansion": {
+                            "type": "number"
+                        },
+                        "nonMajorBoxSuppressionMaxRatio": {
+                            "type": "number"
+                        },
+                        "nonMajorBoxSuppressionMinRank": {
+                            "type": "number"
+                        },
                         "minCcAreaRatio": {
                             "type": "number"
                         },
@@ -373,6 +382,9 @@
                         },
                         "maxGreyscalePenalty": {
                             "type": "number"
+                        },
+                        "iirPassDenoiseMinTime": {
+                            "type": "number"
                         }
                     },
                     "required": [
@@ -388,7 +400,8 @@
                         "colourTolerance",
                         "clusterThreshold",
                         "minColourAreaRatio",
-                        "maxGreyscalePenalty"
+                        "maxGreyscalePenalty",
+                        "iirPassDenoiseMinTime"
                     ],
                     "additionalProperties": false
                 }
@@ -427,7 +440,7 @@
             "type": "object",
             "properties": {
                 "emptyGapForceCheck": {
-                    "description": "in how many milliseconds to force check for existence of subtitles (0 to disable)",
+                    "description": "In how many milliseconds to force check for existence of subtitles (0 to disable)",
                     "type": "number",
                     "minimum": 0
                 },
@@ -441,6 +454,45 @@
                 "debug"
             ],
             "additionalProperties": false
+        },
+        "extraJobs": {
+            "description": "List of extra jobs to perform after subtitle extraction",
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "ocr": {
+            "type": "object",
+            "properties": {
+                "suffix": {
+                    "type": "string"
+                },
+                "separator": {
+                    "type": "string"
+                },
+                "doPaddle": {
+                    "type": "boolean"
+                },
+                "paddleLang": {
+                    "type": "string"
+                },
+                "doTesseract": {
+                    "type": "boolean"
+                },
+                "tesseractLang": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "suffix",
+                "separator",
+                "doPaddle",
+                "paddleLang",
+                "doTesseract",
+                "tesseractLang"
+            ],
+            "additionalProperties": false
         }
     },
     "required": [
@@ -452,7 +504,8 @@
         "preset",
         "engine",
         "framewise",
-        "speculative"
+        "speculative",
+        "extraJobs"
     ],
     "additionalProperties": false
 }

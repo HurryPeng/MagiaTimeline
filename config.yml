@@ -269,6 +269,25 @@ otl:
     featureJumpThreshold: 0.1
     featureJumpStddevThreshold: 0.005
   
+  yukkurilocaltrain:
+    dialogRect: [0.00, 1.00, 0.75, 1.00]
+    fastMode: false
+    textWeightMin: 5
+    textWeightMax: 25
+    textHSVRanges:
+      - [0, 200, 128, 30, 255, 255]
+      - [170, 200, 128, 180, 255, 255]
+      - [105, 100, 128, 135, 255, 255]
+    outlineWeightMax: 5
+    outlineHSVRanges:
+      - [0, 0, 180, 180, 64, 255]
+    boundCompensation: 4
+    sobelThreshold: 192
+    nestingSuppression: 9
+    featureThreshold: 1.0
+    featureJumpThreshold: 0.1
+    featureJumpStddevThreshold: 0.005
+  
   japantrafficlab:
     dialogRect: [0.00, 1.00, 0.75, 1.00]
     fastMode: false
@@ -286,6 +305,23 @@ otl:
     featureJumpThreshold: 0.1
     featureJumpStddevThreshold: 0.005
 
+  yorumeron-yukari:
+    dialogRect: [0.00, 1.00, 0.80, 1.00]
+    fastMode: false
+    textWeightMin: 1
+    textWeightMax: 15
+    textHSVRanges:
+      - [135, 0, 220, 155, 60, 255]
+    outlineWeightMax: 9
+    outlineHSVRanges:
+      - [0, 0, 0, 180, 255, 25]
+    boundCompensation: 2
+    sobelThreshold: 192
+    nestingSuppression: 0
+    featureThreshold: 1.0
+    featureJumpThreshold: 0.1
+    featureJumpStddevThreshold: 0.005
+
 # Adaptive median colour strategy
 bcs:
   default:
@@ -294,6 +330,9 @@ bcs:
     featureThreshold: 0.3
     featureJumpThreshold: 0.1
     featureJumpStddevThreshold: 0.005
+    boxVerticalExpansion: 0.05
+    nonMajorBoxSuppressionMaxRatio: 0.2
+    nonMajorBoxSuppressionMinRank: 1
     minCcAreaRatio: 0.0
     maxCcAreaRatio: 0.3
     minCcFinalMean: 3.0
@@ -302,6 +341,7 @@ bcs:
     clusterThreshold: 1
     minColourAreaRatio: 0.01
     maxGreyscalePenalty: 0.95
+    iirPassDenoiseMinTime: 300
 
 # Engines
 
@@ -323,7 +363,7 @@ framewise:
   # sampleInterval: in how many frames to sample a frame
   # If you have a high-resolution or high-fps video, you can increase this number to speed up the program.
   # However, this will reduce the accuracy of the subtitles.
-  sampleInterval: 8
+  sampleInterval: 2
   debug: true
 
 speculative:
@@ -334,3 +374,19 @@ speculative:
   # If this is set to 0, the program will not force check. 
   emptyGapForceCheck: 1000
   debug: false
+
+# Extra Jobs
+
+# Extra jobs are additional tasks that can be performed after the subtitles are extracted.
+# Currently, the program supports only one experimental extra job: OCR.
+
+# List of extra jobs to perform after subtitle extraction
+extraJobs: [ocr]
+
+ocr:
+  suffix: "-ocr.txt"
+  separator: "@"
+  doPaddle: true
+  paddleLang: "japan"
+  doTesseract: true
+  tesseractLang: "jpn"

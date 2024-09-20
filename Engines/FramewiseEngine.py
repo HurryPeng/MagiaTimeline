@@ -20,7 +20,7 @@ class FramewiseEngine(AbstractEngine):
     def getRequiredAbstractStrategyType(self) -> type[AbstractStrategy]:
         return AbstractFramewiseStrategy
 
-    def runImpl(self, strategy: AbstractFramewiseStrategy, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> IIR:
+    def run(self, strategy: AbstractFramewiseStrategy, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> IIR:
         timeBase: fractions.Fraction = stream.time_base
         fps: fractions.Fraction = stream.average_rate
         frameCount: float = stream.frames
@@ -100,3 +100,5 @@ class FramewiseEngine(AbstractEngine):
         for name, iirPass in (strategy.getIirPasses()).items():
             print(name)
             iirPass.apply(iir)
+
+        return iir

@@ -7,8 +7,6 @@ import argparse
 import json
 import jsonschema
 import yaml
-import pytesseract
-import paddleocr
 import fractions
 import time
 import typing
@@ -27,6 +25,7 @@ from Strategies.OutlineStrategy import *
 from Strategies.BoxColourStatStrategy import *
 from Engines.SpeculativeEngine import *
 from Engines.FramewiseEngine import *
+from ExtraJobs import *
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -76,7 +75,7 @@ def main():
 
         contentRect = RatioRectangle(SrcRectangle(*size), *config["contentRect"])
 
-        strategy: AbstractFramewiseStrategy | None = None
+        strategy: AbstractStrategy | None = None
         print("Strategy:", config["strategy"])
         if config["strategy"] == "mr":
             strategy = MagirecoStrategy(strategyConfig, contentRect)
@@ -110,8 +109,12 @@ def main():
             raise Exception("Unknown engine! ")
         assert engine is not None
 
-        print("==== Running Engine ====")
-        iir: IIR = engine.run(strategy, srcContainer, srcStream)
+        try:
+            print("==== Running Engine ====")
+            iir: IIR = engine.checkAndRun(strategy, srcContainer, srcStream)
+        except Exception as e:
+            print("Error:", e)
+            continue
 
         print("==== IIR to ASS ====")
         asstStr = asstStr.format(styles = "".join(strategy.getStyles()), events = iir.toAss(timeBase))
@@ -125,55 +128,21 @@ def main():
         print("Timeline Elapsed", timeTimelineElapsed, "s")
         print("Timeline Speed", float(srcStream.frames / fps) / timeTimelineElapsed, "x")
 
-        doOcr = True
+        if "ocr" in config["extraJobs"]:
+            print("Extra job: ocr")
+            if not isinstance(strategy, AbstractOcrStrategy):
+                print("Error: Strategy does not support OCR. Skipping. ")
+                continue
+            iirOcrPass = IIROcrPass(config["ocr"], dst, strategy)
+            iirOcrPass.apply(iir)
 
-        if doOcr and isinstance(strategy, AbstractOcrStrategy):
-            paddle = paddleocr.PaddleOCR(use_angle_cls=True, lang='japan', show_log=False)
-            ocrFrameFlagIndex: AbstractFlagIndex = strategy.getOcrFrameFlagIndex()
-
-            for i, interval in enumerate(iir.intervals):
-                name: str = interval.getName(i)
-                frame: typing.Optional[av.frame.Frame] = interval.getFlag(ocrFrameFlagIndex)
-
-                if frame is None:
-                    timestamp = interval.getMidPoint()
-                    srcContainer.seek(timestamp, backward=True, any_frame=False, stream=srcStream)
-                    for curFrame in srcContainer.decode(srcStream):
-                        thisTimestamp: int = curFrame.pts
-                        if thisTimestamp < timestamp:
-                            continue
-                        frame = curFrame
-                        break
-
-                img: cv.Mat = avFrame2CvMat(frame)
-
-                # Tesseract
-                tesseractFrame = strategy.cutCleanOcrFrame(img)
-                tesseractFrame = ensureMat(tesseractFrame)
-                tesseractText: str = pytesseract.image_to_string(tesseractFrame, config="-l jpn --psm 6")
-                tesseractText = tesseractText[:-1].replace("\n", "")
-
-                # PaddleOCR
-                paddleFrame = strategy.cutOcrFrame(img)
-                paddleResult = paddle.ocr(paddleFrame, cls=False, bin=False)
-                paddleText: str = ""
-                for line in paddleResult:
-                    if line is None:
-                        continue
-                    lineText = "".join([wordInfo[1][0] for wordInfo in line])
-                    paddleText += lineText + '\n'
-                paddleText = paddleText.strip()
-
-                print(f"{name},{tesseractText}@{paddleText}")
-
-            timeOverallEnd = time.time()
-            timeOverallElapsed = timeOverallEnd - timeStart
-                
-            print("Overall Elapsed", timeOverallElapsed, "s")
-            print("Overall Speed", float(srcStream.frames / fps) / timeOverallElapsed, "x")
+        timeOverallEnd = time.time()
+        timeOverallElapsed = timeOverallEnd - timeStart
+            
+        print("Overall Elapsed", timeOverallElapsed, "s")
+        print("Overall Speed", float(srcStream.frames / fps) / timeOverallElapsed, "x")
 
         srcContainer.close()
-
 
 if __name__ == "__main__":
     main()

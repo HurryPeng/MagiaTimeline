@@ -15,11 +15,11 @@ class AbstractEngine(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def runImpl(self, strategy: AbstractStrategy, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> IIR:
+    def run(self, strategy: AbstractStrategy, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> IIR:
         pass
 
-    def run(self, strategy: AbstractStrategy, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> IIR:
+    def checkAndRun(self, strategy: AbstractStrategy, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> IIR:
         if not isinstance(strategy, self.getRequiredAbstractStrategyType()):
             raise Exception(self.__class__.__name__ + " requires a " + self.getRequiredAbstractStrategyType().__name__ + " strategy!")
-        return self.runImpl(strategy, container, stream)
+        return self.run(strategy, container, stream)
 

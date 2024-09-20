@@ -38,6 +38,9 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         self.featureThreshold: float = config["featureThreshold"]
         self.featureJumpThreshold: float = config["featureJumpThreshold"]
         self.featureJumpStddevThreshold: float = config["featureJumpStddevThreshold"]
+        self.boxVerticalExpansion: float = config["boxVerticalExpansion"]
+        self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
+        self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
         self.minCcAreaRatio: float = config["minCcAreaRatio"]
         self.maxCcAreaRatio: float = config["maxCcAreaRatio"]
         self.minCcFinalMean: float = config["minCcFinalMean"]
@@ -46,6 +49,7 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         self.clusterThreshold: float = config["clusterThreshold"]
         self.minColourAreaRatio: float = config["minColourAreaRatio"]
         self.maxGreyscalePenalty: float = config["maxGreyscalePenalty"]
+        self.iirPassDenoiseMinTime: int = config["iirPassDenoiseMinTime"]
 
         self.dialogRect = self.rectangles["dialogRect"]
 
@@ -80,7 +84,7 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BoxColourStatStrategy.FlagIndex.Dialog, 300, meetPoint=1.0)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BoxColourStatStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime, meetPoint=1.0)
         
         self.specIirPasses = collections.OrderedDict()
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
@@ -90,7 +94,7 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
                     [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval1.framePoints]
                 )
         )
-        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(BoxColourStatStrategy.FlagIndex.Dialog, 300)
+        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(BoxColourStatStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
         self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
     @classmethod
@@ -162,7 +166,7 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
 
             wordInfo = np.array(wordInfo, np.int32).reshape((-1, 1, 2))
             x0, y0, w0, h0 = cv.boundingRect(wordInfo)
-            expand = int(h0 * 0.10)
+            expand = int(h0 * self.boxVerticalExpansion)
             x = max(0, x0 - expand)
             y = max(0, y0 - expand)
             w = min(imgW, w0 + 2 * expand)
@@ -297,9 +301,6 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         return False
 
     def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, bool, cv.Mat]:
-        noFilterMode = False
-        nonMajonSuppression = True
-
         image = self.dialogRect.cutRoi(frame)
 
         boxes = self.detectTextBoxes(image)
@@ -315,14 +316,10 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
 
         for rank, box in enumerate(boxes):
             x, y, w, h = box
-            if nonMajonSuppression:
-                if w * h < 0.2 * boxSizeSum and rank >= 1:
-                    break
+            if w * h <= self.nonMajorBoxSuppressionMaxRatio * boxSizeSum and rank >= self.nonMajorBoxSuppressionMinRank:
+                break
             roi = image[y:y+h, x:x+w]
-            if noFilterMode:
-                mask = np.ones_like(roi[:, :, 0]) * 255
-            else:
-                mask = self.filterText(roi)
+            mask = self.filterText(roi)
             finalMask[y:y+h, x:x+w] = mask
 
         hasDialog = np.mean(finalMask) > self.featureThreshold
