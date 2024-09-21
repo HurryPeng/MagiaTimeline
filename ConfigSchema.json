@@ -259,44 +259,44 @@
                             "type": "boolean"
                         },
                         "textWeightMin": {
-                            "type": "number"
+                            "type": "integer"
                         },
                         "textWeightMax": {
-                            "type": "number"
+                            "type": "integer"
                         },
                         "textHSVRanges": {
                             "type": "array",
                             "items": {
                                 "type": "array",
                                 "items": {
-                                    "type": "number"
+                                    "type": "integer"
                                 },
                                 "minItems": 6,
                                 "maxItems": 6
                             }
                         },
                         "outlineWeightMax": {
-                            "type": "number"
+                            "type": "integer"
                         },
                         "outlineHSVRanges": {
                             "type": "array",
                             "items": {
                                 "type": "array",
                                 "items": {
-                                    "type": "number"
+                                    "type": "integer"
                                 },
                                 "minItems": 6,
                                 "maxItems": 6
                             }
                         },
                         "boundCompensation": {
-                            "type": "number"
+                            "type": "integer"
                         },
                         "sobelThreshold": {
-                            "type": "number"
+                            "type": "integer"
                         },
                         "nestingSuppression": {
-                            "type": "number"
+                            "type": "integer"
                         },
                         "featureThreshold": {
                             "type": "number"
@@ -306,6 +306,11 @@
                         },
                         "featureJumpStddevThreshold": {
                             "type": "number"
+                        },
+                        "debugLevel": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 3
                         }
                     },
                     "required": [
@@ -321,7 +326,8 @@
                         "nestingSuppression",
                         "featureThreshold",
                         "featureJumpThreshold",
-                        "featureJumpStddevThreshold"
+                        "featureJumpStddevThreshold",
+                        "debugLevel"
                     ],
                     "additionalProperties": false
                 }
@@ -339,52 +345,76 @@
                             "$ref": "#/$defs/ratioRectangle"
                         },
                         "sobelThreshold": {
-                            "type": "number"
+                            "type": "integer"
                         },
                         "featureThreshold": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0
                         },
                         "featureJumpThreshold": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0
                         },
                         "featureJumpStddevThreshold": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0
                         },
                         "boxVerticalExpansion": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0
                         },
                         "nonMajorBoxSuppressionMaxRatio": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0
                         },
                         "nonMajorBoxSuppressionMinRank": {
-                            "type": "number"
+                            "type": "integer",
+                            "minimum": 1
                         },
                         "minCcAreaRatio": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
                         },
                         "maxCcAreaRatio": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
                         },
                         "minCcFinalMean": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0
                         },
                         "maxCcStddev": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0
                         },
                         "colourTolerance": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0
                         },
                         "clusterThreshold": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0
                         },
                         "minColourAreaRatio": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
                         },
                         "maxGreyscalePenalty": {
-                            "type": "number"
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
                         },
                         "iirPassDenoiseMinTime": {
-                            "type": "number"
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "debugLevel": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
                         }
                     },
                     "required": [
@@ -401,7 +431,8 @@
                         "clusterThreshold",
                         "minColourAreaRatio",
                         "maxGreyscalePenalty",
-                        "iirPassDenoiseMinTime"
+                        "iirPassDenoiseMinTime",
+                        "debugLevel"
                     ],
                     "additionalProperties": false
                 }
@@ -421,12 +452,16 @@
             "properties": {
                 "sampleInterval": {
                     "description": "in how many frames to sample a frame",
-                    "type": "number",
+                    "type": "integer",
                     "minimum": 1
                 },
                 "debug": {
                     "description": "enable debug mode",
                     "type": "boolean"
+                }, 
+                "debugPyrDown" : {
+                    "type": "number",
+                    "minimum": 0
                 }
             },
             "required": [

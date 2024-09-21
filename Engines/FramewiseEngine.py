@@ -16,7 +16,7 @@ class FramewiseEngine(AbstractEngine):
         self.config: dict = config
         self.sampleInterval: int = config["sampleInterval"]
         self.debug: bool = config["debug"]
-
+        self.debugPyrDown: int = config["debugPyrDown"]
     def getRequiredAbstractStrategyType(self) -> type[AbstractStrategy]:
         return AbstractFramewiseStrategy
 
@@ -75,6 +75,9 @@ class FramewiseEngine(AbstractEngine):
                 if debugMp4 is None:
                     debugMp4 = cv.VideoWriter("debug.mp4", cv.VideoWriter_fourcc('m','p','4','v'), float(fps), (frameOut.shape[1], frameOut.shape[0]))
                 debugMp4.write(frameOut)
+                if self.debugPyrDown > 0:
+                    for _ in range(self.debugPyrDown):
+                        frameOut = cv.pyrDown(frameOut)
                 if cv.waitKey(1) == ord('q'):
                     break
                 cv.imshow("show", frameOut)

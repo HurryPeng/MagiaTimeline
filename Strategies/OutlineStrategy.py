@@ -39,6 +39,7 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
         self.featureThreshold: float = config["featureThreshold"]
         self.featureJumpThreshold: float = config["featureJumpThreshold"]
         self.featureJumpStddevThreshold: float = config["featureJumpStddevThreshold"]
+        self.debugLevel: int = config["debugLevel"]
 
         self.cvPasses = [self.cvPassDialog]
 
@@ -173,6 +174,9 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
             else:
                 roiDialogText = cv.bitwise_or(roiDialogText, temp)
 
+        if self.debugLevel == 1:
+            debugFrame = roiDialogText
+
         roiDialogOutline = None
         for outlineHSVRange in outlineHSVRanges:
             temp = cv.inRange(roiDialogHSV, outlineHSVRange[0], outlineHSVRange[1])
@@ -180,6 +184,9 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
                 roiDialogOutline = temp
             else:
                 roiDialogOutline = cv.bitwise_or(roiDialogOutline, temp)
+
+        if self.debugLevel == 2:
+            debugFrame = roiDialogOutline
 
         if not fastMode:
             roiDialogSobel = rgbSobel(roiDialog, ksize=3)
@@ -213,6 +220,7 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
             roiDialogTextNearOutline = morphologyNear(roiDialogTextUB, roiDialogOutlineUB, textWeightMax + boundCompensation)
             roiDialogTextClosedByOutline = roiDialogTextNearOutline
 
-        debugFrame = roiDialogTextClosedByOutline
+        if self.debugLevel == 3:
+            debugFrame = roiDialogTextClosedByOutline
 
         return roiDialogTextClosedByOutline, debugFrame

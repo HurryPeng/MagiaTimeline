@@ -50,6 +50,7 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         self.minColourAreaRatio: float = config["minColourAreaRatio"]
         self.maxGreyscalePenalty: float = config["maxGreyscalePenalty"]
         self.iirPassDenoiseMinTime: int = config["iirPassDenoiseMinTime"]
+        self.debugLevel: int = config["debugLevel"]
 
         self.dialogRect = self.rectangles["dialogRect"]
 
@@ -283,25 +284,20 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialogText, hasDialog, debugFrame = self.ocrPass(frame)
-
+        
         framePoint.setDebugFrame(debugFrame)
 
         roiDialogTextResized = cv.resize(roiDialogText, (150, 50))
         dctFeat = dctDescriptor(roiDialogTextResized, 8, 8)
-
-        # inverseDctFeat = inverseDctDescriptor(dctFeat, 150, 50, 8, 8)
-        # debugFrame = inverseDctFeat
-        # debugFrame = cv.resize(inverseDctFeat, (roiDialogText.shape[1], roiDialogText.shape[0]))
-
-        framePoint.setDebugFrame(debugFrame)
 
         framePoint.setFlag(BoxColourStatStrategy.FlagIndex.Dialog, hasDialog)
         framePoint.setFlag(BoxColourStatStrategy.FlagIndex.DialogFeat, dctFeat)
 
         return False
 
-    def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, bool, cv.Mat]:
+    def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, bool, cv.Mat | None]:
         image = self.dialogRect.cutRoi(frame)
+        debugFrame = None
 
         boxes = self.detectTextBoxes(image)
 
@@ -324,6 +320,7 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
 
         hasDialog = np.mean(finalMask) > self.featureThreshold
 
-        debugFrame = finalMask
+        if self.debugLevel == 1:
+            debugFrame = finalMask
 
         return finalMask, hasDialog, debugFrame

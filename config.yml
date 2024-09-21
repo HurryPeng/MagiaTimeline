@@ -6,7 +6,7 @@
 # In order for the program to work for your video, you should adjust the parameters here. 
 # The file is written in YAML format and constrained by JSON Schema in ConfigSchema.json. 
 # However, you do not need to be an expert of YAML or JSON Schema to modify this file. 
-# Any characters after a "#" in a line are comments, which will be ignored by the program. 
+# Any characters after a "#" in a line are comments that will be ignored by the program. 
 # There will be comments for entries below to help you understand and modify the parameters. 
 # If you are still not sure how to do it, just "do as Romans do": imitate existing defaults. 
 # Take it easy, the program will verify this file before running, so you are unlikely to 
@@ -21,6 +21,8 @@
 # and [0.50, 1.0, 0.0, 1.0] represents the right half of the frame. 
 
 # source: path(s) of source video files
+# You may specify multiple source files for batching.
+# They will be processed with the same settings.
 source:
 # - src.mp4
 # - src2.mp4
@@ -34,7 +36,7 @@ destination:
 # - MagiaTimelineOutput2
 
 # assTemplate: template ass file defining the header of destination ass file, in asst format
-# You do not need to modify this in most cases. 
+# The default template should work for most cases. 
 assTemplate: template.asst
 
 # enableOpenCL: enable OpenCL acceleration
@@ -48,23 +50,16 @@ enableOpenCL: false
 # then you should set this to [0.01, 0.99, 0.09, 0.91]. 
 contentRect: [0.0, 1.0, 0.0, 1.0]
 
-# # offset: global offset of the subtitles, in number of frames
-# # If the subtitles are not aligned with the dialogues in the video, you can adjust this parameter.
-# # The offset is the number of frames that the subtitles should be shifted forward or backward.
-# # For example, if the subtitles are 1 frame ahead of the dialogues, you should set this to -1.0.
-# # Can be fractional, e.g. 0.5
-# offset: 0.0
-
 # Strategies and Presets
 
-# MagiaTimeline supports different games and scenes by providing sets of algorithms called Strategies. 
-# However, when recorded from devices of different resolutions, critical areas (e.g. dialog boxes) 
-# may appear at different places on the screen, even for the same game. 
-# Therefore, we also provide several presets under each Strategy to fit different resolutions. 
-# Before running the program, you should choose a Strategy and a preset under the chosen strategy. 
-# If this still does not work for your resolution, you can create and use your own preset. 
-# You can modify each rectangle so that they align with the critical areas in your video. 
-# To check alignment, use debug mode in framewise engine. 
+# MagiaTimeline supports different types of videos by providing sets of algorithms called Strategies. 
+# Each Strategy comes with a set of tunable parameters and several presets of them. 
+# You need to choose which Strategy and which preset of it to use. 
+# For general purpose, bcs is the recommended Strategy.
+# It is likely to function for a variety of videos with default parameters. 
+# There are also other legacy strategies for specific types of videos. 
+# They are more accurate and efficient for their specific types of videos, but may not work for others.
+# They also require more tuning of parameters to work properly.
 
 # strategy: which algorithm set to use
 # - mr: MagiaRecord quest video
@@ -73,15 +68,15 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 # - lcb-mech: LimbusCompany mechanics introduction video
 # - pkm: PekemonEmerald quest video
 # - prk: Parako anime conte
-# - bdr: BanG Dream
+# - bdr: BanG Dream story video
 # - otl: Outlined text
-# - bcs: Box colour stat
+# - bcs: Box colour stat (general-purpose)
 strategy: bcs
 
 # preset: which preset of parameters under a strategy to use
 preset: default
 
-# MagiaRecord quest video strategy
+# MagiaRecord quest video
 mr:
   default:
     dialogOutlineRect: [0.25, 0.75, 0.60, 0.95]
@@ -112,7 +107,7 @@ mr:
     cgSubBelowRect: [0.0, 1.0, 0.70, 0.75]
     cgSubTextRect: [0.3, 0.7, 0.70, 1.00]
 
-# MagiaRecord Scene0 film strategy
+# MagiaRecord Scene0 film
 mr-s0:
   default:
     dialogRect: [0.35, 0.65, 0.74, 0.93]
@@ -121,153 +116,69 @@ mr-s0:
     dialogRect: [0.32, 0.68, 0.76, 0.96]
     blackscreenRect: [0.15, 0.85, 0.00, 1.00]
 
-# LimbusCompany quest video strategy
+# LimbusCompany quest video
 lcb:
   default:
     dialogRect: [0.18, 0.82, 0.79, 0.97]
 
-# LimbusCompany mechanics introduction video strategy
+# LimbusCompany mechanics introduction video
 lcb-mech:
   default:
     dialogRect: [0.30, 0.70, 0.875, 0.915]
 
-# PekemonEmerald quest video strategy
+# PekemonEmerald quest video
 pkm:
   default:
     dialogBgRect: [0.05, 0.95, 0.75, 0.95]
 
-# Parako anime conte strategy
+# Parako anime conte
 prk:
   default:
     dialogRect: [0.00, 1.00, 0.86, 1.00]
   vertical:
     dialogRect: [0.00, 1.00, 0.57, 0.69]
 
-# BanG Dream strategy
+# BanG Dream story video
 bdr:
   default:
     dialogRect: [0.06, 0.94, 0.82, 0.96]
 
-        # # Hotel Zundamon
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 5
-        # textWeightMax = 19
-        # textHSVRanges = [
-        #     ((0, 200, 100), (10, 255, 180)),
-        #     ((170, 200, 100), (180, 255, 180)),
-        #     ((25, 100, 100), (55, 200, 200))
-        # ]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 5
-        # outlineHSVRanges = [((0, 0, 200), (180, 32, 255))]
-        # boundCompensation = 2
-        # sobelThreshold = 200
-
-        # # Zunda House
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 1
-        # textWeightMax = 25
-        # textHSVRanges = [
-        #     ((155, 100, 200), (180, 200, 255)),
-        #     ((55, 150, 150), (75, 220, 220))
-        # ]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((0, 0, 240), (180, 64, 255))]
-        # boundCompensation = 4
-        # sobelThreshold = 230
-        # nestingSuppression = 23
-
-        # # Shioneru
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 1
-        # textWeightMax = 9
-        # textHSVRanges = [((0, 0, 0), (180, 255, 16))]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((0, 0, 200), (180, 64, 255))]
-        # boundCompensation = 4
-        # sobelThreshold = 200
-
-        # # JapanTrafficLab
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 1
-        # textWeightMax = 19
-        # textHSVRanges = [((70, 180, 180), (100, 255, 255))]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((95, 180, 180), (140, 255, 255))]
-        # boundCompensation = 4
-        # sobelThreshold = 100
-        # nestingSuppression = 0
-
-        # # Uemon
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 1
-        # textWeightMax = 25
-        # textHSVRanges = [((0, 0, 230), (180, 64, 255))]
-        # # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # outlineHSVRanges = [((0, 0, 0), (180, 255, 128))]
-        # boundCompensation = 4
-        # sobelThreshold = 200
-        # nestingSuppression = 0
-
-        # # Haruki
-        # # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 1
-        # textWeightMax = 25
-        # textHSVRanges = [
-        #     ((75, 100, 210), (95, 230, 255)),
-        #     ((140, 100, 210), (180, 230, 255)),
-        #     ((50, 100, 210), (70, 150, 255))
-        # ]
-        # # outlineWeightMin = 1
-        # outlineWeightMax = 15
-        # # outlineHSVRanges = [((0, 0, 0), (180, 255, 32))]
-        # outlineHSVRanges = [((0, 0, 0), (180, 255, 32))]
-        # boundCompensation = 4
-        # sobelThreshold = 240
-        # nestingSuppression = 0
-
-        # Fushigi
-        # dialogRect: [0.00, 1.00, 0.75, 1.00]
-        # textWeightMin = 3
-        # textWeightMax = 29
-        # textHSVRanges = [
-        #     ((0, 200, 180), (10, 255, 255)),
-        #     ((160, 200, 180), (180, 255, 255)),
-        #     ((15, 150, 200), (45, 255, 255)),
-        # ]
-        # outlineWeightMin = 1
-        # outlineWeightMax = 11
-        # outlineHSVRanges = [
-        #     ((0, 0, 180), (180, 64, 255)),
-        #     ((0, 0, 0), (180, 255, 16))
-        # ]
-        # boundCompensation = 4
-        # sobelThreshold = 150
-        # nestingSuppression = 0
-
-
-# Outlined text strategy
+# Outlined text
 otl:
   yukkurirailways:
+    # dialogRect: rectangle of the detected dialog area
     dialogRect: [0.00, 1.00, 0.75, 1.00]
+    # fastMode: fast mode skips boundary detection for speed but may reduce accuracy
     fastMode: false
+    # textWeightMin: minimum weight for areas to be considered as text
     textWeightMin: 3
+    # textWeightMax: maximum weight for areas to be considered as text
     textWeightMax: 25
+    # textHSVRanges: HSV ranges for areas to be considered as text
+    # Each range is a list of six integers: [Hmin, Smin, Vmin, Hmax, Smax, Vmax]
     textHSVRanges:
       - [0, 0, 240, 180, 16, 255]
+    # outlineWeightMax: maximum weight for areas to be considered as outlines
     outlineWeightMax: 15
+    # outlineHSVRanges: HSV ranges for areas to be considered as outlines
     outlineHSVRanges:
       - [0, 0, 0, 180, 255, 16]
+    # boundCompensation: extra width applied during the text-outline mutual filtering process
     boundCompensation: 4
+    # sobelThreshold: threshold for the Sobel edge detection
     sobelThreshold: 250
+    # nestingSuppression: suppression weight of the nested outline
+    # Sometimes there is an extra layer of outline that shares the text colour
+    # This parameter sets the weight to scrap from the text area
     nestingSuppression: 0
+    # featureThreshold: minimum feature weight for a frame to be considered containing subtitles
     featureThreshold: 1.0
+    # featureJumpThreshold: maximum feature difference between frames to be considered as a jump
     featureJumpThreshold: 0.1
+    # featureJumpStddevThreshold: maximum standard deviation of feature difference between frames to be considered the same
     featureJumpStddevThreshold: 0.005
+    # debugLevel: setting it to 1-3 will show different intermediate step images to the debug window
+    debugLevel: 0
   
   yukkurilocaltrain:
     dialogRect: [0.00, 1.00, 0.75, 1.00]
@@ -287,6 +198,7 @@ otl:
     featureThreshold: 1.0
     featureJumpThreshold: 0.1
     featureJumpStddevThreshold: 0.005
+    debugLevel: 0
   
   japantrafficlab:
     dialogRect: [0.00, 1.00, 0.75, 1.00]
@@ -304,6 +216,7 @@ otl:
     featureThreshold: 1.0
     featureJumpThreshold: 0.1
     featureJumpStddevThreshold: 0.005
+    debugLevel: 0
 
   yorumeron-yukari:
     dialogRect: [0.00, 1.00, 0.80, 1.00]
@@ -321,50 +234,75 @@ otl:
     featureThreshold: 1.0
     featureJumpThreshold: 0.1
     featureJumpStddevThreshold: 0.005
+    debugLevel: 0
 
-# Adaptive median colour strategy
+# Box colour stat (general-purpose)
 bcs:
   default:
+    # dialogRect: rectangle of the detected dialog area
     dialogRect: [0.00, 1.00, 0.75, 1.00]
+    # sobelThreshold: threshold for the Sobel edge detection
     sobelThreshold: 32
+    # featureThreshold: minimum feature weight for a frame to be considered containing subtitles
     featureThreshold: 0.3
+    # featureJumpThreshold: maximum feature difference between frames to be considered as a jump
     featureJumpThreshold: 0.1
+    # featureJumpStddevThreshold: maximum standard deviation of feature difference between frames to be considered the same
     featureJumpStddevThreshold: 0.005
+    # boxVerticalExpansion: vertical expansion ratio of the detected dialog box
     boxVerticalExpansion: 0.05
+    # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
     nonMajorBoxSuppressionMaxRatio: 0.2
+    # nonMajorBoxSuppressionMinRank: but at least this number of boxes will be kept
     nonMajorBoxSuppressionMinRank: 1
+    # minCcAreaRatio: minimum ratio (over all connected components) to be considered text area candidate
     minCcAreaRatio: 0.0
+    # maxCcAreaRatio: maximum ratio (over all connected components) to be considered text area candidate
     maxCcAreaRatio: 0.3
+    # minCcFinalMean: minimum mean of connected component colour for a frame to be considered containing subtitles
     minCcFinalMean: 3.0
+    # maxCcStddev: maximum standard deviation for a connected component to be considered consistent enough to be text
     maxCcStddev: 10
+    # colourTolerance: distance from the selected mean colour to be filtered for text
     colourTolerance: 30
+    # clusterThreshold: maximum distance threshold for hierarchical clustering
     clusterThreshold: 1
+    # minColourAreaRatio: minimum ratio (over all connected components) to be further considered text area candidate
     minColourAreaRatio: 0.01
+    # maxGreyscalePenalty: a colour that is right on the greyscale axis will be penalized by this factor for its tendency to be selected
     maxGreyscalePenalty: 0.95
+    # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
     iirPassDenoiseMinTime: 300
+    # debugLevel: setting it to 1 will show the binary image of the text area
+    debugLevel: 0
 
 # Engines
 
 # Engines decide how frames are sampled before they are processed by Strategies.
 # This affects the performance and accuracy of the program.
-# A Strategy must implement an Engine's required methods to work with it.
+# A given Strategy must implement a given Engine's required methods to work with it.
 # Not all Engines are compatible with all Strategies.
 # By default, all Strategies are compatible with the Framewise Engine.
-# Slower strategies typically also support the Specilative Engine for faster processing.
+# Currently, bcs and otl also support the Specilative Engine for faster processing.
 # Each Engine has its own parameters that can be adjusted.
 
 # engine: which sampling pipeline to use
 # - framewise: samples every frame or every n-th frame
 # - speculative: skips frames where subtitles do not change and performs binary search for change points
-
 engine: speculative
 
 framewise:
   # sampleInterval: in how many frames to sample a frame
   # If you have a high-resolution or high-fps video, you can increase this number to speed up the program.
   # However, this will reduce the accuracy of the subtitles.
-  sampleInterval: 2
+  sampleInterval: 1
+  # debug: whether to show debug information
+  # Framewise Engine's debug mode will show a window displaying the processed frames with rectangles and FPIR parameters.
   debug: true
+  # debugPyrDown: how many times to downscale the debug window
+  # If the video's resolution is too high, the debug window may be too large to fit on the screen. 
+  # You can downscale the debug window by this number to fit it on the screen.
+  debugPyrDown: 0
 
 speculative:
   # emptyGapForceCheck: in how many milliseconds to force check for existence of subtitles
@@ -373,6 +311,8 @@ speculative:
   # instead of considering there are no subtitles in the gap.
   # If this is set to 0, the program will not force check. 
   emptyGapForceCheck: 1000
+  # debug: whether to show debug information
+  # Speculative Engine's debug mode will print its decision of inserting/extending intervals after each frame.
   debug: false
 
 # Extra Jobs
@@ -381,7 +321,7 @@ speculative:
 # Currently, the program supports only one experimental extra job: OCR.
 
 # List of extra jobs to perform after subtitle extraction
-extraJobs: [ocr]
+extraJobs: []
 
 ocr:
   suffix: "-ocr.txt"
