@@ -29,12 +29,55 @@
             "minItems": 4,
             "maxItems": 4,
             "additionalItems": false
+        },
+        "HSVRange": {
+            "description": "HSV range for color detection",
+            "type": "array",
+            "items": [
+                {
+                    "description": "Hmin",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 180
+                },
+                {
+                    "description": "Smin",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                },
+                {
+                    "description": "Vmin",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                },
+                {
+                    "description": "Hmax",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 180
+                },
+                {
+                    "description": "Smax",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                },
+                {
+                    "description": "Vmax",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                }
+            ],
+            "additionalItems": false
         }
     },
     "type": "object",
     "properties": {
         "source": {
-            "description": "paths of source video files",
+            "description": "path(s) of source video files",
             "type": "array",
             "items": {
                 "type": "string"
@@ -42,7 +85,7 @@
             "minLength": 1
         },
         "destination": {
-            "description": "paths of destination ass subtitle files",
+            "description": "path(s) of destination subtitle files with no extension",
             "type": "array",
             "items": {
                 "type": "string"
@@ -62,7 +105,7 @@
             "$ref": "#/$defs/ratioRectangle"
         },
         "strategy": {
-            "description": "which algorithm to use for timing",
+            "description": "which algorithm set to use",
             "enum": [
                 "mr",
                 "mr-s0",
@@ -76,11 +119,11 @@
             ]
         },
         "preset": {
-            "description": "which preset of parameters under a strategy to use for timing",
+            "description": "which preset of parameters under a strategy to use",
             "type": "string"
         },
         "mr": {
-            "description": "MagiaRecord quest video strategy",
+            "description": "MagiaRecord quest video",
             "type": "object",
             "patternProperties": {
                 ".*": {
@@ -127,7 +170,7 @@
             }
         },
         "mr-s0": {
-            "description": "MagiaRecord Scene0 film strategy",
+            "description": "MagiaRecord Scene0 film",
             "type": "object",
             "patternProperties": {
                 ".*": {
@@ -150,7 +193,7 @@
             }
         },
         "lcb": {
-            "description": "LimbusCompany quest video strategy",
+            "description": "LimbusCompany quest video",
             "type": "object",
             "patternProperties": {
                 ".*": {
@@ -169,7 +212,7 @@
             }
         },
         "lcb-mech": {
-            "description": "LimbusCompany mechanics introduction video strategy",
+            "description": "LimbusCompany mechanics introduction video",
             "type": "object",
             "patternProperties": {
                 ".*": {
@@ -188,7 +231,7 @@
             }
         },
         "pkm": {
-            "description": "PekemonEmerald strategy",
+            "description": "PekemonEmerald video",
             "type": "object",
             "patternProperties": {
                 ".*": {
@@ -207,7 +250,7 @@
             }
         },
         "prk": {
-            "description": "Parako strategy",
+            "description": "Parako anime conte",
             "type": "object",
             "patternProperties": {
                 ".*": {
@@ -226,7 +269,7 @@
             }
         },
         "bdr": {
-            "description": "BanG Dream strategy",
+            "description": "BanG Dream story video",
             "type": "object",
             "patternProperties": {
                 ".*": {
@@ -245,7 +288,7 @@
             }
         },
         "otl": {
-            "description": "Outline strategy",
+            "description": "Outlined text",
             "type": "object",
             "patternProperties": {
                 ".*": {
@@ -253,61 +296,77 @@
                     "type": "object",
                     "properties": {
                         "dialogRect": {
+                            "description": "rectangle of the detected dialog area",
                             "$ref": "#/$defs/ratioRectangle"
                         },
                         "fastMode": {
+                            "description": "fast mode skips boundary detection for speed but may reduce accuracy",
                             "type": "boolean"
                         },
                         "textWeightMin": {
-                            "type": "integer"
+                            "description": "minimum weight for areas to be considered as text",
+                            "type": "integer",
+                            "minimum": 0
                         },
                         "textWeightMax": {
-                            "type": "integer"
+                            "description": "maximum weight for areas to be considered as text",
+                            "type": "integer",
+                            "minimum": 0
                         },
                         "textHSVRanges": {
+                            "description": "HSV ranges for areas to be considered as text",
                             "type": "array",
                             "items": {
-                                "type": "array",
-                                "items": {
-                                    "type": "integer"
-                                },
-                                "minItems": 6,
-                                "maxItems": 6
-                            }
+                                "$ref": "#/$defs/HSVRange"
+                            },
+                            "minLength": 1
                         },
                         "outlineWeightMax": {
-                            "type": "integer"
+                            "description": "maximum weight for areas to be considered as outlines",
+                            "type": "integer",
+                            "minimum": 0
                         },
                         "outlineHSVRanges": {
+                            "description": "HSV ranges for areas to be considered as outlines",
                             "type": "array",
                             "items": {
-                                "type": "array",
-                                "items": {
-                                    "type": "integer"
-                                },
-                                "minItems": 6,
-                                "maxItems": 6
-                            }
+                                "$ref": "#/$defs/HSVRange"
+                            },
+                            "minLength": 1
                         },
                         "boundCompensation": {
-                            "type": "integer"
+                            "description": "extra width applied during the text-outline mutual filtering process",
+                            "type": "integer",
+                            "minimum": 0
                         },
                         "sobelThreshold": {
-                            "type": "integer"
+                            "description": "threshold for the Sobel edge detection",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
                         },
                         "nestingSuppression": {
-                            "type": "integer"
+                            "description": "suppression weight of the nested outline",
+                            "type": "integer",
+                            "minimum": 0
                         },
                         "featureThreshold": {
-                            "type": "number"
+                            "description": "minimum feature weight for a frame to be considered containing subtitles",
+                            "type": "number",
+                            "minimum": 0
                         },
                         "featureJumpThreshold": {
-                            "type": "number"
+                            "description": "maximum feature difference between frames to be considered as a jump",
+                            "type": "number",
+                            "minimum": 0
                         },
                         "featureJumpStddevThreshold": {
-                            "type": "number"
+                            "description": "maximum standard deviation of feature difference between frames to be considered the same",
+                            "type": "number",
+                            "minimum": 0
                         },
                         "debugLevel": {
+                            "description": "setting it to 1-3 will show different intermediate step images to the debug window",
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 3
@@ -342,77 +401,97 @@
                     "type": "object",
                     "properties": {
                         "dialogRect": {
+                            "description": "rectangle of the detected dialog area",
                             "$ref": "#/$defs/ratioRectangle"
                         },
                         "sobelThreshold": {
-                            "type": "integer"
+                            "description": "threshold for the Sobel edge detection",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
                         },
                         "featureThreshold": {
+                            "description": "minimum feature weight for a frame to be considered containing subtitles",
                             "type": "number",
                             "minimum": 0
                         },
                         "featureJumpThreshold": {
+                            "description": "maximum feature difference between frames to be considered as a jump",
                             "type": "number",
                             "minimum": 0
                         },
                         "featureJumpStddevThreshold": {
+                            "description": "maximum standard deviation of feature difference between frames to be considered the same",
                             "type": "number",
                             "minimum": 0
                         },
                         "boxVerticalExpansion": {
+                            "description": "vertical expansion ratio of the detected dialog box",
                             "type": "number",
                             "minimum": 0
                         },
                         "nonMajorBoxSuppressionMaxRatio": {
+                            "description": "boxes with a ratio (over all boxes) lower than this will be suppressed",
                             "type": "number",
                             "minimum": 0
                         },
                         "nonMajorBoxSuppressionMinRank": {
+                            "description": "but at least this number of boxes will be kept",
                             "type": "integer",
                             "minimum": 1
                         },
                         "minCcAreaRatio": {
+                            "description": "minimum ratio (over all connected components) to be considered text area candidate",
                             "type": "number",
                             "minimum": 0,
                             "maximum": 1
                         },
                         "maxCcAreaRatio": {
+                            "description": "maximum ratio (over all connected components) to be considered text area candidate",
                             "type": "number",
                             "minimum": 0,
                             "maximum": 1
                         },
                         "minCcFinalMean": {
+                            "description": "minimum mean of connected component colour for a frame to be considered containing subtitles",
                             "type": "number",
                             "minimum": 0
                         },
                         "maxCcStddev": {
+                            "description": "maximum standard deviation for a connected component to be considered consistent enough to be text",
                             "type": "number",
                             "minimum": 0
                         },
                         "colourTolerance": {
-                            "type": "number",
+                            "description": "distance from the selected mean colour to be filtered for text",
+                            "type": "integer",
                             "minimum": 0
                         },
                         "clusterThreshold": {
+                            "description": "maximum distance threshold for hierarchical clustering",
                             "type": "number",
                             "minimum": 0
                         },
                         "minColourAreaRatio": {
+                            "description": "minimum ratio (over all connected components) to be further considered text area candidate",
                             "type": "number",
                             "minimum": 0,
                             "maximum": 1
                         },
                         "maxGreyscalePenalty": {
+                            "description": "a colour that is right on the greyscale axis will be penalized by this factor for its tendency to be selected",
                             "type": "number",
                             "minimum": 0,
                             "maximum": 1
                         },
                         "iirPassDenoiseMinTime": {
+                            "description": "minimum time (in milliseconds) for an interval to be kept",
                             "type": "integer",
                             "minimum": 0
                         },
                         "debugLevel": {
-                            "type": "number",
+                            "description": "setting it to 1 will show the binary image of the text area",
+                            "type": "integer",
                             "minimum": 0,
                             "maximum": 1
                         }
@@ -439,7 +518,7 @@
             }
         },
         "engine": {
-            "description": "which sampling pipeline to use",
+            "description": "which frame sampling pipeline to use",
             "type": "string",
             "enum": [
                 "framewise",
@@ -447,7 +526,7 @@
             ]
         },
         "framewise": {
-            "description": "Parameters for the framewise engine",
+            "description": "samples every frame or every n-th frame",
             "type": "object",
             "properties": {
                 "sampleInterval": {
@@ -456,31 +535,33 @@
                     "minimum": 1
                 },
                 "debug": {
-                    "description": "enable debug mode",
+                    "description": "whether to show debug information",
                     "type": "boolean"
-                }, 
-                "debugPyrDown" : {
+                },
+                "debugPyrDown": {
+                    "description": "how many times to downscale the debug window",
                     "type": "number",
                     "minimum": 0
                 }
             },
             "required": [
                 "sampleInterval",
-                "debug"
+                "debug",
+                "debugPyrDown"
             ],
             "additionalProperties": false
         },
         "speculative": {
-            "description": "Parameters for the speculative engine",
+            "description": "skips frames where subtitles do not change and performs binary search for change points",
             "type": "object",
             "properties": {
                 "emptyGapForceCheck": {
-                    "description": "In how many milliseconds to force check for existence of subtitles (0 to disable)",
+                    "description": "in how many milliseconds to force check for existence of subtitles",
                     "type": "number",
                     "minimum": 0
                 },
                 "debug": {
-                    "description": "enable debug mode",
+                    "description": "whether to show debug information",
                     "type": "boolean"
                 }
             },
@@ -491,7 +572,7 @@
             "additionalProperties": false
         },
         "extraJobs": {
-            "description": "List of extra jobs to perform after subtitle extraction",
+            "description": "list of extra jobs to perform after subtitle extraction",
             "type": "array",
             "items": {
                 "type": "string"
@@ -501,22 +582,28 @@
             "type": "object",
             "properties": {
                 "suffix": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Suffix for the OCR output file."
                 },
                 "separator": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Separator used in OCR output."
                 },
                 "doPaddle": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Whether to perform OCR using PaddleOCR."
                 },
                 "paddleLang": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Language setting for PaddleOCR (e.g., japan for Japanese)."
                 },
                 "doTesseract": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "description": "Whether to perform OCR using Tesseract."
                 },
                 "tesseractLang": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "Language setting for Tesseract OCR (e.g., jpn for Japanese)."
                 }
             },
             "required": [

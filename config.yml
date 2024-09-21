@@ -27,7 +27,7 @@ source:
 # - src.mp4
 # - src2.mp4
 
-# destination: path(s) of destination subtitle files
+# destination: path(s) of destination subtitle files with no extension
 # Include only the name of the file, without the extension,
 # because they may also be used by extra jobs.
 # There must be equal number of source(s) and destination(s). 
@@ -286,7 +286,7 @@ bcs:
 # Currently, bcs and otl also support the Specilative Engine for faster processing.
 # Each Engine has its own parameters that can be adjusted.
 
-# engine: which sampling pipeline to use
+# engine: which frame sampling pipeline to use
 # - framewise: samples every frame or every n-th frame
 # - speculative: skips frames where subtitles do not change and performs binary search for change points
 engine: speculative
@@ -298,6 +298,8 @@ framewise:
   sampleInterval: 1
   # debug: whether to show debug information
   # Framewise Engine's debug mode will show a window displaying the processed frames with rectangles and FPIR parameters.
+  # Some Strategies may also show intermediate steps in the debug window. 
+  # Tap q to quit the debug window. The x button may not work. 
   debug: true
   # debugPyrDown: how many times to downscale the debug window
   # If the video's resolution is too high, the debug window may be too large to fit on the screen. 
@@ -320,7 +322,7 @@ speculative:
 # Extra jobs are additional tasks that can be performed after the subtitles are extracted.
 # Currently, the program supports only one experimental extra job: OCR.
 
-# List of extra jobs to perform after subtitle extraction
+# extraJobs: list of extra jobs to perform after subtitle extraction
 extraJobs: []
 
 ocr:
