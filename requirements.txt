@@ -1,0 +1,9 @@
+setuptools>=74.1.2
+opencv-contrib-python>=4.10.0.84
+pyav>=13.0.0
+jsonschema>=4.23.0
+pyyaml>=6.0.2
+paddlepaddle>=2.6.1
+paddleocr>=2.8.1
+scikit-learn>=1.5.1
+pytesseract>=0.3.13

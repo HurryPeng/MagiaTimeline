@@ -24,7 +24,7 @@
 # You may specify multiple source files for batching.
 # They will be processed with the same settings.
 source:
-# - src.mp4
+- src.mp4
 # - src2.mp4
 
 # destination: path(s) of destination subtitle files with no extension

@@ -17,3 +17,6 @@ test*
 *.jpg
 *.png
 !logo/
+*.kdenlive
+!requirements.txt
+/venv
