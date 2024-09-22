@@ -1,76 +1,82 @@
 # MagiaTimeline
 
-A CV-based precise subtitle time-coding and alignment tool for RPGs (Role-Playing Game) and Anime Conte (アニメコント、小剧场) videos. 
+A general-purpose CV-based framework for extracting precise subtitle timelines from videos with embedded subtitles, from video to .ass file. 
 
 <img src="./logo/MagiaTimeline-Logo-Transparent.png" width="300">
 
 ## Introduction
 
-### Purpose
+### Motivation
 
-Fans of RPG and Anime Conte videos often translate content when their native language is not supported by the original creators. Besides translating, syncing the subtitles to match the video's original timeline is also a time-consuming job. This project provides a framework to automate this process using CV (computer vision) algorithms. For supported RPGs and Anime Contes, MagiaTimeline takes video files as inputs and generates `.ass` subtitle files. Each RPG or Anime Conte has its own specialized algorithm set (Strategy), and it is not likely that they will work with unseen RPGs and Anime Contes. However, you can extend the framework by implementing a new Strategy class. 
+Many videos have embedded unstructured subtitle texts that are part of the frames. Typical examples include RPC/GalGame recordings, Yukkuri Introduction (ゆっくり解説) videos, Voiceroid videos and Anime Conte (アニメコント) videos. Translating these videos, essentially translating their subtitles, requires the added target language subtitles to sync with the original subtitles. This needs extracting the timepoints when the original subtitles appear, change, and diasppear, into a structured subtitle file (.ass, .srt). Traditionally, this extraction job is done manually, which is a noticable workload in the translation workflow. Voice recognition does not work here because some of the videos do not have dubbings, and even when they do, the dubbings don't necessarily sync with the embedded subtitles well. MagiaTimeline aims to automate this process to empower individual translators, and ultimately advocate cultural communication. 
 
-### Supported RPGs and Anime Contes
+### Goals
+
+- User-friendliness: A general-purpose algorithm provided by MagiaTimeline supports a variety of videos without the user tuning a lot. 
+- Minimum hardware requirement: MagiaTimeline does not require a GPU. 
+- Accuracy: The extracted timeline syncs with the original subtitle at a same-frame level accuracy in most cases. 
+- Performance: The program takes less time to run than playing the video once. 
+- Extendability: MagiaTimeline allows specialized algorithms sets (namely Strategies) that speed up and generate more accurate results for certain types of videos to be integrated into the framework, while reusing most parts of it. 
+
+## Toolbox
+
+### Strategies
+
+A Strategy is a set of CV algorithms that tells the framework how to identify the subtitles from a frame. You can choose which strategy to use for your video. 
+
+MagiaTimeline provides two general-puropse Strategies that are recommended: 
+
+- Box colour stat (`bcs`): A CV pipeline that consists of ML-based text detection, colour statistics and feature extraction. This Strategy works for most videos without tuning. Top recommended.
+- Outline (`otl`): A CV pipeline that relies on predefined parameters of colour and weight of text and outline to detect subtitles. It is much faster than `bcs` in applicable cases, but needs manually setting many parameters. 
+
+Traditionally, there are Strategies that are specialized for certain niches of videos. They are very fast and accurate, but not generalizable. 
 
 - [Magia Record 「マギアレコード」 《魔法纪录》](https://magireco.com/), for which this project was initiated
 - [Limbus Company 「림버스컴퍼니」 《边狱公司》](https://limbuscompany.com/)
 - [Parako 「私立パラの丸高校」 《超能力高校》](https://www.youtube.com/@parako)
 - [BanG Dream! Girls Band Party! 「バンドリ！ ガールズバンドパーティ！」 《BanG Dream! 少女乐团派对!》](https://bang-dream.bushimo.jp/)
 
-### Limitations
+### Engines
 
-Does not support videos with only voice but no subtitles. 
+An Engine decides how frames are sampled before they are processed by Strategies. MagiaTimeline provides two Engines:
+
+- Framewise: Processes every frame (or every n-th frame, n configurable) to form a linear string of features before connecting them as subtitle intervals. This Engine is slow but supports all Strategies. In its debug mode, it also provides a visual window that shows the frame currently being processed, which is very useful for debugging and tuning parameters. 
+- Speculative: Seeks to process less frames by skipping frames that are likely not to contain subtitle changes. This Engine is about 20x faster than the Framewise Engine. It only supports the `bcl` and `otl` general-purpose strategies. 
 
 ## Getting Started
 
-### Prerequisites
+### Installing
 
-- Python 3.10.9
-    - opencv-contrib-python 4.7.0.68
-    - PyYAML 6.0
-    - jsonschema 4.17.3
-
-Should also work on other versions, but not tested. 
+1. Install [Python](https://www.python.org) 3.12.0 (or above). 
+2. Run `install.bat` (for Windows) or `install.sh` (for GNU/Linux or macOS), which automatically installs dependencies listed in    `requirements.txt` into a Python venv. 
+3. (For Extra Job `ocr` only, not required for timeline generation) Tesseract OCR v5.3.3.20231005 (or above). 
 
 ### Workflow
 
-**Working Directory.** Before running any of the following commands, you should change the working directory of your command line to the root folder of this project. 
+**Configuration.** Open `config.yml` to check out configurations. You can open this file with any text editor, but it is more recommended to open it with an IDE that provides syntax checking and pretty formatting. There are detailed comments in `config.yml` to guide you through. 
 
-**Help.** To see help info, run:
+For beginners, it is recommended to do the following settings: 
 
-```
-python MagiaTimeline.py --help
-```
+- Specify the input video file in `source` section.
+- Set `strategy` to `bcs` and `preset` to `default`. This should have been done by default. 
+- Set `engine` to `speculative`. This should have been done by default. 
 
-**Configuration.** Open `config.yml` to check out configurations for the main program. You can open this file with any text editor, but it is more recommended to open it with an IDE that provides syntax checking according to `ConfigSchema.json`. There are comments in `config.yml` to guide you through. 
+**Debug Running.** Run in debug mode to check whether the subtitle area are included in the detection window. 
 
-**Debug Running.** Run the main program in debug mode to check whether black bars are properly cut and critical areas are aligned to rectangles. 
+Temporarily make these changes to `config.yml`:
 
-To run in debug mode, first change `mode` in `config.yml` to `debug`: 
+- Set `engine` to `framewise`. 
+- Under `framewise` section, set `debug` to `true`. This should have been done by default. 
 
-```yaml
-mode: debug
-```
+Then, run `MagiaTimeline.bat` (for Windows) or `MagiaTimeline.sh` (for GNU/Linux or macOS). You should see a window popping out that shows the frames from your video and a red box at the bottom of the frame. The red box should cover the area where the subtitles are displayed. If not, you should adjust `dialogRect` under the `bcs`, `default` section and rerun. You don't have to run the program to the end in debug mode. You can quit by typing q in the display window. 
 
-Then run `MagiaTimeline.py` in the command line: 
+Sometimes the video has too high a resolution that the display window can't show it all. In that case, consider adjusting `debugPyrDown` under the `framewise` section. 
 
-```
-python MagiaTimeline.py
-```
-
-**Productive Running.** Debug mode slows down the program significantly, so after checking the alignments with it, you should process the full video in default mode or short-circuit mode. 
-
-**Using Another Configuration File.** You can copy `config.yml` and modify it as you like. To use another configuration file, tell the main program which file you are using. 
-
-```
-python MagiaTimeline.py --config myconfig.yml
-```
-
-**Without Command Line.** If you have no idea how to use a command line, you can try running this program by double-clicking it from the GUI. In that case, there is no guarantee that the program would behave correctly. Please learn how to use a command line. 
+**Productive Running.** Debug mode slows down the program significantly. So, after checking the alignments with it, you should process the full video with debug off. Reset the parameters as instructed in the **Configuration** subsection, and run `MagiaTimeline.bat` (for Windows) or `MagiaTimeline.sh` (for GNU/Linux or macOS). After the program finishes, you should be able to see `MagiaTimelineOutput.ass` generated. As a video maker, you should have been very familiar with this file format. Enjoy.
 
 ## Architecture
 
-MagiaTimeline adopts a compiler-like architecture. The source video is frame-by-frame analyzed and transformed into intermediate representations (IR). Optimization passes are then applied to IRs for higher timeline quality. 
+MagiaTimeline adopts a compiler-like architecture. The source video is analyzed and transformed into intermediate representations (IR). Optimization passes are then applied to IRs for higher timeline quality. 
 
 For example, it works in the following steps in MagiaRecordStrategy: 
 
@@ -96,13 +102,18 @@ For example, it works in the following steps in MagiaRecordStrategy:
         - Gap filling
         - ASS formatting
 
-You can also implement another Strategy class to support your use case. It needs to follow the CV -> FPIR -> IIR framework, but you can freely specify how the transformations in the middle are done and reuse existing algorithms as much as possible. 
-
 ## Acknowledgements
 
-- [水银h2oag](https://space.bilibili.com/246606859), working consistently on translating Magia Record videos into Chinese. 
-- 冰柠初夏_lemon (QQ: 2624002941), marking timelines for Magia Record videos, testing and advocating this tool. 
-- [啊哈哈QAQ](https://space.bilibili.com/2141525), also working on Magia Record videos. 
+### Early-stage Users
+
+- [水银h2oag](https://space.bilibili.com/246606859), who had been working consistently on translating Magia Record videos into Chinese. 
+- [冰柠初夏_lemon](https://space.bilibili.com/1927412001), who had been marking timelines for Magia Record videos, testing and advocating this tool. 
+- [啊哈哈QAQ](https://space.bilibili.com/2141525), who had also been working on Magia Record videos. 
 - 行光 (QQ: 2263221094), who had been leading [都市零协会汉化组](https://space.bilibili.com/1247764479) to translate games by Project Moon. 
-- [灰色渔歌](https://space.bilibili.com/7653809), also working on games by Project Moon. 
-- [甜隐君子](https://space.bilibili.com/929197), working consistently on translating Parako into Chinese. 
+- [灰色渔歌](https://space.bilibili.com/7653809), who is also working on games by Project Moon. 
+- [甜隐君子](https://space.bilibili.com/929197), who is working consistently on translating Parako into Chinese. 
+
+### Temporary Collaborators
+
+- [Andrew Jeon](https://www.linkedin.com/in/andrew-jeon-58b294107)
+- [Wei-Yu (William) Chen](https://www.linkedin.com/in/wei-yu-william-chen)
