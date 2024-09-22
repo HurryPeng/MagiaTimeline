@@ -8,7 +8,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class PokemonEmeraldStrategy(AbstractStrategy):
+class PokemonEmeraldStrategy(AbstractFramewiseStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogBg = enum.auto()
@@ -19,6 +19,7 @@ class PokemonEmeraldStrategy(AbstractStrategy):
             return [False, 0.0, 0.0]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
+        AbstractStrategy.__init__(self, contentRect)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)

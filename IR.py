@@ -1,6 +1,7 @@
 from __future__ import annotations
 import abc
 import typing
+import fractions
 
 from Util import *
 from AbstractFlagIndex import *
@@ -8,7 +9,7 @@ from AbstractFlagIndex import *
 class FramePoint:
     def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], index: int, timestamp: int):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
-        self.index: int = index
+        self.index: int = index # Always keep this index consistent with the list index in FPIR
         self.timestamp: int = timestamp
         self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
         self.debugFrame: cv.Mat | None = None
@@ -24,10 +25,10 @@ class FramePoint:
             self.flags[k] = v
 
     def setDebugFlag(self, *val: typing.Any):
-        self.flags[self.flagIndexType.Debug] = val
+        self.flags[self.flagIndexType.Debug()] = val
 
     def getDebugFlag(self) -> typing.Any:
-        return self.flags[self.flagIndexType.Debug]
+        return self.flags[self.flagIndexType.Debug()]
     
     def setDebugFrame(self, debugFrame):
         self.debugFrame = debugFrame
@@ -41,16 +42,17 @@ class FramePoint:
     def getDebugFrame(self) -> cv.Mat | None:
         return self.debugFrame
 
-    def toString(self) -> str:
-        return "frame {} {}".format(self.index, formatTimestamp(self.timestamp))
+    def toString(self, timeBase: fractions.Fraction, sampleRate: int = 1) -> str:
+        return "frame {} {}".format(self.index * sampleRate, formatTimestamp(timeBase, self.timestamp))
 
-    def toStringFull(self) -> str:
-        return "frame {} {} {}".format(self.index, formatTimestamp(self.timestamp), self.flags)
+    def toStringFull(self, timeBase: fractions.Fraction, sampleRate: int = 1) -> str:
+        return "frame {} {} {}".format(self.index * sampleRate, formatTimestamp(timeBase, self.timestamp), self.flags)
 
 class FPIR: # Frame Point Intermediate Representation
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex]):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], sampleRate: int):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.framePoints: typing.List[FramePoint] = []
+        self.sampleRate: int = sampleRate
 
     def genVirtualEnd(self) -> FramePoint:
         index: int = len(self.framePoints)
@@ -63,7 +65,7 @@ class FPIR: # Frame Point Intermediate Representation
     def toStringFull(self) -> str:
         lines = []
         for framePoint in self.framePoints:
-            lines.append(framePoint.toStringFull() + "\n")
+            lines.append(framePoint.toStringFull(self.sampleRate) + "\n")
         return "".join(lines)
 
 class FPIRPass(abc.ABC):
@@ -178,21 +180,33 @@ class FPIRPassBooleanBuildIntervals(FPIRPassBuildIntervals):
         return intervals
 
 class Interval:
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], mainFlag: AbstractFlagIndex, begin: int, end: int, framePoints: typing.List[FramePoint]):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], mainFlag: AbstractFlagIndex, begin: int, end: int, framePoints: typing.List[FramePoint], flags: typing.List[typing.Any] = []):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.mainFlag: AbstractFlagIndex = mainFlag
         self.framePoints: typing.List[FramePoint] = framePoints
-        # begin and end are not promised to align with underlying framePoints
+        # begin and end are not promised to align with underlying framePoints after applying IIRPass
         self.begin: int = begin # timestamp
         self.end: int = end # timestamp
         self.style: str = "Default"
-        self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
+        self.flags: typing.List[typing.Any] = flags
+        if len(self.flags) == 0:
+            self.flags = self.flagIndexType.getDefaultFlags()
 
-    def toAss(self, id: int = -1) -> str:
-        template = "Dialogue: 0,{},{},{},,0,0,100,,Subtitle_{}_{}"
-        sBegin = formatTimestamp(self.begin)
-        sEnd = formatTimestamp(self.end)
-        return template.format(sBegin, sEnd, self.style, self.mainFlag.name, id)
+    def getName(self, id: int = -1) -> str:
+        return f"Subtitle_{self.mainFlag.name}_{id}"
+    
+    def getFlag(self, index: AbstractFlagIndex) -> typing.Any:
+        return self.flags[index]
+    
+    def setFlag(self, index: AbstractFlagIndex, val: typing.Any):
+        self.flags[index] = val
+
+    def toAss(self, timeBase: fractions.Fraction, id: int = -1) -> str:
+        template = "Dialogue: 0,{},{},{},,0,0,0,,{}"
+        sBegin = formatTimestamp(timeBase, self.begin)
+        sEnd = formatTimestamp(timeBase, self.end)
+        name = self.getName(id)
+        return template.format(sBegin, sEnd, self.style, name)
 
     def dist(self, other: Interval) -> int:
         l = self
@@ -201,16 +215,31 @@ class Interval:
             l = other
             r = self
         return r.begin - l.end
+    
+    def distFramePoint(self, framePoint: FramePoint) -> int:
+        if framePoint.timestamp < self.begin:
+            return self.begin - framePoint.timestamp
+        if framePoint.timestamp > self.end:
+            return framePoint.timestamp - self.end
+        return 0
 
     def intersects(self, other: Interval) -> bool:
         return self.dist(other) < 0
 
     def touches(self, other: Interval) -> bool:
         return self.dist(other) == 0
+    
+    def getMidPoint(self) -> int:
+        return int((self.begin + self.end) // 2)
+    
+    def merge(self, other: Interval) -> Interval:
+        return Interval(self.flagIndexType, self.mainFlag, min(self.begin, other.begin), max(self.end, other.end), self.framePoints + other.framePoints, self.flags)
 
 class IIR: # Interval Intermediate Representation
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex]):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], fps: fractions.Fraction, unitTimestamp: int):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
+        self.fps: fractions.Fraction = fps
+        self.unitTimestamp: int = unitTimestamp
         self.intervals: typing.List[Interval] = []
 
     def appendFromFpir(self, fpir: FPIR, fpirPassBuildIntervals: FPIRPassBuildIntervals):
@@ -220,14 +249,26 @@ class IIR: # Interval Intermediate Representation
     def sort(self):
         self.intervals.sort(key=lambda interval : interval.begin)
 
-    def toAss(self) -> str:
+    def toAss(self, timeBase: fractions.Fraction) -> str:
         lines: typing.List[str] = []
         mainFlagCounter: typing.Dict[int, int] = {}
         for _, interval in enumerate(self.intervals):
             id = mainFlagCounter.get(interval.mainFlag, 0)
             mainFlagCounter[interval.mainFlag] = id + 1
-            lines.append(interval.toAss(id) + "\n")
+            lines.append(interval.toAss(timeBase, id) + "\n")
         return "".join(lines)
+    
+    def getMidpoints(self) -> typing.List[typing.Tuple[str, int]]:
+        midpoints: typing.List[typing.Tuple[str, int]] = []
+        mainFlagCounter: typing.Dict[int, int] = {}
+        for _, interval in enumerate(self.intervals):
+            id = mainFlagCounter.get(interval.mainFlag, 0)
+            mainFlagCounter[interval.mainFlag] = id + 1
+            midpoints.append((interval.getName(id), interval.getMidPoint()))
+        return midpoints
+    
+    def ms2Timestamp(self, ms: int) -> int:
+        return ms2Timestamp(ms, self.fps, self.unitTimestamp)
 
 class IIRPass(abc.ABC):
     @abc.abstractmethod
@@ -251,7 +292,7 @@ class IIRPassFillGap(IIRPass):
                 if otherInterval.mainFlag != self.flag:
                     otherId += 1
                     continue
-                if interval.dist(otherInterval) > self.maxGap:
+                if interval.dist(otherInterval) > iir.ms2Timestamp(self.maxGap):
                     break
                 if interval.dist(otherInterval) <= 0:
                     otherId += 1
@@ -293,7 +334,7 @@ class IIRPassAlign(IIRPass):
             dist = lDist
             if rDist < -lDist:
                 dist = rDist
-            if abs(dist) <= self.maxGap:
+            if abs(dist) <= iir.ms2Timestamp(self.maxGap):
                 interval.begin += dist
             
             r = 0
@@ -306,7 +347,7 @@ class IIRPassAlign(IIRPass):
             dist = lDist
             if rDist < -lDist:
                 dist = rDist
-            if abs(dist) <= self.maxGap:
+            if abs(dist) <= iir.ms2Timestamp(self.maxGap):
                 interval.end += dist
             
         iir.sort()
@@ -334,3 +375,34 @@ class IIRPassOffset(IIRPass):
         for id, interval in enumerate(iir.intervals):
             interval.begin += self.offset
             interval.end += self.offset
+
+class IIRPassRemovePredicate(IIRPass):
+    def __init__(self, pred: typing.Callable[[Interval], bool]):
+        self.pred = pred
+
+    def apply(self, iir: IIR):
+        iir.intervals = [interval for interval in iir.intervals if not self.pred(interval)]
+
+class IIRPassDenoise(IIRPass):
+    def __init__(self, flag: AbstractFlagIndex, minTime: int):
+        self.flag: AbstractFlagIndex = flag
+        self.minTime: int = minTime
+
+    def apply(self, iir: IIR):
+        iir.intervals = [interval for interval in iir.intervals if not (interval.mainFlag == self.flag and interval.end - interval.begin < iir.ms2Timestamp(self.minTime))]
+
+class IIRPassMerge(IIRPass):
+    def __init__(self, pred: typing.Callable[[Interval, Interval], bool]):
+        self.pred = pred
+
+    def apply(self, iir: IIR):
+        newIntervals: typing.List[Interval] = []
+        for i in range(len(iir.intervals)):
+            if len(newIntervals) == 0:
+                newIntervals.append(iir.intervals[i])
+                continue
+            if self.pred(newIntervals[-1], iir.intervals[i]):
+                newIntervals[-1] = newIntervals[-1].merge(iir.intervals[i])
+            else:
+                newIntervals.append(iir.intervals[i])
+        iir.intervals = newIntervals

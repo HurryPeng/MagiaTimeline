@@ -8,3 +8,15 @@ __pycache__
 *Output*.*
 *.yml
 !config.yml
+test*
+*.csv
+*.xlsx
+*.srt
+.env
+*.out
+*.jpg
+*.png
+!logo/
+*.kdenlive
+!requirements.txt
+/venv

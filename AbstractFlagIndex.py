@@ -3,11 +3,8 @@ import typing
 import enum
 
 class AbstractFlagIndex(enum.IntEnum):
-    # similar to setting Debug = 0 in this enum class
-    # but does not forbid this abstract class from being inherited
     # concrete method
     @classmethod
-    @property
     def Debug(cls) -> int:
         return 0
 

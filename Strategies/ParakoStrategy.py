@@ -8,7 +8,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class ParakoStrategy(AbstractStrategy):
+class ParakoStrategy(AbstractFramewiseStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogFeat = enum.auto()
@@ -19,11 +19,10 @@ class ParakoStrategy(AbstractStrategy):
             return [False, np.zeros(64), False]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
+        AbstractStrategy.__init__(self, contentRect)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
-
-        self.rectangles["dialogRect"] = self.rectangles["dialogRect"]
 
         self.dialogRect = self.rectangles["dialogRect"]
 

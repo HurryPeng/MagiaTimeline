@@ -8,7 +8,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class MagirecoScene0Strategy(AbstractStrategy):
+class MagirecoScene0Strategy(AbstractFramewiseStrategy):
     class FlagIndex(AbstractFlagIndex):
         Blackscreen = enum.auto()
         BlackscreenBg = enum.auto()
@@ -38,6 +38,7 @@ class MagirecoScene0Strategy(AbstractStrategy):
                 ]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
+        AbstractStrategy.__init__(self, contentRect)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
