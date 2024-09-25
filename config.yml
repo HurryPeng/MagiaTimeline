@@ -236,6 +236,26 @@ otl:
     featureJumpStddevThreshold: 0.005
     debugLevel: 0
 
+  hotelzdm:
+    dialogRect: [0.00, 1.00, 0.75, 1.00]
+    fastMode: false
+    textWeightMin: 5
+    textWeightMax: 25
+    textHSVRanges:
+      - [0, 200, 100, 10, 255, 180]
+      - [170, 200, 100, 180, 255, 180]
+      - [25, 100, 100, 55, 200, 200]
+    outlineWeightMax: 7
+    outlineHSVRanges:
+      - [0, 0, 200, 180, 32, 255]
+    boundCompensation: 2
+    sobelThreshold: 200
+    nestingSuppression: 5
+    featureThreshold: 1.0
+    featureJumpThreshold: 0.1
+    featureJumpStddevThreshold: 0.005
+    debugLevel: 0
+
 # Box colour stat (general-purpose)
 bcs:
   default:

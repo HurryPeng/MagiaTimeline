@@ -11,6 +11,7 @@ import av.video.stream
 import av.frame
 import typing
 import fractions
+import math
 
 class IntervalGrower(IIR):
     def __init__(
@@ -33,7 +34,7 @@ class IntervalGrower(IIR):
         self.verbose = verbose
 
     def propose(self) -> typing.Tuple[int, typing.Optional[Interval], typing.Optional[Interval]]:
-        # returns: proposed timestamp (-1 for no proposal), previous interval, next interval
+        # returns: proposed index (-1 for no proposal), previous interval, next interval
 
         if len(self.intervals) == 0:
             return 0, None, None
@@ -57,7 +58,8 @@ class IntervalGrower(IIR):
         
         prev = self.intervals[cur]
         next = self.intervals[cur + 1]
-        return int(prev.end * (1 - self.proposalStride) + next.begin * self.proposalStride), prev, next
+        propose: int = math.floor(prev.end // self.unitTimestamp * (1 - self.proposalStride) + next.begin // self.unitTimestamp * self.proposalStride)
+        return propose, prev, next
     
     def insertInterval(self, framePoint: FramePoint, frame: typing.Optional[av.frame.Frame] = None) -> Interval:
         interval = Interval(self.flagIndexType, self.mainFlag, framePoint.timestamp, framePoint.timestamp + self.unitTimestamp, [framePoint])
@@ -98,32 +100,29 @@ class FrameCache:
         self.fps: fractions.Fraction = self.stream.average_rate
         self.timeBase: fractions.Fraction = self.stream.time_base
         self.unitTimestamp: int = int(1 / self.timeBase / self.fps)
+        self.offsetTimestamp: int = 0
 
         self.statDecodedFrames: int = 0
 
-    def canGetFrame(self, timestamp: int) -> bool:
-        index: int = int(timestamp // self.unitTimestamp)
+    def canGetFrame(self, index: int) -> bool:
         return index >= self.indexBegin and index < self.indexNextI
 
-    def getFrame(self, timestamp: int) -> av.frame.Frame:
-        index: int = int(timestamp // self.unitTimestamp)
+    def getFrame(self, index: int) -> av.frame.Frame:
+        timestamp = index * self.unitTimestamp + self.offsetTimestamp
         if index < self.indexBegin:
             raise Exception("FrameCache: timestamp earlier than the previous I-frame")
         if index > self.indexNextI and self.indexNextI != -1:
             raise Exception("FrameCache: timestamp later than the next I-frame")
         if index >= self.indexEnd:
-            self.proceedTo(timestamp)
+            self.proceedTo(index)
         assert index >= self.indexBegin and index < self.indexEnd
         return self.cache[index - self.indexBegin]
     
-    def proceedTo(self, timestamp: int) -> None:
-        tgtIndex: int = int(timestamp // self.unitTimestamp)
-        # print("proceedTo", formatTimestamp(self.timeBase, timestamp), timestamp, tgtIndex)
+    def proceedTo(self, tgtIndex: int) -> None:
         if tgtIndex < self.indexEnd:
             return
-        # print("proceedTo", formatTimestamp(self.timeBase, timestamp), timestamp, tgtIndex)
         
-        tgtTimestamp: int = tgtIndex * self.unitTimestamp
+        tgtTimestamp: int = tgtIndex * self.unitTimestamp + self.offsetTimestamp
         for frame in self.container.decode(self.stream):
             self.statDecodedFrames += 1
             curIndex: int = int(frame.pts // self.unitTimestamp)
@@ -148,6 +147,8 @@ class FrameCache:
             frameI2 = None
         self.container.seek(self.indexNextI * self.unitTimestamp, stream=self.stream, any_frame=False)
         frameI1: av.frame.Frame = next(self.container.decode(self.stream))
+        if self.indexNextI == 0:
+            self.offsetTimestamp = frameI1.pts
         self.statDecodedFrames += 1
 
         self.indexBegin = int(frameI1.pts // self.unitTimestamp)
@@ -199,15 +200,15 @@ class SpeculativeEngine(AbstractEngine):
 
         lastSegment: bool = False
         while True:
-            timestamp, prev, next = intervalGrower.propose()
-            if lastSegment and timestamp == -1:
+            index, prev, next = intervalGrower.propose()
+            if lastSegment and index == -1:
                 break
-            if timestamp == 0: # Init
+            if index == 0: # Init
                 assert prev is None and next is None
                 frameI2 = frameCache.leap()
                 if frameI2 is None:
                     lastSegment = True
-                    frameI2 = frameCache.getFrame((stream.frames - 1) * unitTimestamp)
+                    frameI2 = frameCache.getFrame(stream.frames - 1)
                 frameI1 = frameCache.getFrame(0)
                 framePoint1 = strategy.genFramePoint(avFrame2CvMat(frameI1), int(frameI1.pts // unitTimestamp), frameI1.pts)
                 interval1 = intervalGrower.insertInterval(framePoint1, frameI1)
@@ -218,12 +219,12 @@ class SpeculativeEngine(AbstractEngine):
                     intervalGrower.extendInterval(interval1, framePoint2)
                 else:
                     intervalGrower.insertInterval(framePoint2, frameI2)
-            elif timestamp == -1: # leap to the next next I-frame
+            elif index == -1: # leap to the next next I-frame
                 assert prev is not None and next is None
                 frameI2 = frameCache.leap()
                 if frameI2 is None:
                     lastSegment = True
-                    frameI2 = frameCache.getFrame((stream.frames - 1) * unitTimestamp)
+                    frameI2 = frameCache.getFrame(stream.frames - 1)
                 framePoint2 = strategy.genFramePoint(avFrame2CvMat(frameI2), int(frameI2.pts // unitTimestamp), frameI2.pts)
                 print(framePoint2.toString(timeBase, 1))
                 merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint2.getFlag(featureFlagIndex)])
@@ -234,7 +235,7 @@ class SpeculativeEngine(AbstractEngine):
                     intervalGrower.insertInterval(framePoint2, frameI2)
             else: # reasonable proposal
                 assert prev is not None and next is not None
-                frame = frameCache.getFrame(timestamp)
+                frame = frameCache.getFrame(index)
                 framePoint = strategy.genFramePoint(avFrame2CvMat(frame), int(frame.pts // unitTimestamp), frame.pts)
                 isEmptyFeature = strategy.isEmptyFeature(framePoint.getFlag(featureFlagIndex))
 
