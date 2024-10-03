@@ -17,13 +17,14 @@ from IR import *
 class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractOcrStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
+        DialogVal = enum.auto()
         DialogFeat = enum.auto()
         DialogFeatJump = enum.auto()
         OcrFrame = enum.auto()
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False, np.zeros(64), False, None]
+            return [False, 0.0, np.zeros(64), False, None]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         AbstractStrategy.__init__(self, contentRect)
@@ -283,19 +284,24 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
             return np.zeros_like(image[:, :, 0])
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
-        roiDialogText, hasDialog, debugFrame = self.ocrPass(frame)
+        roiDialogText, dialogVal, debugFrame = self.ocrPass(frame)
         
         framePoint.setDebugFrame(debugFrame)
 
         roiDialogTextResized = cv.resize(roiDialogText, (150, 50))
         dctFeat = dctDescriptor(roiDialogTextResized, 8, 8)
 
+        hasDialog = dialogVal > self.featureThreshold
+
         framePoint.setFlag(BoxColourStatStrategy.FlagIndex.Dialog, hasDialog)
+        framePoint.setFlag(BoxColourStatStrategy.FlagIndex.DialogVal, dialogVal)
         framePoint.setFlag(BoxColourStatStrategy.FlagIndex.DialogFeat, dctFeat)
 
         return False
 
-    def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, bool, cv.Mat | None]:
+    def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, float, cv.Mat | None]:
+        # returns finalMask, dialogVal, debugFrame
+
         image = self.dialogRect.cutRoi(frame)
         debugFrame = None
 
@@ -318,9 +324,9 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
             mask = self.filterText(roi)
             finalMask[y:y+h, x:x+w] = mask
 
-        hasDialog = np.mean(finalMask) > self.featureThreshold
+        dialogVal: float = np.mean(finalMask)
 
         if self.debugLevel == 1:
             debugFrame = finalMask
 
-        return finalMask, hasDialog, debugFrame
+        return finalMask, dialogVal, debugFrame
