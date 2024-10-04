@@ -77,6 +77,7 @@ def main():
 
         strategy: AbstractStrategy | None = None
         print("Strategy:", config["strategy"])
+        print("Preset:", config["preset"])
         if config["strategy"] == "mr":
             strategy = MagirecoStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "mr-s0":
@@ -109,12 +110,8 @@ def main():
             raise Exception("Unknown engine! ")
         assert engine is not None
 
-        try:
-            print("==== Running Engine ====")
-            iir: IIR = engine.checkAndRun(strategy, srcContainer, srcStream)
-        except Exception as e:
-            print("Error:", e)
-            continue
+        print("==== Running Engine ====")
+        iir: IIR = engine.checkAndRun(strategy, srcContainer, srcStream)
 
         print("==== IIR to ASS ====")
         asstStr = asstStr.format(styles = "".join(strategy.getStyles()), events = iir.toAss(timeBase))

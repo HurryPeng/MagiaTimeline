@@ -24,7 +24,6 @@ class FramewiseEngine(AbstractEngine):
         timeBase: fractions.Fraction = stream.time_base
         fps: fractions.Fraction = stream.average_rate
         frameCount: float = stream.frames
-        unitTimestamp: int = int(1 / timeBase / fps)
 
         flagIndexType = strategy.getFlagIndexType()
 
@@ -41,11 +40,9 @@ class FramewiseEngine(AbstractEngine):
 
             timestamp: int = frame.pts
             img: cv.Mat = frame.to_ndarray(format='bgr24')
-            # unitTimestamp: int = int(1 / timeBase / fps)
-            # print(timestamp, formatTimestamp(timeBase, timestamp), fps, timeBase, frameIndex, unitTimestamp)
 
             # CV and frame point building
-            framePoint = FramePoint(flagIndexType, int(frameIndex // self.sampleInterval), timestamp)
+            framePoint = FramePoint(flagIndexType, timestamp)
             for cvPass in strategy.getCvPasses():
                 mayShortcircuit = cvPass(img, framePoint)
                 # if mayShortcircuit and config["mode"] == "shortcircuit":
@@ -54,7 +51,7 @@ class FramewiseEngine(AbstractEngine):
 
             # Outputs
             if frameIndex % 720 == 0:
-                print(framePoint.toString(timeBase, self.sampleInterval))
+                print(framePoint.toString(timeBase))
 
             if self.debug:
                 frameOut = img
@@ -93,7 +90,7 @@ class FramewiseEngine(AbstractEngine):
             fpirPass.apply(fpir)
 
         print("==== FPIR to IIR ====")
-        iir = IIR(flagIndexType, fps, unitTimestamp)
+        iir = IIR(flagIndexType, fps, timeBase)
         for name, fpirToIirPass in strategy.getFpirToIirPasses().items():
             print(name)
             iir.appendFromFpir(fpir, fpirToIirPass)

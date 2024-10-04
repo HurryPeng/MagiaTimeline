@@ -7,9 +7,8 @@ from Util import *
 from AbstractFlagIndex import *
 
 class FramePoint:
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], index: int, timestamp: int):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], timestamp: int):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
-        self.index: int = index # Always keep this index consistent with the list index in FPIR
         self.timestamp: int = timestamp
         self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
         self.debugFrame: cv.Mat | None = None
@@ -42,11 +41,11 @@ class FramePoint:
     def getDebugFrame(self) -> cv.Mat | None:
         return self.debugFrame
 
-    def toString(self, timeBase: fractions.Fraction, sampleRate: int = 1) -> str:
-        return "frame {} {}".format(self.index * sampleRate, formatTimestamp(timeBase, self.timestamp))
+    def toString(self, timeBase: fractions.Fraction) -> str:
+        return "frame {}".format(formatTimestamp(timeBase, self.timestamp))
 
-    def toStringFull(self, timeBase: fractions.Fraction, sampleRate: int = 1) -> str:
-        return "frame {} {} {}".format(self.index * sampleRate, formatTimestamp(timeBase, self.timestamp), self.flags)
+    def toStringFull(self, timeBase: fractions.Fraction) -> str:
+        return "frame {} {}".format(formatTimestamp(timeBase, self.timestamp), self.flags)
 
 class FPIR: # Frame Point Intermediate Representation
     def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], sampleRate: int):
@@ -57,15 +56,15 @@ class FPIR: # Frame Point Intermediate Representation
     def genVirtualEnd(self) -> FramePoint:
         index: int = len(self.framePoints)
         timestamp: int = self.framePoints[-1].timestamp
-        return FramePoint(self.flagIndexType, index, timestamp)
+        return FramePoint(self.flagIndexType, timestamp)
 
     def getFramePointsWithVirtualEnd(self, length: int = 1) -> typing.List[FramePoint]:
         return self.framePoints + [self.genVirtualEnd()] * length
     
-    def toStringFull(self) -> str:
+    def toStringFull(self, timeBase: fractions.Fraction) -> str:
         lines = []
         for framePoint in self.framePoints:
-            lines.append(framePoint.toStringFull(self.sampleRate) + "\n")
+            lines.append(framePoint.toStringFull(timeBase) + "\n")
         return "".join(lines)
 
 class FPIRPass(abc.ABC):
@@ -167,20 +166,20 @@ class FPIRPassBooleanBuildIntervals(FPIRPassBuildIntervals):
         intervals: typing.List[Interval] = []
         lastBegin: typing.List[int] = [0] * len(self.flags)
         state: typing.List[bool] = [False] * len(self.flags)
-        for framePoint in fpir.getFramePointsWithVirtualEnd():
+        for i, framePoint in enumerate(fpir.getFramePointsWithVirtualEnd()):
             for s in range(len(state)):
                 if not state[s]: # off -> on
                     if framePoint.getFlag(self.flags[s]):
                         state[s] = True
-                        lastBegin[s] = framePoint.index
+                        lastBegin[s] = i
                 else: # on - > off
                     if not framePoint.getFlag(self.flags[s]):
                         state[s] = False
-                        intervals.append(Interval(fpir.flagIndexType, self.flags[s], fpir.framePoints[lastBegin[s]].timestamp, framePoint.timestamp, fpir.framePoints[lastBegin[s] : framePoint.index]))
+                        intervals.append(Interval(fpir.flagIndexType, self.flags[s], fpir.framePoints[lastBegin[s]].timestamp, framePoint.timestamp, fpir.framePoints[lastBegin[s] : i]))
         return intervals
 
 class Interval:
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], mainFlag: AbstractFlagIndex, begin: int, end: int, framePoints: typing.List[FramePoint], flags: typing.List[typing.Any] = []):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], mainFlag: AbstractFlagIndex, begin: int, end: int, framePoints: typing.List[FramePoint] = [], flags: typing.List[typing.Any] = []):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.mainFlag: AbstractFlagIndex = mainFlag
         self.framePoints: typing.List[FramePoint] = framePoints
@@ -236,10 +235,10 @@ class Interval:
         return Interval(self.flagIndexType, self.mainFlag, min(self.begin, other.begin), max(self.end, other.end), self.framePoints + other.framePoints, self.flags)
 
 class IIR: # Interval Intermediate Representation
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], fps: fractions.Fraction, unitTimestamp: int):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], fps: fractions.Fraction, timeBase: fractions.Fraction):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.fps: fractions.Fraction = fps
-        self.unitTimestamp: int = unitTimestamp
+        self.timeBase: fractions.Fraction = timeBase
         self.intervals: typing.List[Interval] = []
 
     def appendFromFpir(self, fpir: FPIR, fpirPassBuildIntervals: FPIRPassBuildIntervals):
@@ -268,7 +267,7 @@ class IIR: # Interval Intermediate Representation
         return midpoints
     
     def ms2Timestamp(self, ms: int) -> int:
-        return ms2Timestamp(ms, self.fps, self.unitTimestamp)
+        return ms2Timestamp(ms, self.timeBase)
 
 class IIRPass(abc.ABC):
     @abc.abstractmethod

@@ -73,5 +73,5 @@ def morphologyNear(base: cv.Mat, ref: cv.Mat, Weight: int) -> cv.Mat:
 def avFrame2CvMat(frame: av.frame.Frame) -> cv.Mat:
     return frame.to_ndarray(format='bgr24')
 
-def ms2Timestamp(ms: int, fps: fractions.Fraction, unitTimestamp: int) -> int:
-    return int(ms / 1000 * fps * unitTimestamp)
+def ms2Timestamp(ms: int, timeBase: fractions.Fraction) -> int:
+    return int(ms / timeBase / 1000)

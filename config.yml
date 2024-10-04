@@ -290,7 +290,7 @@ bcs:
     # minColourAreaRatio: minimum ratio (over all connected components) to be further considered text area candidate
     minColourAreaRatio: 0.01
     # maxGreyscalePenalty: a colour that is right on the greyscale axis will be penalized by this factor for its tendency to be selected
-    maxGreyscalePenalty: 0.95
+    maxGreyscalePenalty: 0.80
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
     iirPassDenoiseMinTime: 300
     # debugLevel: setting it to 1 will show the binary image of the text area

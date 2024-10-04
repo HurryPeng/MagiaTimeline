@@ -79,9 +79,9 @@ class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
     def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeature: typing.List[typing.Any]) -> bool:
         pass
 
-    def genFramePoint(self, frame: cv.Mat, index: int, timestamp: int) -> FramePoint:
+    def genFramePoint(self, frame: cv.Mat, timestamp: int) -> FramePoint:
         self.statAnalyzedFrames += 1
-        framePoint = FramePoint(self.getFlagIndexType(), index, timestamp)
+        framePoint = FramePoint(self.getFlagIndexType(), timestamp)
         for cvPass in self.getCvPasses():
             cvPass(frame, framePoint)
         return framePoint
