@@ -136,15 +136,18 @@ class FrameCache:
     # Proceed until the latest frame timestamp is greater than or equal to tgtTimestamp
     # If tgtTimestamp == -1, then proceed until the end of the video
     def proceedTo(self, tgtTimestamp: int) -> None:
-        if tgtTimestamp <= self.end:
+        if tgtTimestamp <= self.end and not tgtTimestamp == -1:
             return
-        for frame in self.container.decode(self.stream):
-            if frame is None:
-                break
-            self.statDecodedFrames += 1
-            self.cache.append(frame)
-            if frame.pts >= tgtTimestamp and not tgtTimestamp == -1:
-                break
+        try:
+            for frame in self.container.decode(self.stream):
+                if frame is None:
+                    break
+                self.statDecodedFrames += 1
+                self.cache.append(frame)
+                if frame.pts >= tgtTimestamp and not tgtTimestamp == -1:
+                    break
+        except av.EOFError:
+            pass
         self.end = self.cache[-1].pts
     
     def leap(self) -> typing.Optional[av.frame.Frame]:
@@ -159,7 +162,7 @@ class FrameCache:
             self.container.seek(self.nextI + 1, stream=self.stream, any_frame=False, backward=False)
             frameI2 = next(self.container.decode(self.stream))
             self.statDecodedFrames += 1
-        except Exception:
+        except av.PermissionError:
             frameI2 = None
         self.container.seek(self.nextI, stream=self.stream, any_frame=False)
         frameI1: av.frame.Frame = next(self.container.decode(self.stream))
