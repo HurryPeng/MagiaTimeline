@@ -8,7 +8,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class ParakoStrategy(AbstractFramewiseStrategy):
+class ParakoStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogFeat = enum.auto()
@@ -20,6 +20,7 @@ class ParakoStrategy(AbstractFramewiseStrategy):
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         AbstractStrategy.__init__(self, contentRect)
+        AbstractSpeculativeStrategy.__init__(self)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         for k, v in config.items():
             self.rectangles[k] = RatioRectangle(contentRect, *v)
@@ -59,9 +60,32 @@ class ParakoStrategy(AbstractFramewiseStrategy):
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(ParakoStrategy.FlagIndex.Dialog, 300, meetPoint=1.0)
 
+        self.specIirPasses = collections.OrderedDict()
+        self.specIirPasses["iirPassMerge"] = IIRPassMerge(
+            lambda interval0, interval1:
+                self.decideFeatureMerge(
+                    [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval0.framePoints],
+                    [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval1.framePoints]
+                )
+        )
+        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(ParakoStrategy.FlagIndex.Dialog, 100)
+        self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
+
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
+    
+    @classmethod
+    def getMainFlagIndex(cls) -> AbstractFlagIndex:
+        return cls.FlagIndex.Dialog
+    
+    @classmethod
+    def getFeatureFlagIndex(cls) -> AbstractFlagIndex:
+        return cls.FlagIndex.DialogFeat
+    
+    @classmethod
+    def isEmptyFeature(cls, feature) -> bool:
+        return np.all(feature == 0)
 
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
@@ -77,6 +101,12 @@ class ParakoStrategy(AbstractFramewiseStrategy):
 
     def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.iirPasses
+    
+    def getSpecIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
+        return self.iirPasses
+    
+    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.List[typing.Any]) -> bool:
+        return bool(np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < 0.1)
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)

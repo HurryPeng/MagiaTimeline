@@ -11,6 +11,11 @@ class AbstractStrategy(abc.ABC):
     def __init__(self, contentRect: AbstractRectangle) -> None:
         self.contentRect = contentRect
 
+    @classmethod
+    @abc.abstractmethod
+    def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
+        pass
+
     def getContentRect(self) -> AbstractRectangle:
         return self.contentRect
     
@@ -18,11 +23,6 @@ class AbstractStrategy(abc.ABC):
         return []
 
 class AbstractFramewiseStrategy(AbstractStrategy, abc.ABC):
-    @classmethod
-    @abc.abstractmethod
-    def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
-        pass
-
     @abc.abstractmethod
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         pass
@@ -44,10 +44,6 @@ class AbstractFramewiseStrategy(AbstractStrategy, abc.ABC):
         pass
 
 class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
-    @classmethod
-    @abc.abstractmethod
-    def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
-        pass
 
     @classmethod
     @abc.abstractmethod
