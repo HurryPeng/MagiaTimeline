@@ -102,6 +102,9 @@ class FrameCache:
 
         self.fps: fractions.Fraction = self.stream.average_rate
         self.timeBase: fractions.Fraction = self.stream.time_base
+        # For variable frame rate videos, the unit timestamp is only the average frame duration
+        # Do not use this for calculating the precise timestamp of the next I-frame
+        # Use for approximation only
         self.unitTimestamp: int = int(1 / self.timeBase / self.fps)
 
         self.statDecodedFrames: int = 0
@@ -159,8 +162,12 @@ class FrameCache:
 
         frameI2: typing.Optional[av.frame.Frame] = None
         try:
-            self.container.seek(self.nextI + 1, stream=self.stream, any_frame=False, backward=False)
+            # Sometimes the seek returns the same frame even if the offset is increased by 1
+            # So we increase the offset by the unit timestamp instead
+            # This might be a bug in the pyav library
+            self.container.seek(self.nextI + self.unitTimestamp, stream=self.stream, any_frame=False, backward=False)
             frameI2 = next(self.container.decode(self.stream))
+            assert frameI2.pts > self.nextI
             self.statDecodedFrames += 1
         except av.PermissionError:
             frameI2 = None
@@ -170,8 +177,9 @@ class FrameCache:
 
         if frameI2 is not None and frameI2.pts == frameI1.pts:
             # This is init and the first frame's pts is not 0
-            self.container.seek(frameI1.pts + 1, stream=self.stream, any_frame=False, backward=False)
+            self.container.seek(frameI1.pts + self.unitTimestamp, stream=self.stream, any_frame=False, backward=False)
             frameI2 = next(self.container.decode(self.stream))
+            assert frameI2.pts > frameI1.pts
             self.statDecodedFrames += 1
             self.container.seek(0, stream=self.stream, any_frame=False, backward=False)
             frameI1 = next(self.container.decode(self.stream))
