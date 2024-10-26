@@ -256,6 +256,25 @@ otl:
     featureJumpStddevThreshold: 0.005
     debugLevel: 0
 
+  zundahouse:
+    dialogRect: [0.00, 1.00, 0.75, 1.00]
+    fastMode: false
+    textWeightMin: 1
+    textWeightMax: 25
+    textHSVRanges:
+      - [155, 100, 200, 180, 200, 255]
+      - [55, 150, 150, 75, 220, 220]
+    outlineWeightMax: 15
+    outlineHSVRanges:
+      - [0, 0, 240, 180, 64, 255]
+    boundCompensation: 4
+    sobelThreshold: 230
+    nestingSuppression: 23
+    featureThreshold: 1.0
+    featureJumpThreshold: 0.1
+    featureJumpStddevThreshold: 0.005
+    debugLevel: 0
+
 # Box colour stat (general-purpose)
 bcs:
   default:
