@@ -59,5 +59,7 @@ class IIROcrPass(IIRPass):
                 buff += tesseractText
 
             file.write(f"{name},{buff}\n")
+            if i % 10 == 0:
+                print(name)
 
         file.close()
