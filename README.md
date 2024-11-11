@@ -47,9 +47,9 @@ An Engine decides how frames are sampled before they are processed by Strategies
 
 ### Installing
 
-1. Install [Python](https://www.python.org) 3.12.6 (or above).
-2. Run `install.bat` (for Windows) or `install.sh` (for GNU/Linux or macOS), which automatically installs dependencies listed in `requirements.txt` into a Python virtual environment.
-3. (For Extra Job `ocr` only, not required for timeline generation) Install Tesseract OCR v5.3.3.20231005 (or above).
+1. Install [Python](https://www.python.org) 3.12.6 (or above), 64-bit version. 
+2. Run `install.bat` (for Windows) or `install.sh` (for GNU/Linux or macOS). This automatically installs dependencies listed in `requirements.txt` into a Python virtual environment.
+3. (For Extra Job `ocr` only, not required for basic timeline generation) Install Tesseract OCR v5.3.3.20231005 (or above).
 
 ### Workflow
 
