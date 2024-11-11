@@ -16,6 +16,10 @@ test*
 *.out
 *.jpg
 *.png
+*.webp
+*.ogg
+*.wav
+*.mp3
 !logo/
 *.kdenlive
 !requirements.txt
