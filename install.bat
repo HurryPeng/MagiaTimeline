@@ -1,4 +1,5 @@
 @echo off
+python -V -V
 python -c "import platform; print(platform.architecture()[0])" | findstr "64" > nul
 if %errorlevel% neq 0 (
     echo You are using a 32-bit version of Python. MagiaTimeline does not support it. Please install a 64-bit version.

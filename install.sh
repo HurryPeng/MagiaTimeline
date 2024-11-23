@@ -1,4 +1,5 @@
 #!/bin/bash
+python3 -V -V
 python3 -c "import platform; print(platform.architecture()[0])" | grep "64" > /dev/null
 if [ $? -ne 0 ]; then
     echo "You are using a 32-bit version of Python. MagiaTimeline does not support it. Please install a 64-bit version."

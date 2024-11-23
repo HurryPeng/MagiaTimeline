@@ -124,5 +124,4 @@ class ParakoStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy):
         framePoint.setFlag(ParakoStrategy.FlagIndex.Dialog, meanDialogShade > 1.0)
         framePoint.setFlag(ParakoStrategy.FlagIndex.DialogFeat, dctFeat)
 
-
         return False
