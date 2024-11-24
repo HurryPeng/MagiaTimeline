@@ -25,4 +25,4 @@ test*
 !requirements.txt
 /venv
 ChatGPT.py
-/PaddleocrModels
+/PaddleOCRModels
