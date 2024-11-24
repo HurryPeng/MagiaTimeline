@@ -2,14 +2,13 @@
 
 from PyInstaller.utils.hooks import collect_all
 
-# paddle_datas, paddle_binaries, paddle_hiddenimports = collect_all('paddle')
 paddleocr_datas, paddleocr_binaries, paddleocr_hiddenimports = collect_all('paddleocr')
 
 a = Analysis(
     ['MagiaTimeline.py'],
     pathex=[],
     binaries=[
-        ('venv/Lib/site-packages/mklml.dll', '.'),
+        ('venv/Lib/site-packages/paddle/libs/', 'paddle/libs/'),
     ] + paddleocr_binaries,
     datas=[
         ('README.md', 'move_to_root'),
@@ -17,7 +16,7 @@ a = Analysis(
         ('ConfigSchema.json', 'move_to_root'),
         ('config.yml', 'move_to_root'),
         ('template.asst', 'move_to_root'),
-        ('PaddleOCRModels', 'move_to_root/PaddleOCRModels'),
+        ('PaddleOCRModels/', 'move_to_root/PaddleOCRModels/'),
     ] + paddleocr_datas,
     hiddenimports=[] + paddleocr_hiddenimports,
     hookspath=[],
