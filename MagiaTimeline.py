@@ -142,4 +142,8 @@ def main():
         srcContainer.close()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print("Exception caught: ", e)
+    input("Press Enter to continue...")
