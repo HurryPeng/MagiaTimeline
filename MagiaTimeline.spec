@@ -12,7 +12,6 @@ a = Analysis(
     ] + paddleocr_binaries,
     datas=[
         ('README.md', 'move_to_root'),
-        ('src.mp4', 'move_to_root'),
         ('ConfigSchema.json', 'move_to_root'),
         ('config.yml', 'move_to_root'),
         ('template.asst', 'move_to_root'),
