@@ -47,7 +47,13 @@ An Engine decides how frames are sampled before they are processed by Strategies
 
 ### Installing
 
-1. Install [Python](https://www.python.org) 3.12.6 (or above), 64-bit version. 
+#### Pre-built Binary
+
+Currently only win_amd64 is supported. No Python installation is needed. You can find the pre-built package at release page. 
+
+#### Install form Source
+
+1. Install [Python](https://www.python.org) 3.12.6 (or above, but < 3.13), 64-bit version. 
 2. Run `install.bat` (for Windows) or `install.sh` (for GNU/Linux or macOS). This automatically installs dependencies listed in `requirements.txt` into a Python virtual environment.
 3. (For Extra Job `ocr` only, not required for basic timeline generation) Install Tesseract OCR v5.3.3.20231005 (or above).
 
@@ -68,11 +74,11 @@ Temporarily make these changes to `config.yml`:
 - Set `engine` to `framewise`.
 - Under the `framewise` section, set `debug` to `true`. This should be the default setting.
 
-Then, run `MagiaTimeline.bat` (for Windows) or `MagiaTimeline.sh` (for GNU/Linux or macOS). A window will pop up showing the frames from your video with a red box at the bottom. The red box should cover the area where the subtitles are displayed. If not, adjust `dialogRect` under the `bcs`, `default` section and rerun. You don’t have to run the program to the end in debug mode; you can quit by typing 'q' in the display window.
+Then, run `MagiaTimeline.bat`/`MagiaTimeline.exe` (for Windows) or `MagiaTimeline.sh` (for GNU/Linux or macOS). A window will pop up showing the frames from your video with a red box at the bottom. The red box should cover the area where the subtitles are displayed. If not, adjust `dialogRect` under the `bcs`, `default` section and rerun. You don’t have to run the program to the end in debug mode; you can quit by typing 'q' in the display window.
 
 If the video has a resolution too high for the display window, consider adjusting `debugPyrDown` under the `framewise` section.
 
-**Productive Running**: Debug mode significantly slows down the program. After verifying alignments in debug mode, process the full video with debug off. Reset the parameters as instructed in the **Configuration** section and run `MagiaTimeline.bat` (for Windows) or `MagiaTimeline.sh` (for GNU/Linux or macOS). Once the program finishes, you should see a `MagiaTimelineOutput.ass` file generated. As a video maker, you should already be familiar with this file format. Enjoy!
+**Productive Running**: Debug mode significantly slows down the program. After verifying alignments in debug mode, process the full video with debug off. Reset the parameters as instructed in the **Configuration** section and run `MagiaTimeline.bat`/`MagiaTimeline.exe` (for Windows) or `MagiaTimeline.sh` (for GNU/Linux or macOS). Once the program finishes, you should see a `MagiaTimelineOutput.ass` file generated. As a video maker, you should already be familiar with this file format. Enjoy!
 
 ## Architecture
 
