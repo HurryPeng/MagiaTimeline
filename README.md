@@ -18,31 +18,6 @@ Many videos have embedded, unstructured subtitle text that is part of the video 
 - **Performance**: The program takes less time to run than the total duration of the video.
 - **Extendability**: MagiaTimeline allows specialized algorithm sets (called Strategies) that speed up processing and generate more accurate results for certain video types, while reusing most of the framework’s core components.
 
-## Toolbox
-
-### Strategies
-
-A *Strategy* is a set of CV algorithms that tells the framework how to identify subtitles in a frame. You can choose which Strategy to use for your video.
-
-MagiaTimeline provides two recommended general-purpose Strategies:
-
-- **Box colour stat (`bcs`)**: A CV pipeline consisting of ML-based text detection, color statistics, and feature extraction. This strategy works for most videos without tuning and is the top recommendation.
-- **Outline (`otl`)**: A CV pipeline that relies on predefined parameters for text and outline color and weight to detect subtitles. It is much faster than `bcs` in applicable cases, but it requires manual parameter adjustments.
-
-Traditionally, there are also Strategies specialized for certain types of videos. These are fast and accurate but not generalizable:
-
-- [Magia Record 「マギアレコード」 《魔法纪录》](https://magireco.com/), for which this project was initially created.
-- [Limbus Company 「림버스컴퍼니」 《边狱公司》](https://limbuscompany.com/).
-- [Parako 「私立パラの丸高校」 《超能力高校》](https://www.youtube.com/@parako).
-- [BanG Dream! Girls Band Party! 「バンドリ！ ガールズバンドパーティ！」 《BanG Dream! 少女乐团派对!》](https://bang-dream.bushimo.jp/).
-
-### Engines
-
-An *Engine* determines how frames are sampled before they are processed by Strategies. MagiaTimeline provides two Engines:
-
-- **Framewise**: Processes every frame (or every n-th frame, where n is configurable) to form a linear string of features before connecting them as subtitle intervals. This engine is slow but supports all Strategies. In debug mode, it provides a visual window showing the currently processed frame, useful for debugging and tuning parameters.
-- **Speculative**: Processes fewer frames by skipping those unlikely to contain subtitle changes. This engine is about 20× faster than the Framewise engine but only supports the `bcs` and `otl` general-purpose strategies.
-
 ## Getting Started
 
 ### Installing
@@ -79,6 +54,45 @@ Then, run `MagiaTimeline.bat`/`MagiaTimeline.exe` (Windows) or `MagiaTimeline.sh
 If the video’s resolution is too high for the display window, consider adjusting `debugPyrDown` under the `framewise` section.
 
 **Productive Running**: Debug mode significantly slows down the program. After verifying alignment in debug mode, run the full video with debug off. Reset the parameters as described in the **Configuration** section, then run `MagiaTimeline.bat`/`MagiaTimeline.exe` (Windows) or `MagiaTimeline.sh` (GNU/Linux or macOS). Once the program finishes, you should see a `MagiaTimelineOutput.ass` file generated. As a video creator, you should already be familiar with this file format. Enjoy!
+
+## Toolbox
+
+### Strategies
+
+A *Strategy* is a set of CV algorithms that tells the framework how to identify subtitles in a frame. You can choose which Strategy to use for your video.
+
+MagiaTimeline provides two recommended general-purpose Strategies:
+
+- **Box colour stat (`bcs`)**: A CV pipeline consisting of ML-based text detection, color statistics, and feature extraction. This strategy works for most videos without tuning and is the top recommendation.
+- **Outline (`otl`)**: A CV pipeline that relies on predefined parameters for text and outline color and weight to detect subtitles. It is much faster than `bcs` in applicable cases, but it requires manual parameter adjustments.
+
+Traditionally, there are also Strategies specialized for certain types of videos. These are fast and accurate but not generalizable:
+
+- [Magia Record 「マギアレコード」 《魔法纪录》](https://magireco.com/), for which this project was initially created.
+- [Limbus Company 「림버스컴퍼니」 《边狱公司》](https://limbuscompany.com/).
+- [Parako 「私立パラの丸高校」 《超能力高校》](https://www.youtube.com/@parako).
+- [BanG Dream! Girls Band Party! 「バンドリ！ ガールズバンドパーティ！」 《BanG Dream! 少女乐团派对!》](https://bang-dream.bushimo.jp/).
+
+### Engines
+
+An *Engine* determines how frames are sampled before they are processed by Strategies. MagiaTimeline provides two Engines:
+
+- **Framewise**: Processes every frame (or every n-th frame, where n is configurable) to form a linear string of features before connecting them as subtitle intervals. This engine is slow but supports all Strategies. In debug mode, it provides a visual window showing the currently processed frame, useful for debugging and tuning parameters.
+- **Speculative**: Processes fewer frames by skipping those unlikely to contain subtitle changes. This engine is about 20× faster than the Framewise engine but only supports the `bcs` and `otl` general-purpose strategies.
+
+## Troubleshooting
+
+### Default Bottom-Quarter Detection
+
+By default, the `bcs` strategy only detects subtitles in the bottom quarter of the screen (`dialogRect` starts at `0.75`). This is because the upper part of the screen often contains text or other content that may interfere with subtitle detection.
+
+If your video has subtitles above this region and you need full-screen detection, open `config.yml`. Under the `bcs:` → `default:` section, locate the `dialogRect:` parameter and change the `0.75` to `0.00`. This allows subtitle detection across the entire frame.
+
+### Black-and-White Subtitles
+
+If your video features black-and-white (or gray) subtitles, you may find the `bcs` strategy difficult to detect them. MagiaTimeline assigns a lower priority to pure grayscale colors (black/white/gray), which helps reduce false positives but can interfere with accurately picking up purely black-and-white subtitles.
+ 
+To improve black-and-white subtitle detection, open `config.yml` and go to `bcs:` → `default:`. Find `maxGreyscalePenalty: 0.70` and change it to `0.00`. This removes the penalty for grayscale pixels and may significantly improve the recognition of black-and-white subtitles.
 
 ## Architecture
 
