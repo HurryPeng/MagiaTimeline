@@ -12,6 +12,7 @@ a = Analysis(
     ] + paddleocr_binaries,
     datas=[
         ('README.md', 'move_to_root'),
+        ('README-zh_CN.md', 'move_to_root'),
         ('ConfigSchema.json', 'move_to_root'),
         ('config.yml', 'move_to_root'),
         ('template.asst', 'move_to_root'),
