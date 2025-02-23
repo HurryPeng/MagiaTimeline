@@ -8,11 +8,7 @@ import av.frame
 def formatTimestamp(timeBase: fractions.Fraction, timestamp: int) -> str:
     dTimestamp = datetime.datetime.fromtimestamp(float(timestamp * timeBase), datetime.timezone(datetime.timedelta()))
     timeStr = dTimestamp.strftime("%H:%M:%S.%f")[:-3]
-    if timeStr[-1] >= '5':
-        dTimestamp += datetime.timedelta(milliseconds=5)
-        timeStr = dTimestamp.strftime("%H:%M:%S.%f")[:-3]
     return timeStr[:-1]
-
 
 def inRange(frame, lower: typing.List[int], upper: typing.List[int]):
     # just a syntactic sugar
