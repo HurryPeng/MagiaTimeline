@@ -1,5 +1,7 @@
 # MagiaTimeline
 
+English | [简体中文](./README-zh_CN.md)
+
 A general-purpose CV-based framework for extracting precise subtitle timelines from videos with embedded subtitles, from video to .ass file.
 
 <img src="./logo/MagiaTimeline-Logo-Transparent.png" width="300">
@@ -82,7 +84,7 @@ An *Engine* determines how frames are sampled before they are processed by Strat
 
 ## Troubleshooting
 
-### Default Bottom-Quarter Detection
+### Enabling Entire-Frame Detection
 
 By default, the `bcs` strategy only detects subtitles in the bottom quarter of the screen (`dialogRect` starts at `0.75`). This is because the upper part of the screen often contains text or other content that may interfere with subtitle detection.
 
@@ -139,3 +141,7 @@ For example, in the **MagiaRecordStrategy**, the process involves:
 
 - [Andrew Jeon](https://www.linkedin.com/in/andrew-jeon-58b294107)
 - [Wei-Yu (William) Chen](https://www.linkedin.com/in/wei-yu-william-chen)
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 (GPLv3). You are free to use, modify, and distribute this software for both commercial and non-commercial purposes, provided you comply with the GPLv3 terms and release any derivative works under the same license. When using this framework in your video production workflow, please mention “Subtitles timed by MagiaTimeline” in the credits or description. This software is provided without any warranty.
