@@ -420,11 +420,6 @@
                             "type": "number",
                             "minimum": 0
                         },
-                        "featureJumpStddevThreshold": {
-                            "description": "maximum standard deviation of feature difference between frames to be considered the same",
-                            "type": "number",
-                            "minimum": 0
-                        },
                         "boxVerticalExpansion": {
                             "description": "vertical expansion ratio of the detected dialog box",
                             "type": "number",
@@ -493,7 +488,7 @@
                             "description": "setting it to 1 will show the binary image of the text area",
                             "type": "integer",
                             "minimum": 0,
-                            "maximum": 1
+                            "maximum": 4
                         }
                     },
                     "required": [
@@ -501,7 +496,6 @@
                         "sobelThreshold",
                         "featureThreshold",
                         "featureJumpThreshold",
-                        "featureJumpStddevThreshold",
                         "minCcAreaRatio",
                         "maxCcAreaRatio",
                         "minCcFinalMean",

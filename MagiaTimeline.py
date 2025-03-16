@@ -10,6 +10,7 @@ import yaml
 import fractions
 import time
 import typing
+import traceback
 
 from Rectangle import *
 from IR import *
@@ -146,4 +147,5 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         print("Exception caught: ", e)
+        traceback.print_exc()
     input("Press Enter to continue...")

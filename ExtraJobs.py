@@ -24,7 +24,7 @@ class IIROcrPass(IIRPass):
         self.filename = self.dest + self.suffix
 
     def apply(self, iir: IIR):
-        file = open(self.filename, "w")
+        file = open(self.filename, "w", encoding="utf-8")
         print(f"Writing to {self.filename}")
         
         paddle = paddleocr.PaddleOCR(use_angle_cls=True, lang=self.paddleLang, show_log=False)

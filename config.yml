@@ -286,8 +286,6 @@ bcs:
     featureThreshold: 0.3
     # featureJumpThreshold: maximum feature difference between frames to be considered as a jump
     featureJumpThreshold: 0.1
-    # featureJumpStddevThreshold: maximum standard deviation of feature difference between frames to be considered the same
-    featureJumpStddevThreshold: 0.005
     # boxVerticalExpansion: vertical expansion ratio of the detected dialog box
     boxVerticalExpansion: 0.05
     # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
@@ -312,7 +310,7 @@ bcs:
     maxGreyscalePenalty: 0.70
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
     iirPassDenoiseMinTime: 300
-    # debugLevel: setting it to 1 will show the binary image of the text area
+    # debugLevel: 1 shows raw text boxes, 2 shows filtered text boxes, 3 shows accepted connected components, 4 shows text strokes
     debugLevel: 0
 
 # Engines

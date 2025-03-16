@@ -43,7 +43,6 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         self.sobelThreshold: int = config["sobelThreshold"]
         self.featureThreshold: float = config["featureThreshold"]
         self.featureJumpThreshold: float = config["featureJumpThreshold"]
-        self.featureJumpStddevThreshold: float = config["featureJumpStddevThreshold"]
         self.boxVerticalExpansion: float = config["boxVerticalExpansion"]
         self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
         self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
@@ -183,9 +182,13 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
 
         return boxes
     
-    def filterText(self, image: cv.Mat) -> cv.Mat:
+    def filterText(self, image: cv.Mat) -> typing.Tuple[cv.Mat, cv.Mat | None]: # mask, colouredMask (for debugging)
+        colouredColourMask = None
+        if self.debugLevel == 3 or self.debugLevel == 4:
+            colouredColourMask = np.zeros_like(image)
+
         imageSobel = rgbSobel(image, 1)
-        imageSobelBin = cv.threshold(imageSobel, 32, 255, cv.THRESH_BINARY_INV)[1]
+        imageSobelBin = cv.threshold(imageSobel, self.sobelThreshold, 255, cv.THRESH_BINARY_INV)[1]
 
         minCcAreaRatio = self.minCcAreaRatio
         maxCcAreaRatio = self.maxCcAreaRatio
@@ -218,9 +221,13 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
                     ccMeans.append(mean)
                     ccStds.append(std)
                     acceptedArea += stats[i][cv.CC_STAT_AREA]
+                    if self.debugLevel == 3:
+                        # colour the accepted component with its mean colour
+                        mask = cv.cvtColor(mask, cv.COLOR_GRAY2BGR)
+                        colouredColourMask = np.where(mask == 255, mean.reshape((1, 1, 3)), colouredColourMask)
 
         if len(acceptedIds) <= 1:
-            return np.zeros_like(image[:, :, 0])
+            return np.zeros_like(image[:, :, 0]), colouredColourMask
 
         ccMeans = np.array(ccMeans).reshape(len(ccMeans), -1)
         ccAreas = np.array([stats[i][cv.CC_STAT_AREA] for i in acceptedIds]).reshape(-1, 1)
@@ -270,23 +277,28 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
 
         pickedColour = finalClusters[0][0]
 
-        lowerBound = np.array([max(pickedColour[0] - colourTolerance, 0),
-                                max(pickedColour[1] - colourTolerance, 0),
-                                max(pickedColour[2] - colourTolerance, 0)])
+        lowerBound = np.array([max(int(pickedColour[0]) - colourTolerance, 0),
+                                max(int(pickedColour[1]) - colourTolerance, 0),
+                                max(int(pickedColour[2]) - colourTolerance, 0)])
 
-        upperBound = np.array([min(pickedColour[0] + colourTolerance, 255),
-                                min(pickedColour[1] + colourTolerance, 255),
-                                min(pickedColour[2] + colourTolerance, 255)])
+        upperBound = np.array([min(int(pickedColour[0]) + colourTolerance, 255),
+                                min(int(pickedColour[1]) + colourTolerance, 255),
+                                min(int(pickedColour[2]) + colourTolerance, 255)])
         
         colourMask = cv.inRange(image, lowerBound, upperBound)
 
         meanfinalMask = cv.mean(colourMask)[0]
         hasDialog = meanfinalMask > minCcFinalMean
+
+        if self.debugLevel == 4:
+            colouredColourMask = cv.cvtColor(colourMask, cv.COLOR_GRAY2BGR)
+            # Fill the white areas with the picked colour
+            colouredColourMask = np.where(colouredColourMask == 255, pickedColour, colouredColourMask)
         
         if hasDialog:
-            return colourMask
+            return colourMask, colouredColourMask
         else:
-            return np.zeros_like(image[:, :, 0])
+            return np.zeros_like(image[:, :, 0]), colouredColourMask
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialogText, dialogVal, debugFrame = self.ocrPass(frame)
@@ -321,17 +333,23 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
 
         boxes = sorted(boxes, key=lambda box: box[2] * box[3], reverse=True)
 
+        if self.debugLevel != 0:
+            debugFrame = np.zeros_like(image)
+
         for rank, box in enumerate(boxes):
             x, y, w, h = box
+            if self.debugLevel == 1:
+                cv.rectangle(debugFrame, (x, y), (x + w, y + h), (255, 255, 255), 5)
             if w * h <= self.nonMajorBoxSuppressionMaxRatio * boxSizeSum and rank >= self.nonMajorBoxSuppressionMinRank:
                 break
             roi = image[y:y+h, x:x+w]
-            mask = self.filterText(roi)
+            mask, colouredMask = self.filterText(roi)
             finalMask[y:y+h, x:x+w] = mask
+            if self.debugLevel == 2:
+                cv.rectangle(debugFrame, (x, y), (x + w, y + h), (255, 255, 255), 5)
+            if self.debugLevel == 3 or self.debugLevel == 4:
+                debugFrame[y:y+h, x:x+w] = colouredMask
 
         dialogVal: float = np.mean(finalMask)
-
-        if self.debugLevel == 1:
-            debugFrame = finalMask
 
         return finalMask, dialogVal, debugFrame
