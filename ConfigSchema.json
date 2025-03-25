@@ -109,6 +109,7 @@
             "enum": [
                 "mr",
                 "mr-s0",
+                "md",
                 "lcb",
                 "lcb-mech",
                 "pkm",
@@ -187,6 +188,25 @@
                     "required": [
                         "dialogRect",
                         "blackscreenRect"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        "md": {
+            "description": "MagiaExedra quest video",
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "description": "a preset for strategy md",
+                    "type": "object",
+                    "properties": {
+                        "dialogRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        }
+                    },
+                    "required": [
+                        "dialogRect"
                     ],
                     "additionalProperties": false
                 }

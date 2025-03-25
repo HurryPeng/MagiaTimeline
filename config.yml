@@ -116,6 +116,11 @@ mr-s0:
     dialogRect: [0.32, 0.68, 0.76, 0.96]
     blackscreenRect: [0.15, 0.85, 0.00, 1.00]
 
+# MagiaExedra quest video
+md:
+  default:
+    dialogRect: [0.25, 0.75, 0.80, 1.00]
+
 # LimbusCompany quest video
 lcb:
   default:

@@ -17,6 +17,7 @@ from IR import *
 from Util import *
 from Strategies.MagirecoStrategy import *
 from Strategies.MagirecoScene0Strategy import *
+from Strategies.MadodoraStrategy import *
 from Strategies.LimbusCompanyStrategy import *
 from Strategies.LimbusCompanyMechanicsStrategy import *
 from Strategies.PokemonEmeraldStrategy import *
@@ -83,6 +84,8 @@ def main():
             strategy = MagirecoStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "mr-s0":
             strategy = MagirecoScene0Strategy(strategyConfig, contentRect)
+        elif config["strategy"] == "md":
+            strategy = MadodoraStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "lcb":
             strategy = LimbusCompanyStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "lcb-mech":

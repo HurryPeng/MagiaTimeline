@@ -138,6 +138,21 @@ class FPIRPassDetectFeatureJump(FPIRPass):
             else:
                 framePoint.setFlag(self.dstFlag, self.inverse)
 
+class FPIRPassShift(FPIRPass):
+    def __init__(self, tgtFlag: AbstractFlagIndex, refFlag: AbstractFlagIndex, shift: int, padding: typing.Any):
+        self.tgtFlag: AbstractFlagIndex = tgtFlag
+        self.refFlag: AbstractFlagIndex = refFlag
+        self.shift: int = shift
+        self.padding: typing.Any = padding
+
+    def apply(self, fpir: FPIR):
+        for iTgt, framePoint in enumerate(fpir.framePoints):
+            iSrc = iTgt - self.shift
+            if iSrc < 0 or iSrc >= len(fpir.framePoints):
+                framePoint.setFlag(self.tgtFlag, self.padding)
+            else:
+                framePoint.setFlag(self.tgtFlag, fpir.framePoints[iSrc].getFlag(self.refFlag))
+
 class FPIRPassFunctional(FPIRPass):
     def __init__(self, func: typing.Callable[[FPIR], typing.Any]):
         self.func = func
