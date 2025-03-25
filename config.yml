@@ -64,6 +64,7 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 # strategy: which algorithm set to use
 # - mr: MagiaRecord quest video
 # - mr-s0: MagiaRecord Scene0 film
+# - md: MagiaExedra quest video
 # - lcb: LimbusCompany quest video
 # - lcb-mech: LimbusCompany mechanics introduction video
 # - pkm: PekemonEmerald quest video
