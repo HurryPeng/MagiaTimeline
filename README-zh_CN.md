@@ -69,6 +69,7 @@ MagiaTimeline提供两款推荐的通用策略组：
 除此之外，MagiaTimeline针对几种特定视频类型开发了专用策略组，这几个策略组处理速度快、精度高，但无法泛用：
 
 - [《魔法纪录》「マギアレコード」](https://magireco.com/)（开山鼻祖）
+- [Magia Exedra](https://madoka-exedra.com/)
 - [《边狱公司》「림버스컴퍼니」](https://limbuscompany.com/)
 - [《超能力高校》「私立パラの丸高校」](https://www.youtube.com/@parako)
 - [《BanG Dream! 少女乐团派对!》「バンドリ！ガールズバンドパーティ！」](https://bang-dream.bushimo.jp/)

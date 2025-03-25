@@ -71,6 +71,7 @@ MagiaTimeline provides two recommended general-purpose Strategies:
 Traditionally, there are also Strategies specialized for certain types of videos. These are fast and accurate but not generalizable:
 
 - [Magia Record 「マギアレコード」 《魔法纪录》](https://magireco.com/), for which this project was initially created.
+- [Magia Exedra](https://madoka-exedra.com/)
 - [Limbus Company 「림버스컴퍼니」 《边狱公司》](https://limbuscompany.com/).
 - [Parako 「私立パラの丸高校」 《超能力高校》](https://www.youtube.com/@parako).
 - [BanG Dream! Girls Band Party! 「バンドリ！ ガールズバンドパーティ！」 《BanG Dream! 少女乐团派对!》](https://bang-dream.bushimo.jp/).
