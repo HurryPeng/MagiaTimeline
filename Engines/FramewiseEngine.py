@@ -44,9 +44,7 @@ class FramewiseEngine(AbstractEngine):
             # CV and frame point building
             framePoint = FramePoint(flagIndexType, timestamp)
             for cvPass in strategy.getCvPasses():
-                mayShortcircuit = cvPass(img, framePoint)
-                # if mayShortcircuit and config["mode"] == "shortcircuit":
-                #     break
+                cvPass(img, framePoint)
             fpir.framePoints.append(framePoint)
 
             # Outputs

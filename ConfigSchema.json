@@ -201,11 +201,19 @@
                     "description": "a preset for strategy md",
                     "type": "object",
                     "properties": {
+                        "homeDialogRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "underHomeDialogRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
                         "dialogRect": {
                             "$ref": "#/$defs/ratioRectangle"
                         }
                     },
                     "required": [
+                        "homeDialogRect",
+                        "underHomeDialogRect",
                         "dialogRect"
                     ],
                     "additionalProperties": false
