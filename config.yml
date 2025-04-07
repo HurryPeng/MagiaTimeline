@@ -123,6 +123,7 @@ md:
     homeDialogRect: [0.25, 0.75, 0.74, 0.94]
     underHomeDialogRect: [0.25, 0.75, 0.94, 1.00]
     dialogRect: [0.25, 0.75, 0.80, 1.00]
+    whitescreenRect: [0.17, 0.83, 0.20, 0.80]
 
 # LimbusCompany quest video
 lcb:

@@ -209,12 +209,16 @@
                         },
                         "dialogRect": {
                             "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "whitescreenRect": {
+                            "$ref": "#/$defs/ratioRectangle"
                         }
                     },
                     "required": [
                         "homeDialogRect",
                         "underHomeDialogRect",
-                        "dialogRect"
+                        "dialogRect",
+                        "whitescreenRect"
                     ],
                     "additionalProperties": false
                 }

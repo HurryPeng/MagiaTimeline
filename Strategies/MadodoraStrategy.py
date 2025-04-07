@@ -21,6 +21,9 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         DialogBg = enum.auto()
         DialogText = enum.auto()
 
+        Whitescreen = enum.auto()
+        WhitescreenBg = enum.auto()
+        WhitescreenText = enum.auto()
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
@@ -35,8 +38,9 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         self.homeDialogRect = self.rectangles["homeDialogRect"]
         self.underHomeDialogRect = self.rectangles["underHomeDialogRect"]
         self.dialogRect = self.rectangles["dialogRect"]
+        self.whitescreenRect = self.rectangles["whitescreenRect"]
 
-        self.cvPasses = [self.cvPassHomeDialog, self.cvPassDialog]
+        self.cvPasses = [self.cvPassHomeDialog, self.cvPassDialog, self.cvPassWhitescreen]
 
         self.fpirPasses = collections.OrderedDict()
 
@@ -73,11 +77,13 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
             MadodoraStrategy.FlagIndex.HomeDialog,
             MadodoraStrategy.FlagIndex.Dialog,
+            MadodoraStrategy.FlagIndex.Whitescreen,
         )
 
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapHomeDialog"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.HomeDialog, 300, 0.0)
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Dialog, 300, 0.0)
+        self.iirPasses["iirPassFillGapWhitescreen"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Whitescreen, 2000, 0.5)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -111,8 +117,9 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         roiUnderDialog = self.underHomeDialogRect.cutRoiToUmat(frame)
         roiUnderDialogGray = cv.cvtColor(roiUnderDialog, cv.COLOR_BGR2GRAY)
         _, roiUnderDialogBin = cv.threshold(roiUnderDialogGray, 20, 255, cv.THRESH_BINARY)
-        meanUnderDialogGray: float = cv.mean(roiUnderDialogBin)[0]
-        hasUnderBlackBar: bool = meanUnderDialogGray < 1
+        meanUnderDialogBin: float = cv.mean(roiUnderDialogBin)[0]
+        varUnderDialogGray: float = cv.mean(cv.meanStdDev(roiUnderDialogGray)[1])[0]
+        hasUnderBlackBar: bool = meanUnderDialogBin < 1 and varUnderDialogGray < 0.01
 
         isValidDialog = hasDialogBg and hasDialogText and hasUnderBlackBar
 
@@ -140,3 +147,19 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         framePoint.setFlag(MadodoraStrategy.FlagIndex.DialogText, hasDialogText)
 
         return isValidDialog
+    
+    def cvPassWhitescreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiWhitescreen = self.whitescreenRect.cutRoiToUmat(frame)
+        roiWhitescreenGray = cv.cvtColor(roiWhitescreen, cv.COLOR_BGR2GRAY)
+        _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 240, 255, cv.THRESH_BINARY)
+        _, roiWhitescreenTextBin = cv.threshold(roiWhitescreenGray, 20, 255, cv.THRESH_BINARY_INV)
+        meanWhitescreenBgBin: float = cv.mean(roiWhitescreenBgBin)[0]
+        meanWhitescreenTextBin: float = cv.mean(roiWhitescreenTextBin)[0]
+        hasWhitescreenBg: bool = 255 - meanWhitescreenBgBin < 15
+        hasWhitescreenText: bool = meanWhitescreenTextBin < 8 and meanWhitescreenTextBin > 0.1
+
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.WhitescreenBg, hasWhitescreenBg)
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.WhitescreenText, hasWhitescreenText)
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.Whitescreen, hasWhitescreenBg and hasWhitescreenText)
+
+        return hasWhitescreenBg
