@@ -25,6 +25,10 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         WhitescreenBg = enum.auto()
         WhitescreenText = enum.auto()
 
+        Blackscreen = enum.auto()
+        BlackscreenBg = enum.auto()
+        BlackscreenText = enum.auto()
+
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
             return [False] * cls.getNum()
@@ -39,8 +43,9 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         self.underHomeDialogRect = self.rectangles["underHomeDialogRect"]
         self.dialogRect = self.rectangles["dialogRect"]
         self.whitescreenRect = self.rectangles["whitescreenRect"]
+        self.blackscreenRect = self.rectangles["blackscreenRect"]
 
-        self.cvPasses = [self.cvPassHomeDialog, self.cvPassDialog, self.cvPassWhitescreen]
+        self.cvPasses = [self.cvPassHomeDialog, self.cvPassDialog, self.cvPassWhitescreen, self.cvPassBlackscreen]
 
         self.fpirPasses = collections.OrderedDict()
 
@@ -78,12 +83,14 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
             MadodoraStrategy.FlagIndex.HomeDialog,
             MadodoraStrategy.FlagIndex.Dialog,
             MadodoraStrategy.FlagIndex.Whitescreen,
+            MadodoraStrategy.FlagIndex.Blackscreen,
         )
 
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapHomeDialog"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.HomeDialog, 300, 0.0)
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Dialog, 300, 0.0)
         self.iirPasses["iirPassFillGapWhitescreen"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Whitescreen, 2000, 0.5)
+        self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Blackscreen, 2000, 0.5)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -151,15 +158,32 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
     def cvPassWhitescreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiWhitescreen = self.whitescreenRect.cutRoiToUmat(frame)
         roiWhitescreenGray = cv.cvtColor(roiWhitescreen, cv.COLOR_BGR2GRAY)
-        _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 240, 255, cv.THRESH_BINARY)
+        _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 240, 255, cv.THRESH_BINARY_INV)
         _, roiWhitescreenTextBin = cv.threshold(roiWhitescreenGray, 20, 255, cv.THRESH_BINARY_INV)
         meanWhitescreenBgBin: float = cv.mean(roiWhitescreenBgBin)[0]
         meanWhitescreenTextBin: float = cv.mean(roiWhitescreenTextBin)[0]
-        hasWhitescreenBg: bool = 255 - meanWhitescreenBgBin < 15
+        hasWhitescreenBg: bool = meanWhitescreenBgBin < 15
         hasWhitescreenText: bool = meanWhitescreenTextBin < 8 and meanWhitescreenTextBin > 0.1
+        hasWhitescreen: bool = hasWhitescreenBg and hasWhitescreenText
 
         framePoint.setFlag(MadodoraStrategy.FlagIndex.WhitescreenBg, hasWhitescreenBg)
         framePoint.setFlag(MadodoraStrategy.FlagIndex.WhitescreenText, hasWhitescreenText)
-        framePoint.setFlag(MadodoraStrategy.FlagIndex.Whitescreen, hasWhitescreenBg and hasWhitescreenText)
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.Whitescreen, hasWhitescreen)
 
         return hasWhitescreenBg
+    
+    def cvPassBlackscreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiBlackscreen = self.blackscreenRect.cutRoiToUmat(frame)
+        roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
+        _, roiBlackscreenBgBin = cv.threshold(roiBlackscreenGray, 10, 255, cv.THRESH_BINARY)
+        _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 240, 255, cv.THRESH_BINARY)
+        meanBlackscreenBgBin: float = cv.mean(roiBlackscreenBgBin)[0]
+        meanBlackscreenTextBin: float = cv.mean(roiBlackscreenTextBin)[0]
+
+        hasBlackscreenBg: bool = meanBlackscreenBgBin < 15
+        hasBlackscreenText: bool = meanBlackscreenTextBin < 5 and meanBlackscreenTextBin > 0.1
+        hasBlackscreen: bool = hasBlackscreenBg and hasBlackscreenText
+
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.BlackscreenBg, hasBlackscreenBg)
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.BlackscreenText, hasBlackscreenText)
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.Blackscreen, hasBlackscreen)
