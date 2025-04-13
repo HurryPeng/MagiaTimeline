@@ -158,11 +158,11 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
     def cvPassWhitescreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiWhitescreen = self.whitescreenRect.cutRoiToUmat(frame)
         roiWhitescreenGray = cv.cvtColor(roiWhitescreen, cv.COLOR_BGR2GRAY)
-        _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 240, 255, cv.THRESH_BINARY_INV)
+        _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 220, 255, cv.THRESH_BINARY_INV)
         _, roiWhitescreenTextBin = cv.threshold(roiWhitescreenGray, 20, 255, cv.THRESH_BINARY_INV)
         meanWhitescreenBgBin: float = cv.mean(roiWhitescreenBgBin)[0]
         meanWhitescreenTextBin: float = cv.mean(roiWhitescreenTextBin)[0]
-        hasWhitescreenBg: bool = meanWhitescreenBgBin < 15
+        hasWhitescreenBg: bool = meanWhitescreenBgBin < 20
         hasWhitescreenText: bool = meanWhitescreenTextBin < 8 and meanWhitescreenTextBin > 0.1
         hasWhitescreen: bool = hasWhitescreenBg and hasWhitescreenText
 
