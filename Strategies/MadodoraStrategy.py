@@ -11,13 +11,11 @@ from IR import *
 class MadodoraStrategy(AbstractFramewiseStrategy):
     class FlagIndex(AbstractFlagIndex):
         HomeDialog = enum.auto()
-        HomeDialogFuture = enum.auto()
         HomeDialogBg = enum.auto()
         HomeDialogText = enum.auto()
         HomeDialogUnder = enum.auto()
 
         Dialog = enum.auto()
-        DialogFuture = enum.auto()
         DialogBg = enum.auto()
         DialogText = enum.auto()
 
@@ -49,24 +47,8 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
 
         self.fpirPasses = collections.OrderedDict()
 
-        self.fpirPasses["fpirPassHomeDialogFuture"] = FPIRPassShift(MadodoraStrategy.FlagIndex.HomeDialogFuture, MadodoraStrategy.FlagIndex.HomeDialog, -30, False)
-        self.fpirPasses["fpirPassHomeDialogRefine"] = FPIRPassFramewiseFunctional(
-            lambda framePoint: framePoint.setFlag(
-                MadodoraStrategy.FlagIndex.HomeDialog,
-                framePoint.getFlag(MadodoraStrategy.FlagIndex.HomeDialog)
-                    or framePoint.getFlag(MadodoraStrategy.FlagIndex.HomeDialogFuture) and framePoint.getFlag(MadodoraStrategy.FlagIndex.HomeDialogBg)
-            )
-        )
         self.fpirPasses["fpirPassRemoveNoiseHomeDialogTrue"] = FPIRPassBooleanRemoveNoise(MadodoraStrategy.FlagIndex.HomeDialog, True, 10)
 
-        self.fpirPasses["fpirPassDialogFuture"] = FPIRPassShift(MadodoraStrategy.FlagIndex.DialogFuture, MadodoraStrategy.FlagIndex.Dialog, -30, False)
-        self.fpirPasses["fpirPassDialogRefine"] = FPIRPassFramewiseFunctional(
-            lambda framePoint: framePoint.setFlag(
-                MadodoraStrategy.FlagIndex.Dialog,
-                framePoint.getFlag(MadodoraStrategy.FlagIndex.Dialog)
-                    or framePoint.getFlag(MadodoraStrategy.FlagIndex.DialogFuture) and framePoint.getFlag(MadodoraStrategy.FlagIndex.DialogBg)
-            )
-        )
         self.fpirPasses["fpirPassRemoveNoiseDialogTrue"] = FPIRPassBooleanRemoveNoise(MadodoraStrategy.FlagIndex.Dialog, True, 10)
 
         self.fpirPasses["fpirPassPrioritizeHomeDialog"] = FPIRPassFramewiseFunctional(
@@ -74,7 +56,6 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
                 MadodoraStrategy.FlagIndex.Dialog,
                 framePoint.getFlag(MadodoraStrategy.FlagIndex.Dialog)
                     and not framePoint.getFlag(MadodoraStrategy.FlagIndex.HomeDialog)
-                    and not framePoint.getFlag(MadodoraStrategy.FlagIndex.HomeDialogFuture)
             )
         )
 
@@ -88,9 +69,13 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
 
         self.iirPasses = collections.OrderedDict()
         self.iirPasses["iirPassFillGapHomeDialog"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.HomeDialog, 300, 0.0)
+        self.iirPasses["iirPassExtendHomeDialog"] = IIRPassExtend(MadodoraStrategy.FlagIndex.HomeDialog, 300, 0)
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Dialog, 300, 0.0)
+        self.iirPasses["iirPassExtendDialog"] = IIRPassExtend(MadodoraStrategy.FlagIndex.Dialog, 300, 0)
         self.iirPasses["iirPassFillGapWhitescreen"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Whitescreen, 2000, 0.5)
+        self.iirPasses["iirPassExtendWhitescreen"] = IIRPassExtend(MadodoraStrategy.FlagIndex.Whitescreen, 500, 500)
         self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Blackscreen, 2000, 0.5)
+        self.iirPasses["iirPassExtendBlackscreen"] = IIRPassExtend(MadodoraStrategy.FlagIndex.Blackscreen, 500, 500)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
