@@ -73,9 +73,9 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Dialog, 300, 0.0)
         self.iirPasses["iirPassExtendDialog"] = IIRPassExtend(MadodoraStrategy.FlagIndex.Dialog, 300, 0)
         self.iirPasses["iirPassFillGapWhitescreen"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Whitescreen, 2000, 0.5)
-        self.iirPasses["iirPassExtendWhitescreen"] = IIRPassExtend(MadodoraStrategy.FlagIndex.Whitescreen, 500, 500)
+        self.iirPasses["iirPassExtendWhitescreen"] = IIRPassExtend(MadodoraStrategy.FlagIndex.Whitescreen, 400, 400)
         self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Blackscreen, 2000, 0.5)
-        self.iirPasses["iirPassExtendBlackscreen"] = IIRPassExtend(MadodoraStrategy.FlagIndex.Blackscreen, 500, 500)
+        self.iirPasses["iirPassExtendBlackscreen"] = IIRPassExtend(MadodoraStrategy.FlagIndex.Blackscreen, 400, 400)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -160,12 +160,17 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
     def cvPassBlackscreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiBlackscreen = self.blackscreenRect.cutRoiToUmat(frame)
         roiBlackscreenGray = cv.cvtColor(roiBlackscreen, cv.COLOR_BGR2GRAY)
-        _, roiBlackscreenBgBin = cv.threshold(roiBlackscreenGray, 10, 255, cv.THRESH_BINARY)
+        _, roiBlackscreenBlackBgBin = cv.threshold(roiBlackscreenGray, 10, 255, cv.THRESH_BINARY)
+        _, roiBlackscreenDimBgBin = cv.threshold(roiBlackscreenGray, 100, 255, cv.THRESH_BINARY)
         _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 240, 255, cv.THRESH_BINARY)
-        meanBlackscreenBgBin: float = cv.mean(roiBlackscreenBgBin)[0]
+        roiBlackscreenTextBinDialate = cv.morphologyEx(roiBlackscreenTextBin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (5, 5)))
+        roiBlackscreenDimBgBinExcludeText = cv.bitwise_and(roiBlackscreenDimBgBin, cv.bitwise_not(roiBlackscreenTextBinDialate))
+
+        meanBlackscreenBlackBgBin: float = cv.mean(roiBlackscreenBlackBgBin)[0]
+        meanBlackscreenDimBgBin: float = cv.mean(roiBlackscreenDimBgBinExcludeText)[0]
         meanBlackscreenTextBin: float = cv.mean(roiBlackscreenTextBin)[0]
 
-        hasBlackscreenBg: bool = meanBlackscreenBgBin < 15
+        hasBlackscreenBg: bool = meanBlackscreenBlackBgBin < 15 or meanBlackscreenDimBgBin < 0.1
         hasBlackscreenText: bool = meanBlackscreenTextBin < 5 and meanBlackscreenTextBin > 0.1
         hasBlackscreen: bool = hasBlackscreenBg and hasBlackscreenText
 
