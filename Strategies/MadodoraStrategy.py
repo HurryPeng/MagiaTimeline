@@ -27,6 +27,14 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         BlackscreenBg = enum.auto()
         BlackscreenText = enum.auto()
 
+        LeftBubble = enum.auto()
+        LeftBubbleBg = enum.auto()
+        LeftBubbleText = enum.auto()
+
+        RightBubble = enum.auto()
+        RightBubbleBg = enum.auto()
+        RightBubbleText = enum.auto()
+
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
             return [False] * cls.getNum()
@@ -42,8 +50,17 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         self.dialogRect = self.rectangles["dialogRect"]
         self.whitescreenRect = self.rectangles["whitescreenRect"]
         self.blackscreenRect = self.rectangles["blackscreenRect"]
+        self.leftBubbleRect = self.rectangles["leftBubbleRect"]
+        self.rightBubbleRect = self.rectangles["rightBubbleRect"]
 
-        self.cvPasses = [self.cvPassHomeDialog, self.cvPassDialog, self.cvPassWhitescreen, self.cvPassBlackscreen]
+        self.cvPasses = [
+            self.cvPassHomeDialog,
+            self.cvPassDialog,
+            self.cvPassWhitescreen,
+            self.cvPassBlackscreen,
+            self.cvPassLeftBubble,
+            self.cvPassRightBubble,
+        ]
 
         self.fpirPasses = collections.OrderedDict()
 
@@ -65,6 +82,8 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
             MadodoraStrategy.FlagIndex.Dialog,
             MadodoraStrategy.FlagIndex.Whitescreen,
             MadodoraStrategy.FlagIndex.Blackscreen,
+            MadodoraStrategy.FlagIndex.LeftBubble,
+            MadodoraStrategy.FlagIndex.RightBubble,
         )
 
         self.iirPasses = collections.OrderedDict()
@@ -76,6 +95,10 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         self.iirPasses["iirPassExtendWhitescreen"] = IIRPassExtend(MadodoraStrategy.FlagIndex.Whitescreen, 400, 400)
         self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.Blackscreen, 2000, 0.5)
         self.iirPasses["iirPassExtendBlackscreen"] = IIRPassExtend(MadodoraStrategy.FlagIndex.Blackscreen, 400, 400)
+        self.iirPasses["iirPassFillGapLeftBubble"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.LeftBubble, 300, 0.0)
+        self.iirPasses["iirPassExtendLeftBubble"] = IIRPassExtend(MadodoraStrategy.FlagIndex.LeftBubble, 200, 0)
+        self.iirPasses["iirPassFillGapRightBubble"] = IIRPassFillGap(MadodoraStrategy.FlagIndex.RightBubble, 300, 0.0)
+        self.iirPasses["iirPassExtendRightBubble"] = IIRPassExtend(MadodoraStrategy.FlagIndex.RightBubble, 200, 0)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -177,3 +200,71 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         framePoint.setFlag(MadodoraStrategy.FlagIndex.BlackscreenBg, hasBlackscreenBg)
         framePoint.setFlag(MadodoraStrategy.FlagIndex.BlackscreenText, hasBlackscreenText)
         framePoint.setFlag(MadodoraStrategy.FlagIndex.Blackscreen, hasBlackscreen)
+
+    def cvPassLeftBubble(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiLeftBubble: cv.UMat = self.leftBubbleRect.cutRoiToUmat(frame)
+        # Around (213, 223, 229) +- 10
+        roiLeftBubbleBgBin: cv.UMat = cv.inRange(roiLeftBubble, (203, 213, 219), (223, 233, 239))
+        # Find from right to left the index of the first coloumn where over 90% of the pixels are white
+        leftBubbleWidth, leftBubbleHeight = self.leftBubbleRect.getSizeInt()
+        roiLeftBubbleBgBinColSum: cv.Mat = cv.reduce(roiLeftBubbleBgBin, 0, cv.REDUCE_SUM, dtype=cv.CV_32S).get()
+        colBouldIdx = 0
+        for i in range(leftBubbleWidth - 1, int(leftBubbleWidth * 0.3), -1): # Less than 30% of the width is cosidered nonexistent
+            if roiLeftBubbleBgBinColSum[0][i] >= 255 * leftBubbleHeight * 0.9:
+                colBouldIdx = i
+                break
+
+        if colBouldIdx == 0 or colBouldIdx >= leftBubbleWidth * 0.9:
+            return False
+
+        refinedRect = RatioRectangle(self.leftBubbleRect, 0.0, float(colBouldIdx) / leftBubbleWidth, 0.0, 1.0)
+        roiRefined = refinedRect.cutRoiToUmat(frame)
+        roiRefinedGray = cv.cvtColor(roiRefined, cv.COLOR_BGR2GRAY)
+        roiRefinedBgBin = cv.inRange(roiRefined, (203, 213, 219), (223, 233, 239))
+        _, roiRefinedTextBin = cv.threshold(roiRefinedGray, 150, 255, cv.THRESH_BINARY_INV)
+        meanRefinedBgBin: float = 255 - cv.mean(roiRefinedBgBin)[0]
+        meanRefinedTextBin: float = cv.mean(roiRefinedTextBin)[0]
+
+        hasLeftBubbleBg: bool = meanRefinedBgBin < 70 and meanRefinedBgBin > 1
+        hasLeftBubbleText: bool = meanRefinedTextBin < 30 and meanRefinedTextBin > 1
+        hasLeftBubble: bool = hasLeftBubbleBg and hasLeftBubbleText
+
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.LeftBubble, hasLeftBubble)
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.LeftBubbleBg, hasLeftBubbleBg)
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.LeftBubbleText, hasLeftBubbleText)
+
+        return hasLeftBubble
+
+    def cvPassRightBubble(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
+        roiRightBubble: cv.UMat = self.rightBubbleRect.cutRoiToUmat(frame)
+        # Around (213, 223, 229) +- 10
+        roiRightBubbleBgBin: cv.UMat = cv.inRange(roiRightBubble, (203, 213, 219), (223, 233, 239))
+        # Find from left to right the index of the first coloumn where over 90% of the pixels are white
+        rightBubbleWidth, rightBubbleHeight = self.rightBubbleRect.getSizeInt()
+        roiRightBubbleBgBinColSum: cv.Mat = cv.reduce(roiRightBubbleBgBin, 0, cv.REDUCE_SUM, dtype=cv.CV_32S).get()
+        colBouldIdx = rightBubbleWidth - 1
+        for i in range(0, int(rightBubbleWidth * 0.7)):
+            if roiRightBubbleBgBinColSum[0][i] >= 255 * rightBubbleHeight * 0.9:
+                colBouldIdx = i
+                break
+        
+        if colBouldIdx == rightBubbleWidth - 1 or colBouldIdx <= rightBubbleWidth * 0.1:
+            return False
+        
+        refinedRect = RatioRectangle(self.rightBubbleRect, float(colBouldIdx) / rightBubbleWidth, 1.0, 0.0, 1.0)
+        roiRefined = refinedRect.cutRoiToUmat(frame)
+        roiRefinedGray = cv.cvtColor(roiRefined, cv.COLOR_BGR2GRAY)
+        roiRefinedBgBin = cv.inRange(roiRefined, (203, 213, 219), (223, 233, 239))
+        _, roiRefinedTextBin = cv.threshold(roiRefinedGray, 150, 255, cv.THRESH_BINARY_INV)
+        meanRefinedBgBin: float = 255 - cv.mean(roiRefinedBgBin)[0]
+        meanRefinedTextBin: float = cv.mean(roiRefinedTextBin)[0]
+
+        hasRightBubbleBg: bool = meanRefinedBgBin < 70 and meanRefinedBgBin > 1
+        hasRightBubbleText: bool = meanRefinedTextBin < 30 and meanRefinedTextBin > 1
+        hasRightBubble: bool = hasRightBubbleBg and hasRightBubbleText
+
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.RightBubble, hasRightBubble)
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.RightBubbleBg, hasRightBubbleBg)
+        framePoint.setFlag(MadodoraStrategy.FlagIndex.RightBubbleText, hasRightBubbleText)
+
+        return hasRightBubble

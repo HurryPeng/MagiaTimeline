@@ -215,6 +215,12 @@
                         },
                         "blackscreenRect": {
                             "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "leftBubbleRect": {
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "rightBubbleRect": {
+                            "$ref": "#/$defs/ratioRectangle"
                         }
                     },
                     "required": [
@@ -222,7 +228,9 @@
                         "underHomeDialogRect",
                         "dialogRect",
                         "whitescreenRect",
-                        "blackscreenRect"
+                        "blackscreenRect",
+                        "leftBubbleRect",
+                        "rightBubbleRect"
                     ],
                     "additionalProperties": false
                 }
