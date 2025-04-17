@@ -281,6 +281,9 @@ class IIR: # Interval Intermediate Representation
             midpoints.append((interval.getName(id), interval.getMidPoint()))
         return midpoints
     
+    def collectIfMainFlag(self, mainFlag: AbstractFlagIndex) -> typing.List[Interval]:
+        return [interval for interval in self.intervals if interval.mainFlag == mainFlag]
+    
     def ms2Timestamp(self, ms: int) -> int:
         return ms2Timestamp(ms, self.timeBase)
 
@@ -316,6 +319,26 @@ class IIRPassFillGap(IIRPass):
                 otherInterval.begin = mid
                 break
         iir.sort()
+
+class IIRPassExtend(IIRPass):
+    def __init__(self, flag: AbstractFlagIndex, front: int = 0, back: int = 0):
+        self.flag: AbstractFlagIndex = flag
+        self.front: int = front # in millisecs
+        self.back: int = back # in millisecs
+
+    def apply(self, iir: IIR):
+        # Assert sorted
+        for id, interval in enumerate(iir.intervals):
+            if interval.mainFlag != self.flag:
+                continue
+            if id == 0:
+                interval.begin = max(interval.begin - iir.ms2Timestamp(self.front), 0)
+            else:
+                interval.begin = max(interval.begin - iir.ms2Timestamp(self.front), iir.intervals[id - 1].end)
+            if id == len(iir.intervals) - 1:
+                interval.end += iir.ms2Timestamp(self.back)
+            else:
+                interval.end = min(interval.end + iir.ms2Timestamp(self.back), iir.intervals[id + 1].begin)
 
 class IIRPassAlign(IIRPass):
     def __init__(self, tgtFlag: AbstractFlagIndex, refFlag: AbstractFlagIndex, maxGap: int = 300):
