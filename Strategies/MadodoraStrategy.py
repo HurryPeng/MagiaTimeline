@@ -126,8 +126,8 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         _, roiDialogBgBin = cv.threshold(roiDialogGray, 100, 255, cv.THRESH_BINARY)
         meanDialogTextBin: float = cv.mean(roiDialogTextBin)[0]
         meanDialogBgBin: float = cv.mean(roiDialogBgBin)[0]
-        hasDialogBg: bool = meanDialogBgBin < 20 and meanDialogBgBin > 0.1
-        hasDialogText: bool = meanDialogTextBin < 10 and meanDialogTextBin > 0.1
+        hasDialogBg: bool = meanDialogBgBin < 25 and meanDialogBgBin > 0.1
+        hasDialogText: bool = meanDialogTextBin < 20 and meanDialogTextBin > 0.1
 
         roiUnderDialog = self.underHomeDialogRect.cutRoiToUmat(frame)
         roiUnderDialogGray = cv.cvtColor(roiUnderDialog, cv.COLOR_BGR2GRAY)
@@ -152,8 +152,8 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         _, roiDialogBgBin = cv.threshold(roiDialogGray, 100, 255, cv.THRESH_BINARY)
         meanDialogTextBin: float = cv.mean(roiDialogTextBin)[0]
         meanDialogBgBin: float = cv.mean(roiDialogBgBin)[0]
-        hasDialogBg: bool = meanDialogBgBin < 20 and meanDialogBgBin > 0.1
-        hasDialogText: bool = meanDialogTextBin < 10 and meanDialogTextBin > 0.1
+        hasDialogBg: bool = meanDialogBgBin < 25 and meanDialogBgBin > 0.1
+        hasDialogText: bool = meanDialogTextBin < 20 and meanDialogTextBin > 0.1
 
         isValidDialog = hasDialogBg and hasDialogText
 
@@ -166,7 +166,7 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
     def cvPassWhitescreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiWhitescreen = self.whitescreenRect.cutRoiToUmat(frame)
         roiWhitescreenGray = cv.cvtColor(roiWhitescreen, cv.COLOR_BGR2GRAY)
-        _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 220, 255, cv.THRESH_BINARY_INV)
+        _, roiWhitescreenBgBin = cv.threshold(roiWhitescreenGray, 170, 255, cv.THRESH_BINARY_INV)
         _, roiWhitescreenTextBin = cv.threshold(roiWhitescreenGray, 20, 255, cv.THRESH_BINARY_INV)
         meanWhitescreenBgBin: float = cv.mean(roiWhitescreenBgBin)[0]
         meanWhitescreenTextBin: float = cv.mean(roiWhitescreenTextBin)[0]
@@ -186,7 +186,7 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         _, roiBlackscreenBlackBgBin = cv.threshold(roiBlackscreenGray, 10, 255, cv.THRESH_BINARY)
         _, roiBlackscreenDimBgBin = cv.threshold(roiBlackscreenGray, 100, 255, cv.THRESH_BINARY)
         _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 240, 255, cv.THRESH_BINARY)
-        roiBlackscreenTextBinDialate = cv.morphologyEx(roiBlackscreenTextBin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (5, 5)))
+        roiBlackscreenTextBinDialate = cv.morphologyEx(roiBlackscreenTextBin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (9, 9)))
         roiBlackscreenDimBgBinExcludeText = cv.bitwise_and(roiBlackscreenDimBgBin, cv.bitwise_not(roiBlackscreenTextBinDialate))
 
         meanBlackscreenBlackBgBin: float = cv.mean(roiBlackscreenBlackBgBin)[0]
