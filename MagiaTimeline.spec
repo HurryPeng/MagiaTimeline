@@ -3,13 +3,14 @@
 from PyInstaller.utils.hooks import collect_all
 
 paddleocr_datas, paddleocr_binaries, paddleocr_hiddenimports = collect_all('paddleocr')
+cython_datas, cython_binaries, cython_hiddenimports = collect_all('Cython')
 
 a = Analysis(
     ['MagiaTimeline.py'],
     pathex=[],
     binaries=[
         ('venv/Lib/site-packages/paddle/libs/', 'paddle/libs/'),
-    ] + paddleocr_binaries,
+    ] + paddleocr_binaries + cython_binaries,
     datas=[
         ('README.md', 'move_to_root'),
         ('README-zh_CN.md', 'move_to_root'),
@@ -17,8 +18,8 @@ a = Analysis(
         ('config.yml', 'move_to_root'),
         ('template.asst', 'move_to_root'),
         ('PaddleOCRModels/', 'move_to_root/PaddleOCRModels/'),
-    ] + paddleocr_datas,
-    hiddenimports=[] + paddleocr_hiddenimports,
+    ] + paddleocr_datas + cython_datas,
+    hiddenimports=[] + paddleocr_hiddenimports + cython_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
