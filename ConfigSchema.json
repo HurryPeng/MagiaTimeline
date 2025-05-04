@@ -116,7 +116,8 @@
                 "prk",
                 "bdr",
                 "otl",
-                "bcs"
+                "bcs",
+                "dob"
             ]
         },
         "preset": {
@@ -548,6 +549,72 @@
                         "clusterThreshold",
                         "minColourAreaRatio",
                         "maxGreyscalePenalty",
+                        "iirPassDenoiseMinTime",
+                        "debugLevel"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        "dob": {
+            "description": "Diff ocr boolean strategy",
+            "type": "object",
+            "patternProperties": {
+                ".*": {
+                    "description": "a preset for strategy dob",
+                    "type": "object",
+                    "properties": {
+                        "dialogRect": {
+                            "description": "rectangle of the detected dialog area",
+                            "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "featureThreshold": {
+                            "description": "minimum feature weight for a frame to be considered containing subtitles",
+                            "type": "number",
+                            "minimum": 0
+                        },
+                        "boxVerticalExpansion": {
+                            "description": "vertical expansion ratio of the detected dialog box",
+                            "type": "number",
+                            "minimum": 0
+                        },
+                        "nonMajorBoxSuppressionMaxRatio": {
+                            "description": "boxes with a ratio (over all boxes) lower than this will be suppressed",
+                            "type": "number",
+                            "minimum": 0
+                        },
+                        "nonMajorBoxSuppressionMinRank": {
+                            "description": "but at least this number of boxes will be kept",
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "colourTolerance": {
+                            "description": "distance from the selected mean colour to be filtered for text",
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "maxGreyscalePenalty": {
+                            "description": "a colour that is right on the greyscale axis will be penalized by this factor for its tendency to be selected",
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                        },
+                        "iirPassDenoiseMinTime": {
+                            "description": "minimum time (in milliseconds) for an interval to be kept",
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "debugLevel": {
+                            "description": "setting it to 1 will show the binary image of the text area",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4
+                        }
+                    },
+                    "required": [
+                        "dialogRect",
+                        "featureThreshold",
+                        "colourTolerance",
                         "iirPassDenoiseMinTime",
                         "debugLevel"
                     ],

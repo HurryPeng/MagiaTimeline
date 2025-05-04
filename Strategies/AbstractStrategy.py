@@ -72,7 +72,11 @@ class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeature: typing.List[typing.Any]) -> bool:
+    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.List[typing.Any]) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def releaseFeaturesOnHook(self) -> bool:
         pass
 
     def genFramePoint(self, frame: cv.Mat, timestamp: int) -> FramePoint:

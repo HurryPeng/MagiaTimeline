@@ -25,6 +25,7 @@ from Strategies.ParakoStrategy import *
 from Strategies.BanGDreamStrategy import *
 from Strategies.OutlineStrategy import *
 from Strategies.BoxColourStatStrategy import *
+from Strategies.DiffOcrBooleanStrategy import *
 from Engines.SpeculativeEngine import *
 from Engines.FramewiseEngine import *
 from ExtraJobs import *
@@ -100,6 +101,8 @@ def main():
             strategy = OutlineStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "bcs":
             strategy = BoxColourStatStrategy(strategyConfig, contentRect)
+        elif config["strategy"] == "dob":
+            strategy = DiffOcrBooleanStrategy(strategyConfig, contentRect)
         else:
             raise Exception("Unknown strategy! ")
         assert strategy is not None

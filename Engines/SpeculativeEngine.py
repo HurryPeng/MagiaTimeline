@@ -20,11 +20,15 @@ class IntervalGrower(IIR):
         fps: fractions.Fraction,
         timeBase: fractions.Fraction,
         mainFlagIndex: AbstractFlagIndex,
+        featureFlagIndex: AbstractFlagIndex,
+        releaseFeatureOnHook: bool = False,
         ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None,
         verbose: bool = False
     ) -> None:
         super().__init__(flagIndexType, fps, timeBase)
-        self.mainFlag: AbstractFlagIndex = mainFlagIndex
+        self.mainFlagIndex: AbstractFlagIndex = mainFlagIndex
+        self.featureFlagIndex: AbstractFlagIndex = featureFlagIndex
+        self.releaseFeatureOnHook: bool = releaseFeatureOnHook
         self.ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = ocrFrameFlagIndex
 
         self.proposalStride: fractions.Fraction = fractions.Fraction(1, 2)
@@ -62,7 +66,7 @@ class IntervalGrower(IIR):
         return propose, prev, next
     
     def insertInterval(self, framePoint: FramePoint, frame: typing.Optional[av.frame.Frame]) -> Interval:
-        interval = Interval(self.flagIndexType, self.mainFlag, framePoint.timestamp, framePoint.timestamp, [framePoint])
+        interval = Interval(self.flagIndexType, self.mainFlagIndex, framePoint.timestamp, framePoint.timestamp, [framePoint])
         if self.ocrFrameFlagIndex is not None:
             assert frame is not None
             interval.setFlag(self.ocrFrameFlagIndex, frame)
@@ -72,7 +76,7 @@ class IntervalGrower(IIR):
             print("insertInterval       ", f"({interval.begin}, {interval.end}) {(interval.end - interval.begin)}", formatTimestamp(self.timeBase, interval.begin))
         return interval
 
-    def extendInterval(self, interval: Interval, framePoint: FramePoint):
+    def extendInterval(self, interval: Interval, framePoint: FramePoint) -> None:
         if interval.begin > framePoint.timestamp:
             interval.begin = framePoint.timestamp
             if self.verbose:
@@ -87,6 +91,9 @@ class IntervalGrower(IIR):
     def hookInterval(self, intervalL: Interval, intervalR: Interval):
         assert intervalL.end < intervalR.begin
         intervalL.end = intervalR.begin
+        if self.releaseFeatureOnHook:
+            for framePoint in intervalL.framePoints:
+                framePoint.setFlag(self.featureFlagIndex, None)
         if self.verbose:
             print("hookInterval         ", f"[{intervalL.begin}, {intervalL.end}}} {(intervalL.end - intervalL.begin)}", formatTimestamp(self.timeBase, intervalL.end))
 
@@ -219,7 +226,15 @@ class SpeculativeEngine(AbstractEngine):
 
         self.emptyFeatureMaxTimestamp: int = ms2Timestamp(self.emptyGapForceCheck, timeBase)
 
-        intervalGrower: IntervalGrower = IntervalGrower(strategy.getFlagIndexType(), fps, timeBase, mainFlagIndex, ocrFrameFlagIndex, self.debug)
+        intervalGrower: IntervalGrower = IntervalGrower(
+            strategy.getFlagIndexType(),
+            fps,
+            timeBase,
+            mainFlagIndex,
+            featureFlagIndex,
+            strategy.releaseFeaturesOnHook(),
+            ocrFrameFlagIndex,
+            self.debug)
         frameCache: FrameCache = FrameCache(container, stream)
 
         print("==== IIR Building ====")

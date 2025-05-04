@@ -72,7 +72,8 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 # - bdr: BanG Dream story video
 # - otl: Outlined text
 # - bcs: Box colour stat (general-purpose)
-strategy: bcs
+# - dob: Diff ocr boolean (general-purpose, experimental)
+strategy: dob
 
 # preset: which preset of parameters under a strategy to use
 preset: default
@@ -328,6 +329,26 @@ bcs:
     minColourAreaRatio: 0.01
     # maxGreyscalePenalty: a colour that is right on the greyscale axis will be penalized by this factor for its tendency to be selected
     maxGreyscalePenalty: 0.70
+    # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
+    iirPassDenoiseMinTime: 300
+    # debugLevel: 1 shows raw text boxes, 2 shows filtered text boxes, 3 shows accepted connected components, 4 shows text strokes
+    debugLevel: 0
+
+# Diff ocr boolean (general-purpose, experimental)
+dob:
+  default:
+    # dialogRect: rectangle of the detected dialog area
+    dialogRect: [0.00, 1.00, 0.75, 1.00]
+    # featureThreshold: minimum feature weight for a frame to be considered containing subtitles
+    featureThreshold: 0.3
+    # boxVerticalExpansion: vertical expansion ratio of the detected dialog box
+    boxVerticalExpansion: 0.05
+    # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
+    nonMajorBoxSuppressionMaxRatio: 0.2
+    # nonMajorBoxSuppressionMinRank: but at least this number of boxes will be kept
+    nonMajorBoxSuppressionMinRank: 1
+    # colourTolerance: distance from the selected mean colour to be filtered for text
+    colourTolerance: 30
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
     iirPassDenoiseMinTime: 300
     # debugLevel: 1 shows raw text boxes, 2 shows filtered text boxes, 3 shows accepted connected components, 4 shows text strokes
