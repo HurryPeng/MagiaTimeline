@@ -84,6 +84,7 @@ class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
         framePoint = FramePoint(self.getFlagIndexType(), timestamp)
         for cvPass in self.getCvPasses():
             cvPass(frame, framePoint)
+        framePoint.clearDebugFrame()
         return framePoint
     
     def getStatAnalyzedFrames(self) -> int:
