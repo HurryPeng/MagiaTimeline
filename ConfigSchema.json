@@ -117,7 +117,7 @@
                 "bdr",
                 "otl",
                 "bcs",
-                "dob"
+                "dtd"
             ]
         },
         "preset": {
@@ -556,12 +556,12 @@
                 }
             }
         },
-        "dob": {
-            "description": "Diff ocr boolean strategy",
+        "dtd": {
+            "description": "Diff text detection strategy",
             "type": "object",
             "patternProperties": {
                 ".*": {
-                    "description": "a preset for strategy dob",
+                    "description": "a preset for strategy dtd",
                     "type": "object",
                     "properties": {
                         "dialogRect": {

@@ -72,8 +72,8 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 # - bdr: BanG Dream story video
 # - otl: Outlined text
 # - bcs: Box colour stat (general-purpose)
-# - dob: Diff ocr boolean (general-purpose, experimental)
-strategy: dob
+# - dtd: Diff text detection (general-purpose, experimental)
+strategy: dtd
 
 # preset: which preset of parameters under a strategy to use
 preset: default
@@ -334,8 +334,8 @@ bcs:
     # debugLevel: 1 shows raw text boxes, 2 shows filtered text boxes, 3 shows accepted connected components, 4 shows text strokes
     debugLevel: 0
 
-# Diff ocr boolean (general-purpose, experimental)
-dob:
+# Diff text detection (general-purpose, experimental)
+dtd:
   default:
     # dialogRect: rectangle of the detected dialog area
     dialogRect: [0.00, 1.00, 0.75, 1.00]

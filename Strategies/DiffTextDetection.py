@@ -9,7 +9,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class DiffOcrBooleanStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractOcrStrategy):
+class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractOcrStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogVal = enum.auto()
@@ -46,7 +46,7 @@ class DiffOcrBooleanStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrat
         self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
         self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
         self.colourTolerance: int = config["colourTolerance"]
-        self.minIou: float = 0.7
+        self.minIou: float = 0.8
         self.iirPassDenoiseMinTime: int = config["iirPassDenoiseMinTime"]
         self.debugLevel: int = config["debugLevel"]
 
@@ -79,7 +79,7 @@ class DiffOcrBooleanStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrat
         
         self.fpirToIirPasses = collections.OrderedDict()
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
-            DiffOcrBooleanStrategy.FlagIndex.Dialog
+            DiffTextDetectionStrategy.FlagIndex.Dialog
         )
 
         self.iirPasses = collections.OrderedDict()
@@ -93,7 +93,7 @@ class DiffOcrBooleanStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrat
         #             interval1.getFlag(self.getFeatureFlagIndex())
         #         )
         # )
-        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(DiffOcrBooleanStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
+        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(DiffTextDetectionStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
         # self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
         # Generate uniform noise of the size of self.dialogRect
@@ -239,9 +239,9 @@ class DiffOcrBooleanStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrat
         if hasDialog:
             feat = (image, mask)
 
-        framePoint.setFlag(DiffOcrBooleanStrategy.FlagIndex.Dialog, hasDialog)
-        framePoint.setFlag(DiffOcrBooleanStrategy.FlagIndex.DialogVal, dialogVal)
-        framePoint.setFlag(DiffOcrBooleanStrategy.FlagIndex.DialogFeat, feat)
+        framePoint.setFlag(DiffTextDetectionStrategy.FlagIndex.Dialog, hasDialog)
+        framePoint.setFlag(DiffTextDetectionStrategy.FlagIndex.DialogVal, dialogVal)
+        framePoint.setFlag(DiffTextDetectionStrategy.FlagIndex.DialogFeat, feat)
 
         return False
 
