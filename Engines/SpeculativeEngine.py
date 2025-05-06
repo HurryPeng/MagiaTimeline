@@ -279,7 +279,7 @@ class SpeculativeEngine(AbstractEngine):
                 print(framePoint2.toString(timeBase))
                 merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint2.getFlag(featureFlagIndex)])
                 dist = prev.distFramePoint(framePoint2)
-                if merge and not (strategy.isEmptyFeature(framePoint2.getFlag(featureFlagIndex)) and dist > self.emptyFeatureMaxTimestamp):
+                if merge and not dist > self.emptyFeatureMaxTimestamp:
                     intervalGrower.extendInterval(prev, framePoint2)
                 else:
                     intervalGrower.insertInterval(framePoint2, frameI2)

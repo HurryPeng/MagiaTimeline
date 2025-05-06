@@ -154,48 +154,57 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         intersectArea = np.sum(intersectMask) / 255
         unionArea = np.sum(unionMask) / 255
 
-        # debugFrameNew = cv.addWeighted(newImage, 0.5, cv.cvtColor(newMask, cv.COLOR_GRAY2BGR), 0.5, 0)
-        # debugFrameOld = cv.addWeighted(oldImage, 0.5, cv.cvtColor(oldMask, cv.COLOR_GRAY2BGR), 0.5, 0)
-        # debugFrame = cv.addWeighted(debugFrameNew, 0.5, debugFrameOld, 0.5, 0)
+        if self.debugLevel >= 2:
+            debugFrameNew = cv.addWeighted(newImage, 0.5, cv.cvtColor(newMask, cv.COLOR_GRAY2BGR), 0.5, 0)
+            debugFrameOld = cv.addWeighted(oldImage, 0.5, cv.cvtColor(oldMask, cv.COLOR_GRAY2BGR), 0.5, 0)
+            debugFrame = cv.addWeighted(debugFrameNew, 0.5, debugFrameOld, 0.5, 0)
         
         if unionArea == 0:
             return False
         
         iou = intersectArea / unionArea
-        # print("intersectArea:", intersectArea)
-        # print("unionArea:", unionArea)
-        # print("iou:", iou)
+        if self.debugLevel >= 1:
+            print("intersectArea:", intersectArea)
+            print("unionArea:", unionArea)
+            print("iou:", iou)
 
-        # if iou < self.minIou:
-        #     print("NO")
-        # else:
-        #     print("WAIT")
+        if self.debugLevel >= 1:
+            if iou < self.minIou:
+                print("NO")
+            else:
+                print("WAIT")
         
         if iou < self.minIou:
             return False
-        
-        # cv.imshow("DebugFrame", debugFrame)
-        # cv.waitKey(0)
         
         diffImage = cv.absdiff(oldImage, newImage)
         diffImageGrey = cv.cvtColor(diffImage, cv.COLOR_BGR2GRAY)
         _, diffMask = cv.threshold(diffImageGrey, self.colourTolerance, 255, cv.THRESH_BINARY)
         # The rate of pixels that are close enough
         diffRate = np.average(diffMask) / 255
-        # print("diffRate:", diffRate)
-        if diffRate < 0.001:
-            # print("YES IDENTICAL")
+        if self.debugLevel >= 1:
+            print("diffRate:", diffRate)
+        if diffRate < 0.01:
+            if self.debugLevel >= 1:
+                print("YES IDENTICAL")
             return True
-        # cv.imshow("DebugFrame", diffMask)
-        # cv.waitKey(0)
+        
+        if self.debugLevel >= 2:
+            cv.imshow("DebugFrame", debugFrame)
+            cv.waitKey(0)
+
+        if self.debugLevel >= 21:
+            cv.imshow("DebugFrame", diffMask)
+            cv.waitKey(0)
         inpaintMask = cv.bitwise_and(cv.bitwise_not(diffMask), unionMask)
-        # cv.imshow("DebugFrame", inpaintMask)
-        # cv.waitKey(0)
+        if self.debugLevel >= 2:
+            cv.imshow("DebugFrame", inpaintMask)
+            cv.waitKey(0)
         biggerImage = oldImage if oldArea > newArea else newImage
         biggerImageInpaint = cv.inpaint(biggerImage, inpaintMask, 3, cv.INPAINT_TELEA)
-        # noisifiedImage = cv.bitwise_and(noisifiedImage, noisifiedImage, mask=intersectMask)
-        # cv.imshow("DebugFrame", newImageInpaint)
-        # cv.waitKey(0)
+        if self.debugLevel >= 2:
+            cv.imshow("DebugFrame", biggerImageInpaint)
+            cv.waitKey(0)
         
         # Perform ocr on the noisified image and recompute iou
         ocrMask, _, _ = self.ocrPass(biggerImageInpaint)
@@ -205,19 +214,21 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         ocrIntersectArea = np.sum(ocrIntersectMask) / 255
         ocrIou = ocrIntersectArea / unionArea
 
-        # print("ocrIntersectVal:", ocrIntersectVal)
-        # print("unionArea:", unionArea)
-        # print("ocrIou:", ocrIou)
+        if self.debugLevel >= 1:
+            print("ocrIntersectVal:", ocrIntersectVal)
+            print("unionArea:", unionArea)
+            print("ocrIou:", ocrIou)
 
-        # # After inpainting the common area, detecting no text means the original texts are the same
-        # if ocrIntersectVal < self.featureThreshold or ocrIou < 1 - self.minIou:
-        #     print("YES")
-        # else:
-        #     print("NOO")
-
-        # debugFrame = cv.addWeighted(newImageInpaint, 0.5, cv.cvtColor(ocrIntersectMask, cv.COLOR_GRAY2BGR), 0.5, 0)
-        # cv.imshow("DebugFrame", debugFrame)
-        # cv.waitKey(0)
+        # After inpainting the common area, detecting no text means the original texts are the same
+        if self.debugLevel >= 1:
+            if ocrIntersectVal < self.featureThreshold or ocrIou < 1 - self.minIou:
+                print("YES")
+            else:
+                print("NOO")
+        if self.debugLevel >= 2:
+            debugFrame = cv.addWeighted(biggerImageInpaint, 0.5, cv.cvtColor(ocrIntersectMask, cv.COLOR_GRAY2BGR), 0.5, 0)
+            cv.imshow("DebugFrame", debugFrame)
+            cv.waitKey(0)
 
         return ocrIntersectVal < self.featureThreshold or ocrIou < 1 - self.minIou
 
