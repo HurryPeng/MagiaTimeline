@@ -32,7 +32,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         AbstractSpeculativeStrategy.__init__(self)
 
         self.ocr = paddleocr.PaddleOCR(
-            det=True, rec=False, cls=False, use_angle_cls=False, det_algorithm="DB", show_log=False,
+            det=True, rec=False, cls=False, use_angle_cls=False, show_log=False,
             det_model_dir="./PaddleOCRModels/ch_PP-OCRv4_det_infer/",
             rec_model_dir="./PaddleOCRModels/ch_PP-OCRv4_rec_infer/",
             cls_model_dir="./PaddleOCRModels/ch_ppocr_mobile_v2.0_cls_infer/"
@@ -46,7 +46,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
         self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
         self.colourTolerance: int = config["colourTolerance"]
-        self.minIou: float = 0.8
+        self.minIou: float = 0.7
         self.iirPassDenoiseMinTime: int = config["iirPassDenoiseMinTime"]
         self.debugLevel: int = config["debugLevel"]
 
@@ -95,10 +95,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         # )
         self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(DiffTextDetectionStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
         # self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
-
-        # Generate uniform noise of the size of self.dialogRect
-        self.backgroudNoise: cv.Mat = np.zeros((*reversed(self.dialogRect.getSizeInt()), 3), np.uint8)
-        cv.randu(self.backgroudNoise, (0, 0, 0), (255, 255, 255))
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -153,35 +149,78 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         # Quick mask iou check before performing ocr on the intersection of the two images
         intersectMask = cv.bitwise_and(oldMask, newMask)
         unionMask = cv.bitwise_or(oldMask, newMask)
-        intersectArea = np.sum(intersectMask > 0)
-        unionArea = np.sum(unionMask > 0)
+        oldArea = np.sum(oldMask) / 255
+        newArea = np.sum(newMask) / 255
+        intersectArea = np.sum(intersectMask) / 255
+        unionArea = np.sum(unionMask) / 255
+
+        # debugFrameNew = cv.addWeighted(newImage, 0.5, cv.cvtColor(newMask, cv.COLOR_GRAY2BGR), 0.5, 0)
+        # debugFrameOld = cv.addWeighted(oldImage, 0.5, cv.cvtColor(oldMask, cv.COLOR_GRAY2BGR), 0.5, 0)
+        # debugFrame = cv.addWeighted(debugFrameNew, 0.5, debugFrameOld, 0.5, 0)
+        
         if unionArea == 0:
             return False
+        
         iou = intersectArea / unionArea
+        # print("intersectArea:", intersectArea)
+        # print("unionArea:", unionArea)
+        # print("iou:", iou)
+
+        # if iou < self.minIou:
+        #     print("NO")
+        # else:
+        #     print("WAIT")
+        
         if iou < self.minIou:
             return False
         
-        # Take the average of the two images where both masks are 1 and the colour difference is less than the colour tolerance
-        # Other areas are set to self.backgroudNoise
+        # cv.imshow("DebugFrame", debugFrame)
+        # cv.waitKey(0)
+        
         diffImage = cv.absdiff(oldImage, newImage)
         diffImageGrey = cv.cvtColor(diffImage, cv.COLOR_BGR2GRAY)
-        diffMask = diffImageGrey < self.colourTolerance
-        combinedMask = cv.bitwise_and(intersectMask, diffMask.astype(np.uint8))
-        avgImage = cv.addWeighted(oldImage, 0.5, newImage, 0.5, 0)
-        noisifiedImage = self.noisifyUnmasked(avgImage, combinedMask)
+        _, diffMask = cv.threshold(diffImageGrey, self.colourTolerance, 255, cv.THRESH_BINARY)
+        # The rate of pixels that are close enough
+        diffRate = np.average(diffMask) / 255
+        # print("diffRate:", diffRate)
+        if diffRate < 0.001:
+            # print("YES IDENTICAL")
+            return True
+        # cv.imshow("DebugFrame", diffMask)
+        # cv.waitKey(0)
+        inpaintMask = cv.bitwise_and(cv.bitwise_not(diffMask), unionMask)
+        # cv.imshow("DebugFrame", inpaintMask)
+        # cv.waitKey(0)
+        biggerImage = oldImage if oldArea > newArea else newImage
+        biggerImageInpaint = cv.inpaint(biggerImage, inpaintMask, 3, cv.INPAINT_TELEA)
+        # noisifiedImage = cv.bitwise_and(noisifiedImage, noisifiedImage, mask=intersectMask)
+        # cv.imshow("DebugFrame", newImageInpaint)
+        # cv.waitKey(0)
         
         # Perform ocr on the noisified image and recompute iou
-        ocrMask, _, _ = self.ocrPass(noisifiedImage)
-        ocrIntersectMask = cv.bitwise_and(ocrMask, intersectMask)
-        ocrIntersectArea = np.sum(ocrIntersectMask > 0)
+        ocrMask, _, _ = self.ocrPass(biggerImageInpaint)
+
+        ocrIntersectMask = cv.bitwise_and(ocrMask, unionMask)
+        ocrIntersectVal = np.mean(ocrIntersectMask)
+        ocrIntersectArea = np.sum(ocrIntersectMask) / 255
         ocrIou = ocrIntersectArea / unionArea
 
-        debugFrame = cv.addWeighted(noisifiedImage, 0.5, cv.cvtColor(ocrMask, cv.COLOR_GRAY2BGR), 0.5, 0)
-        # cv.imshow("DebugFrame", debugFrame)
-        # cv.waitKey(1)
+        # print("ocrIntersectVal:", ocrIntersectVal)
+        # print("unionArea:", unionArea)
+        # print("ocrIou:", ocrIou)
 
-        return ocrIou >= self.minIou
-    
+        # # After inpainting the common area, detecting no text means the original texts are the same
+        # if ocrIntersectVal < self.featureThreshold or ocrIou < 1 - self.minIou:
+        #     print("YES")
+        # else:
+        #     print("NOO")
+
+        # debugFrame = cv.addWeighted(newImageInpaint, 0.5, cv.cvtColor(ocrIntersectMask, cv.COLOR_GRAY2BGR), 0.5, 0)
+        # cv.imshow("DebugFrame", debugFrame)
+        # cv.waitKey(0)
+
+        return ocrIntersectVal < self.featureThreshold or ocrIou < 1 - self.minIou
+
     def releaseFeaturesOnHook(self) -> bool:
         return True
 
@@ -189,12 +228,12 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         return self.dialogRect.cutRoi(frame)
     
     def cutCleanOcrFrame(self, frame: cv.Mat) -> cv.Mat:
-        image = self.dialogRect.cutRoi(frame)
-        mask, _, _ = self.ocrPass(image)
-        return self.noisifyUnmasked(frame, mask)
+        return self.dialogRect.cutRoi(frame)
     
-    def detectTextBoxes(self, frame: cv.Mat) -> typing.List[typing.Tuple[int, int, int, int]]:
-        result = self.ocr.ocr(frame, det=True, cls=False, rec=False)
+    def detectTextBoxes(self, frame: cv.Mat, doRec: bool) -> typing.List[typing.Tuple[int, int, int, int]]:
+        result = self.ocr.ocr(frame, det=True, cls=False, rec=doRec)
+
+        # print("ocr result:", result)
 
         imgH, imgW = frame.shape[:2]
 
@@ -203,6 +242,11 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         boxes = []
         for wordInfo in result[0]:
+            if doRec:
+                confidence = wordInfo[1][1]
+                if confidence < 0.9:
+                    continue
+                wordInfo = wordInfo[0]
             x0, y0 = wordInfo[0]
             x1, y1 = wordInfo[1]
             x2, y2 = wordInfo[2]
@@ -231,8 +275,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         mask, dialogVal, debugFrame = self.ocrPass(image)
 
-        framePoint.setDebugFrame(self.noisifyUnmasked(image, mask))
-
         hasDialog = dialogVal > self.featureThreshold
 
         feat: typing.Tuple[cv.Mat, cv.Mat] = (None, None)
@@ -245,10 +287,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         return False
 
-    def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, float, cv.Mat | None]:
+    def ocrPass(self, frame: cv.Mat, doRec: bool = False) -> typing.Tuple[cv.Mat, float, cv.Mat | None]:
         # returns mask, dialogVal, debugFrame
 
-        boxes = self.detectTextBoxes(frame)
+        boxes = self.detectTextBoxes(frame, doRec)
 
         mask: cv.Mat = np.zeros_like(frame[:, :, 0])
         boxSizeSum = 0
@@ -265,9 +307,3 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         dialogVal: float = np.mean(mask)
 
         return mask, dialogVal, mask
-    
-    def noisifyUnmasked(self, image: cv.Mat, mask: cv.Mat) -> cv.Mat:
-        # Set the image to self.backgroudNoise where the mask is 0
-        noisifiedImage = self.backgroudNoise.copy()
-        cv.copyTo(image, mask, noisifiedImage)
-        return noisifiedImage
