@@ -69,9 +69,9 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
 
         # def breakDialogJump(framePoint: FramePoint):
-        #     framePoint.setFlag(DiffOcrBooleanStrategy.FlagIndex.Dialog,
-        #         framePoint.getFlag(DiffOcrBooleanStrategy.FlagIndex.Dialog)
-        #         and not framePoint.getFlag(DiffOcrBooleanStrategy.FlagIndex.DialogFeatJump)
+        #     framePoint.setFlag(DiffTextDetectionStrategy.FlagIndex.Dialog,
+        #         framePoint.getFlag(DiffTextDetectionStrategy.FlagIndex.Dialog)
+        #         and not framePoint.getFlag(DiffTextDetectionStrategy.FlagIndex.DialogFeatJump)
         #     )
         # self.fpirPasses["fpirPassBreakDialogJump"] = FPIRPassFramewiseFunctional(
         #     func=breakDialogJump
@@ -86,13 +86,13 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         # self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(DiffOcrBooleanStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime, meetPoint=1.0)
         
         self.specIirPasses = collections.OrderedDict()
-        # self.specIirPasses["iirPassMerge"] = IIRPassMerge(
-        #     lambda interval0, interval1:
-        #         self.decideFeatureMerge(
-        #             interval0.getFlag(self.getFeatureFlagIndex()),
-        #             interval1.getFlag(self.getFeatureFlagIndex())
-        #         )
-        # )
+        self.specIirPasses["iirPassMerge"] = IIRPassMerge(
+            lambda interval0, interval1:
+                self.decideFeatureMerge(
+                    [interval0.getFlag(self.getFeatureFlagIndex())],
+                    [interval1.getFlag(self.getFeatureFlagIndex())]
+                )
+        )
         self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(DiffTextDetectionStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
         # self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
@@ -231,8 +231,12 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             cv.waitKey(0)
 
         return ocrIntersectVal < self.featureThreshold or ocrIou < 1 - self.minIou
+    
+    def aggregateFeatures(self, features: typing.List[typing.Any]) -> typing.Any:
+        # simply return the last feature
+        return features[-1]
 
-    def releaseFeaturesOnHook(self) -> bool:
+    def aggregateAndMoveFeatureToIntervalOnHook(self) -> bool:
         return True
 
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:

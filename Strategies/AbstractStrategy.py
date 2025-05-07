@@ -76,7 +76,11 @@ class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def releaseFeaturesOnHook(self) -> bool:
+    def aggregateFeatures(self, features: typing.List[typing.Any]) -> typing.Any:
+        pass
+
+    @abc.abstractmethod
+    def aggregateAndMoveFeatureToIntervalOnHook(self) -> bool:
         pass
 
     def genFramePoint(self, frame: cv.Mat, timestamp: int) -> FramePoint:

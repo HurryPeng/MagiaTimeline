@@ -9,6 +9,36 @@ import threading
 import uuid
 import diskcache
 import atexit
+import pickle
+import lz4
+
+class CompressedDisk(diskcache.Disk):
+    """Cache key and value using zlib compression."""
+
+    def __init__(self, directory, compress_level=4, **kwargs):
+        self.compress_level = compress_level
+        super().__init__(directory, **kwargs)
+
+    def put(self, key):
+        pickle_bytes = pickle.dumps(key)
+        data = lz4.frame.compress(pickle_bytes, compression_level=self.compress_level)
+        return super().put(data)
+
+    def get(self, key, raw):
+        data = super().get(key, raw)
+        return pickle.loads(lz4.frame.decompress(data)) if data else None
+
+    def store(self, value, read, key):
+        if not read:
+            pickle_bytes = pickle.dumps(value)
+            value = lz4.frame.compress(pickle_bytes, compression_level=self.compress_level)
+        return super().store(value, read, key=key)
+
+    def fetch(self, mode, filename, value, read):
+        data = super().fetch(mode, filename, value, read)
+        if not read:
+            data = pickle.loads(lz4.frame.decompress(data))
+        return data
 
 # Private globals for cache initialization
 _tempLock = threading.Lock()
@@ -28,12 +58,15 @@ def getCache() -> diskcache.Cache:
         with _tempLock:
             if _cacheInstance is None:
                 print(f"Disk cache initialized at {_tempDir.name}")
-                _cacheInstance = diskcache.Cache(_tempDir.name, eviction_policy='none')
+                _cacheInstance = diskcache.Cache(_tempDir.name, eviction_policy='none', disk=CompressedDisk)
     return _cacheInstance
 
 @atexit.register
 def _cleanupCache():
-    getCache().close()
+    global _cacheInstance
+    if _cacheInstance is not None:
+        _cacheInstance.close()
+        _cacheInstance = None
     _tempDir.cleanup()
 
 class DiskCacheHandle:
@@ -42,8 +75,9 @@ class DiskCacheHandle:
         getCache()[self.key] = value
 
     def get(self) -> typing.Any:
-        print(f"Disk cache handle {self.key} accessed")
-        return getCache()[self.key]
+        value = getCache()[self.key]
+        assert value is not None, "Cache value has been deleted!"
+        return value
     
 def containsLargeNdarray(obj: typing.Any) -> bool:
     """

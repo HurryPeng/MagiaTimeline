@@ -21,14 +21,16 @@ class IntervalGrower(IIR):
         timeBase: fractions.Fraction,
         mainFlagIndex: AbstractFlagIndex,
         featureFlagIndex: AbstractFlagIndex,
-        releaseFeatureOnHook: bool = False,
+        aggregateFeatures: typing.Callable[[typing.List[typing.Any]], typing.Any],
+        aggregateAndMoveFeatureToIntervalOnHook: bool = False,
         ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None,
         verbose: bool = False
     ) -> None:
         super().__init__(flagIndexType, fps, timeBase)
         self.mainFlagIndex: AbstractFlagIndex = mainFlagIndex
         self.featureFlagIndex: AbstractFlagIndex = featureFlagIndex
-        self.releaseFeatureOnHook: bool = releaseFeatureOnHook
+        self.aggregateFeatures: typing.Callable[[typing.List[typing.Any]], typing.Any] = aggregateFeatures
+        self.aggregateAndMoveFeatureToIntervalOnHook: bool = aggregateAndMoveFeatureToIntervalOnHook
         self.ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = ocrFrameFlagIndex
 
         self.proposalStride: fractions.Fraction = fractions.Fraction(1, 2)
@@ -91,7 +93,10 @@ class IntervalGrower(IIR):
     def hookInterval(self, intervalL: Interval, intervalR: Interval):
         assert intervalL.end < intervalR.begin
         intervalL.end = intervalR.begin
-        if self.releaseFeatureOnHook:
+        if self.aggregateAndMoveFeatureToIntervalOnHook:
+            features = [framePoint.getFlag(self.featureFlagIndex) for framePoint in intervalL.framePoints]
+            featuresAggregated = self.aggregateFeatures(features)
+            intervalL.setFlag(self.featureFlagIndex, featuresAggregated, inDiskCache=True)
             for framePoint in intervalL.framePoints:
                 framePoint.setFlag(self.featureFlagIndex, None)
         if self.verbose:
@@ -232,7 +237,8 @@ class SpeculativeEngine(AbstractEngine):
             timeBase,
             mainFlagIndex,
             featureFlagIndex,
-            strategy.releaseFeaturesOnHook(),
+            strategy.aggregateFeatures,
+            strategy.aggregateAndMoveFeatureToIntervalOnHook(),
             ocrFrameFlagIndex,
             self.debug)
         frameCache: FrameCache = FrameCache(container, stream)
