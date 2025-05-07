@@ -13,15 +13,16 @@ class FramePoint:
         self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
         self.debugFrame: cv.Mat | None = None
 
-    def setFlag(self, index: AbstractFlagIndex, val: typing.Any):
+    def setFlag(self, index: AbstractFlagIndex, val: typing.Any, inDiskCache: bool = False):
+        if inDiskCache:
+            val = DiskCacheHandle(val)
         self.flags[index] = val
 
     def getFlag(self, index: AbstractFlagIndex) -> typing.Any:
-        return self.flags[index]
-
-    def setFlags(self, map: typing.Dict[AbstractFlagIndex, typing.Any]):
-        for k, v in map.items():
-            self.flags[k] = v
+        val = self.flags[index]
+        if isinstance(val, DiskCacheHandle):
+            return val.get()
+        return val
 
     def setDebugFlag(self, *val: typing.Any):
         self.flags[self.flagIndexType.Debug()] = val
@@ -209,11 +210,16 @@ class Interval:
     def getName(self, id: int = -1) -> str:
         return f"Subtitle_{self.mainFlag.name}_{id}"
     
-    def getFlag(self, index: AbstractFlagIndex) -> typing.Any:
-        return self.flags[index]
-    
-    def setFlag(self, index: AbstractFlagIndex, val: typing.Any):
+    def setFlag(self, index: AbstractFlagIndex, val: typing.Any, inDiskCache: bool = False):
+        if inDiskCache:
+            val = DiskCacheHandle(val)
         self.flags[index] = val
+
+    def getFlag(self, index: AbstractFlagIndex) -> typing.Any:
+        val = self.flags[index]
+        if isinstance(val, DiskCacheHandle):
+            return val.get()
+        return val
 
     def toAss(self, timeBase: fractions.Fraction, id: int = -1) -> str:
         template = "Dialogue: 0,{},{},{},,0,0,0,,{}"

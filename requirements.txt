@@ -7,3 +7,4 @@ paddlepaddle>=2.6,<3.0
 paddleocr>=2.8,<2.10
 scikit-learn>=1.5
 pytesseract>=0.3
+diskcache>=5.6
