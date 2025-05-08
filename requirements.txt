@@ -1,6 +1,6 @@
 setuptools>=74.0
 opencv-contrib-python>=4.10
-pyav>=13.0
+av>=13.0
 jsonschema>=4.23
 pyyaml>=6.0
 paddlepaddle>=2.6,<3.0
