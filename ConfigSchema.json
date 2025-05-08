@@ -529,7 +529,7 @@
                             "minimum": 0
                         },
                         "debugLevel": {
-                            "description": "setting it to 1 will show the binary image of the text area",
+                            "description": "1 shows raw text boxes, 2 shows filtered text boxes, 3 shows accepted connected components, 4 shows text strokes",
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 4
