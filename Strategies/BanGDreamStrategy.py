@@ -22,10 +22,20 @@ class BanGDreamStrategy(AbstractFramewiseStrategy):
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         AbstractStrategy.__init__(self, contentRect)
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
-        for k, v in config.items():
-            self.rectangles[k] = RatioRectangle(contentRect, *v)
+        self.rectangles["dialogRect"] = RatioRectangle(contentRect, *config["dialogRect"])
 
         self.dialogRect = self.rectangles["dialogRect"]
+        self.jumpThreshDist: float = config["jumpThreshDist"]
+        self.fillGapMaxGap: int = config["fillGapMaxGap"]
+        self.fillGapMeetPoint: float = config["fillGapMeetPoint"]
+        self.bgMinBrightness: int = config["bgMinBrightness"]
+        self.bgMaxBrightness: int = config["bgMaxBrightness"]
+        self.bgMinMeanVal: float = config["bgMinMeanVal"]
+        self.bgMaxMeanVal: float = config["bgMaxMeanVal"]
+        self.textMinBrightness: int = config["textMinBrightness"]
+        self.textMaxBrightness: int = config["textMaxBrightness"]
+        self.textMinMeanVal: float = config["textMinMeanVal"]
+        self.textMaxMeanVal: float = config["textMaxMeanVal"]
 
         self.cvPasses = [self.cvPassDialog]
 
@@ -36,7 +46,7 @@ class BanGDreamStrategy(AbstractFramewiseStrategy):
             dstFlag=BanGDreamStrategy.FlagIndex.DialogTextJump, 
             featOpMean=lambda feats : np.mean(feats, 0),
             featOpDist=lambda lhs, rhs : abs(lhs-rhs),
-            threshDist=2.0
+            threshDist=self.jumpThreshDist
         )
 
         def breakDialogJump(framePoint: FramePoint):
@@ -54,7 +64,7 @@ class BanGDreamStrategy(AbstractFramewiseStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BanGDreamStrategy.FlagIndex.Dialog, 500, meetPoint=0.5)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BanGDreamStrategy.FlagIndex.Dialog, self.fillGapMaxGap, meetPoint=self.fillGapMeetPoint)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -79,13 +89,14 @@ class BanGDreamStrategy(AbstractFramewiseStrategy):
         roiDialog = self.dialogRect.cutRoiToUmat(frame)
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
 
-        _, roiDialogBinBg = cv.threshold(roiDialogGray, 200, 255, cv.THRESH_BINARY)
+        roiDialogBinBg = cv.inRange(roiDialogGray, self.bgMinBrightness, self.bgMaxBrightness)
         meanDialogBinBg = cv.mean(roiDialogBinBg)[0]
 
-        _, roiDialogBinText = cv.threshold(roiDialogGray, 128, 255, cv.THRESH_BINARY_INV)
+        roiDialogBinText = cv.inRange(roiDialogGray, self.textMinBrightness, self.textMaxBrightness)
         meanDialogBinText = cv.mean(roiDialogBinText)[0]
 
-        hasDialog = meanDialogBinBg > 200 and meanDialogBinText > 0.5 and meanDialogBinText < 32
+        hasDialog = meanDialogBinBg >= self.bgMinMeanVal and meanDialogBinBg <= self.bgMaxMeanVal \
+                    and meanDialogBinText >= self.textMinMeanVal and meanDialogBinText <= self.textMaxMeanVal
 
         framePoint.setFlag(BanGDreamStrategy.FlagIndex.Dialog, hasDialog)
         framePoint.setFlag(BanGDreamStrategy.FlagIndex.DialogBgVal, meanDialogBinBg)

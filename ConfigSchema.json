@@ -322,10 +322,85 @@
                     "properties": {
                         "dialogRect": {
                             "$ref": "#/$defs/ratioRectangle"
+                        },
+                        "jumpThreshDist": {
+                            "description": "threshold distance for jump detection",
+                            "type": "number",
+                            "minimum": 0
+                        },
+                        "fillGapMaxGap": {
+                            "description": "maximum gap in milliseconds to fill",
+                            "type": "integer",
+                            "minimum": 0
+                        },
+                        "fillGapMeetPoint": {
+                            "description": "meeting point ratio for filling gaps",
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                        },
+                        "bgMinBrightness": {
+                            "description": "minimum brightness for background",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                        },
+                        "bgMaxBrightness": {
+                            "description": "maximum brightness for background",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                        },
+                        "bgMinMeanVal": {
+                            "description": "minimum mean value for background",
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 255
+                        },
+                        "bgMaxMeanVal": {
+                            "description": "maximum mean value for background",
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 255
+                        },
+                        "textMinBrightness": {
+                            "description": "minimum brightness for text",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                        },
+                        "textMaxBrightness": {
+                            "description": "maximum brightness for text",
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 255
+                        },
+                        "textMinMeanVal": {
+                            "description": "minimum mean value for text",
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 255
+                        },
+                        "textMaxMeanVal": {
+                            "description": "maximum mean value for text",
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 255
                         }
                     },
                     "required": [
-                        "dialogRect"
+                        "dialogRect",
+                        "jumpThreshDist",
+                        "fillGapMaxGap",
+                        "fillGapMeetPoint",
+                        "bgMinBrightness",
+                        "bgMaxBrightness",
+                        "bgMinMeanVal",
+                        "bgMaxMeanVal",
+                        "textMinBrightness",
+                        "textMaxBrightness",
+                        "textMinMeanVal",
+                        "textMaxMeanVal"
                     ],
                     "additionalProperties": false
                 }

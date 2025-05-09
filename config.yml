@@ -162,6 +162,31 @@ prk:
 bdr:
   default:
     dialogRect: [0.06, 0.94, 0.82, 0.96]
+    jumpThreshDist: 2.0
+    fillGapMaxGap: 500
+    fillGapMeetPoint: 0.5
+    bgMinBrightness: 200
+    bgMaxBrightness: 255
+    bgMinMeanVal: 200.0
+    bgMaxMeanVal: 255.0
+    textMinBrightness: 0
+    textMaxBrightness: 128
+    textMinMeanVal: 0.5
+    textMaxMeanVal: 32.0
+  
+  bunaru:
+    dialogRect: [0.04, 0.96, 0.82, 0.96]
+    jumpThreshDist: 2.0
+    fillGapMaxGap: 500
+    fillGapMeetPoint: 0.5
+    bgMinBrightness: 170
+    bgMaxBrightness: 255
+    bgMinMeanVal: 200.0
+    bgMaxMeanVal: 255.0
+    textMinBrightness: 0
+    textMaxBrightness: 128
+    textMinMeanVal: 0.5
+    textMaxMeanVal: 32.0
 
 # Outlined text
 otl:
