@@ -29,10 +29,16 @@ from Engines.SpeculativeEngine import *
 from Engines.FramewiseEngine import *
 from ExtraJobs import *
 
+VERSION = "1.0.0"
+
 def main():
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--config", type=str, default="config.yml", help="config file stating parameters to run with")
-    parser.add_argument("--schema", type=str, default="ConfigSchema.json", help="schema file specifying the format of config file")
+    parser = argparse.ArgumentParser(
+        description=f"MagiaTimeline {VERSION} - https://github.com/HurryPeng/MagiaTimeline",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument("--config", type=str, default="config.yml", help="config file specifying the source and destination files and other parameters")
+    parser.add_argument("--schema", type=str, default="ConfigSchema.json", help="schema file for config validation")
+    parser.add_argument("--version", action="version", version=VERSION)
     args = parser.parse_args()
     
     schema = json.load(open(args.schema, "r"))
