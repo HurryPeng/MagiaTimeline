@@ -142,6 +142,10 @@ def rgbSobel(image: cv.Mat, ksize: int) -> cv.Mat:
     imageSobel = cv.convertScaleAbs(cv.addWeighted(cv.addWeighted(imageSobelR, 1/3, imageSobelG, 1/3, 0), 1, imageSobelB, 1/3, 0))
     return imageSobel
 
+def rgbDiffMask(lhs: cv.Mat, rhs: cv.Mat, threshold: int) -> cv.Mat:
+    diff = cv.absdiff(lhs, rhs)
+    return cv.bitwise_not(cv.inRange(diff, (0, 0, 0), (threshold, threshold, threshold)))
+
 def ensureMat(frame):
     if isinstance(frame, cv.UMat):
         return frame.get()

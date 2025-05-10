@@ -14,7 +14,7 @@ class FramePoint:
         self.debugFrame: cv.Mat | None = None
 
     def setFlag(self, index: AbstractFlagIndex, val: typing.Any, inDiskCache: bool = False):
-        if inDiskCache:
+        if inDiskCache and val is not None:
             val = DiskCacheHandle(val)
         self.flags[index] = val
 
@@ -211,7 +211,7 @@ class Interval:
         return f"Subtitle_{self.mainFlag.name}_{id}"
     
     def setFlag(self, index: AbstractFlagIndex, val: typing.Any, inDiskCache: bool = False):
-        if inDiskCache:
+        if inDiskCache and val is not None:
             val = DiskCacheHandle(val)
         self.flags[index] = val
 

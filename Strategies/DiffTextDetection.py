@@ -177,11 +177,9 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if iou < self.minIou:
             return False
         
-        diffImage = cv.absdiff(oldImage, newImage)
-        diffImageGrey = cv.cvtColor(diffImage, cv.COLOR_BGR2GRAY)
-        _, diffMask = cv.threshold(diffImageGrey, self.colourTolerance, 255, cv.THRESH_BINARY)
+        diffMask: cv.Mat = rgbDiffMask(oldImage, newImage, self.colourTolerance)
         # The rate of pixels that are close enough
-        diffRate = np.average(diffMask) / 255
+        diffRate = np.mean(diffMask) / 255
         if self.debugLevel >= 1:
             print("diffRate:", diffRate)
         if diffRate < 0.01:

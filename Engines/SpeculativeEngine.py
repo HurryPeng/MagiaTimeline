@@ -304,7 +304,7 @@ class SpeculativeEngine(AbstractEngine):
                 if mergeLeft and not (isEmptyFeature and distLeft > self.emptyFeatureMaxTimestamp):
                     intervalGrower.extendInterval(prev, framePoint)
                 else:
-                    mergeRight = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in next.framePoints], [framePoint.getFlag(featureFlagIndex)])
+                    mergeRight = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex)], [framePoint.getFlag(featureFlagIndex) for framePoint in next.framePoints])
                     distRight = next.distFramePoint(framePoint)
                     if mergeRight and not (isEmptyFeature and distRight > self.emptyFeatureMaxTimestamp):
                         intervalGrower.extendInterval(next, framePoint)
