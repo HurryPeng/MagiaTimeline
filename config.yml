@@ -342,13 +342,13 @@ dtd:
     # featureThreshold: minimum feature weight for a frame to be considered containing subtitles
     featureThreshold: 0.3
     # boxVerticalExpansion: vertical expansion ratio of the detected dialog box
-    boxVerticalExpansion: 0.10
+    boxVerticalExpansion: 0.20
     # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
-    nonMajorBoxSuppressionMaxRatio: 0.2
+    nonMajorBoxSuppressionMaxRatio: 0.3
     # nonMajorBoxSuppressionMinRank: but at least this number of boxes will be kept
     nonMajorBoxSuppressionMinRank: 1
     # colourTolerance: distance from the selected mean colour to be filtered for text
-    colourTolerance: 30
+    colourTolerance: 50
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
     iirPassDenoiseMinTime: 300
     # debugLevel: 1 prints extra information, 2 shows debug frames

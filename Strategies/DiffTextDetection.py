@@ -96,6 +96,13 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(DiffTextDetectionStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
         # self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
+        self.statDecideFeatureMerge = 0
+        self.statDecideFeatureMergeComputeECC = 0
+        self.statDecideFeatureMergeFindTransformECC = 0
+        self.statDecideFeatureMergeWarpAffine = 0
+        self.statDecideFeatureMergeOCR = 0
+        # self.log = open("log.csv", "w")
+
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
@@ -135,6 +142,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         return self.specIirPasses
     
     def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.List[typing.Any]) -> bool:
+        self.statDecideFeatureMerge += 1
+
         oldFeature = oldFeatures[0]
         newFeature = newFeatures[0]
 
@@ -177,35 +186,94 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if iou < self.minIou:
             return False
         
-        diffMask: cv.Mat = rgbDiffMask(oldImage, newImage, self.colourTolerance)
+        self.statDecideFeatureMergeComputeECC += 1
+
+        oldImageGrey = cv.cvtColor(oldImage, cv.COLOR_BGR2GRAY)
+        newImageGrey = cv.cvtColor(newImage, cv.COLOR_BGR2GRAY)
+
+        warp = np.eye(2, 3, dtype=np.float32)
+        cc: float = cv.computeECC(
+            templateImage=newImageGrey,
+            inputImage=oldImageGrey,
+            inputMask=unionMask,
+        )
+
+        if cc < 0.9:
+            self.statDecideFeatureMergeFindTransformECC += 1
+            
+            oldImageGreyMasked = cv.bitwise_and(oldImageGrey, oldImageGrey, mask=oldMask)
+            newImageGreyMasked = cv.bitwise_and(newImageGrey, newImageGrey, mask=newMask)
+            oldImageGreyMaskedF32 = np.float32(oldImageGreyMasked)
+            newImageGreyMaskedF32 = np.float32(newImageGreyMasked)
+            hann = cv.createHanningWindow(oldImageGreyMaskedF32.shape[::-1], cv.CV_32F)
+            (shiftX, shiftY), response = cv.phaseCorrelate(
+                src1=newImageGreyMaskedF32,
+                src2=oldImageGreyMaskedF32,
+                window=hann,
+            )
+            if response > 0.1:
+                warp = np.array([[1, 0, shiftX], [0, 1, shiftY]], dtype=np.float32)
+            try:
+                cc, warp = cv.findTransformECC(
+                    templateImage=newImageGrey,
+                    inputImage=oldImageGrey,
+                    warpMatrix=warp,
+                    motionType=cv.MOTION_TRANSLATION,
+                    criteria=(cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 0.01),
+                    inputMask=unionMask,
+                )
+            except cv.error:
+                cc = 0
+                warp = np.eye(2, 3, dtype=np.float32)
+
+        if self.debugLevel >= 1:
+            print("cc:", cc)
+        if self.debugLevel >= 2:
+            warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
+            combinedImage = cv.addWeighted(oldImage, 0.5, warpedImage, 0.5, 0)
+            combinedImage = cv.bitwise_and(combinedImage, combinedImage, mask=unionMask)
+            cv.imshow("DebugFrame", cv.pyrDown(combinedImage))
+            cv.waitKey(0)
+        
+        if cc < 0.1:
+            return False
+        
+        self.statDecideFeatureMergeWarpAffine += 1
+
+        warpedImage = newImage
+        warpDist = np.linalg.norm(warp[0:2, 2])
+        if warpDist > 2 and warpDist < 100:
+            warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
+        
+        diffMask: cv.Mat = rgbDiffMask(oldImage, warpedImage, self.colourTolerance)
         # The rate of pixels that are close enough
         diffRate = np.mean(diffMask) / 255
         if self.debugLevel >= 1:
             print("diffRate:", diffRate)
-        if diffRate < 0.01:
-            if self.debugLevel >= 1:
-                print("YES IDENTICAL")
+        if diffRate < 0.1:
             return True
+        
+        self.statDecideFeatureMergeOCR += 1
         
         if self.debugLevel >= 2:
             cv.imshow("DebugFrame", debugFrame)
             cv.waitKey(0)
 
-        if self.debugLevel >= 21:
+        if self.debugLevel >= 2:
             cv.imshow("DebugFrame", diffMask)
             cv.waitKey(0)
         inpaintMask = cv.bitwise_and(cv.bitwise_not(diffMask), unionMask)
+        inpaintMask = cv.dilate(inpaintMask, np.ones((3, 3), np.uint8))
         if self.debugLevel >= 2:
             cv.imshow("DebugFrame", inpaintMask)
             cv.waitKey(0)
-        biggerImage = oldImage if oldArea > newArea else newImage
-        biggerImageInpaint = cv.inpaint(biggerImage, inpaintMask, 3, cv.INPAINT_TELEA)
+        warpedImageInpaint = cv.inpaint(warpedImage, inpaintMask, 2, cv.INPAINT_TELEA)
         if self.debugLevel >= 2:
-            cv.imshow("DebugFrame", biggerImageInpaint)
+            cv.imshow("DebugFrame", warpedImageInpaint)
             cv.waitKey(0)
         
         # Perform ocr on the noisified image and recompute iou
-        ocrMask, _, _ = self.ocrPass(biggerImageInpaint)
+        ocrMask, _, _ = self.ocrPass(warpedImageInpaint)
 
         ocrIntersectMask = cv.bitwise_and(ocrMask, unionMask)
         ocrIntersectVal = np.mean(ocrIntersectMask)
@@ -224,7 +292,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             else:
                 print("NOO")
         if self.debugLevel >= 2:
-            debugFrame = cv.addWeighted(biggerImageInpaint, 0.5, cv.cvtColor(ocrIntersectMask, cv.COLOR_GRAY2BGR), 0.5, 0)
+            debugFrame = cv.addWeighted(warpedImageInpaint, 0.5, cv.cvtColor(ocrIntersectMask, cv.COLOR_GRAY2BGR), 0.5, 0)
             cv.imshow("DebugFrame", debugFrame)
             cv.waitKey(0)
 

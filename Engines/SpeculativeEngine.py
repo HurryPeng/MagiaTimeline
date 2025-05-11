@@ -322,4 +322,11 @@ class SpeculativeEngine(AbstractEngine):
 
         print("totalFrames/decoded/analyzed", frameCount, frameCache.statDecodedFrames, strategy.statAnalyzedFrames)
 
+        if hasattr(strategy, "statDecideFeatureMerge"):
+            print("statDecideFeatureMerge", strategy.statDecideFeatureMerge)
+            print("statDecideFeatureMergeComputeECC", strategy.statDecideFeatureMergeComputeECC)
+            print("statDecideFeatureMergeFindTransformECC", strategy.statDecideFeatureMergeFindTransformECC)
+            print("statDecideFeatureMergeWarpAffine", strategy.statDecideFeatureMergeWarpAffine)
+            print("statDecideFeatureMergeOCR", strategy.statDecideFeatureMergeOCR)
+
         return intervalGrower
