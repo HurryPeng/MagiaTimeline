@@ -324,9 +324,9 @@ class SpeculativeEngine(AbstractEngine):
 
         if hasattr(strategy, "statDecideFeatureMerge"):
             print("statDecideFeatureMerge", strategy.statDecideFeatureMerge)
+            print("statDecideFeatureMergeDiff", strategy.statDecideFeatureMergeDiff)
             print("statDecideFeatureMergeComputeECC", strategy.statDecideFeatureMergeComputeECC)
             print("statDecideFeatureMergeFindTransformECC", strategy.statDecideFeatureMergeFindTransformECC)
-            print("statDecideFeatureMergeWarpAffine", strategy.statDecideFeatureMergeWarpAffine)
             print("statDecideFeatureMergeOCR", strategy.statDecideFeatureMergeOCR)
 
         return intervalGrower

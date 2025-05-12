@@ -87,19 +87,19 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         
         self.specIirPasses = collections.OrderedDict()
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
-            lambda interval0, interval1:
+            lambda iir, interval0, interval1:
                 self.decideFeatureMerge(
                     [interval0.getFlag(self.getFeatureFlagIndex())],
                     [interval1.getFlag(self.getFeatureFlagIndex())]
-                )
+                ) and iir.ms2Timestamp(self.iirPassDenoiseMinTime) > interval0.dist(interval1)
         )
         self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(DiffTextDetectionStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
-        # self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
+        self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
         self.statDecideFeatureMerge = 0
+        self.statDecideFeatureMergeDiff = 0
         self.statDecideFeatureMergeComputeECC = 0
         self.statDecideFeatureMergeFindTransformECC = 0
-        self.statDecideFeatureMergeWarpAffine = 0
         self.statDecideFeatureMergeOCR = 0
         # self.log = open("log.csv", "w")
 
@@ -186,6 +186,17 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if iou < self.minIou:
             return False
         
+        self.statDecideFeatureMergeDiff += 1
+        
+        diffMask: cv.Mat = rgbDiffMask(oldImage, newImage, self.colourTolerance)
+        # The rate of pixels that are close enough
+        diffArea = np.sum(diffMask) / 255
+        diffRate = diffArea / unionArea
+        if self.debugLevel >= 1:
+            print("diffRate:", diffRate)
+        if diffRate < 0.1:
+            return True
+        
         self.statDecideFeatureMergeComputeECC += 1
 
         oldImageGrey = cv.cvtColor(oldImage, cv.COLOR_BGR2GRAY)
@@ -232,26 +243,16 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
             combinedImage = cv.addWeighted(oldImage, 0.5, warpedImage, 0.5, 0)
             combinedImage = cv.bitwise_and(combinedImage, combinedImage, mask=unionMask)
-            cv.imshow("DebugFrame", cv.pyrDown(combinedImage))
+            cv.imshow("DebugFrame", combinedImage)
             cv.waitKey(0)
         
         if cc < 0.1:
             return False
-        
-        self.statDecideFeatureMergeWarpAffine += 1
 
         warpedImage = newImage
         warpDist = np.linalg.norm(warp[0:2, 2])
         if warpDist > 2 and warpDist < 100:
             warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
-        
-        diffMask: cv.Mat = rgbDiffMask(oldImage, warpedImage, self.colourTolerance)
-        # The rate of pixels that are close enough
-        diffRate = np.mean(diffMask) / 255
-        if self.debugLevel >= 1:
-            print("diffRate:", diffRate)
-        if diffRate < 0.1:
-            return True
         
         self.statDecideFeatureMergeOCR += 1
         
@@ -262,12 +263,34 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if self.debugLevel >= 2:
             cv.imshow("DebugFrame", diffMask)
             cv.waitKey(0)
+
+        # INPAINT
+
         inpaintMask = cv.bitwise_and(cv.bitwise_not(diffMask), unionMask)
         inpaintMask = cv.dilate(inpaintMask, np.ones((3, 3), np.uint8))
+        warpedImageInpaint = cv.inpaint(warpedImage, inpaintMask, 3, cv.INPAINT_TELEA)
+
+        # STACK BLUR
+        # inpaintMask = cv.bitwise_and(cv.bitwise_not(diffMask), unionMask)
+        # inpaintMask = cv.dilate(inpaintMask, np.ones((3, 3), np.uint8), iterations=1)
+        # notInpaintMask = cv.bitwise_not(inpaintMask)
+        # notInpaintMaskF32 = np.float32(inpaintMask) / 255
+        # warpedImageMasked = cv.bitwise_and(warpedImage, warpedImage, mask=notInpaintMask)
+        # warpedImageMaskedF32 = np.float32(warpedImageMasked)
+
+        # warpedImageMaskedF32Blur = cv.stackBlur(warpedImageMaskedF32, (201, 201))
+        # notInpaintMaskF32Blur = cv.stackBlur(notInpaintMaskF32, (201, 201))
+
+        # notInpaintMaskF32Blur3C = cv.merge([notInpaintMaskF32Blur] * 3)
+        # warpedImageMaskedF32BlurNormalized = cv.divide(warpedImageMaskedF32Blur, notInpaintMaskF32Blur3C + 1e-6)
+        # warpedImageMaskedBlurNormalized = cv.convertScaleAbs(warpedImageMaskedF32BlurNormalized, alpha=1.0, beta=0)
+
+        # warpedImageInpaint = warpedImage.copy()
+        # cv.copyTo(dst=warpedImageInpaint, src=warpedImageMaskedBlurNormalized, mask=inpaintMask)
+
         if self.debugLevel >= 2:
             cv.imshow("DebugFrame", inpaintMask)
             cv.waitKey(0)
-        warpedImageInpaint = cv.inpaint(warpedImage, inpaintMask, 2, cv.INPAINT_TELEA)
         if self.debugLevel >= 2:
             cv.imshow("DebugFrame", warpedImageInpaint)
             cv.waitKey(0)

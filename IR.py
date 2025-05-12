@@ -435,7 +435,7 @@ class IIRPassDenoise(IIRPass):
         iir.intervals = [interval for interval in iir.intervals if not (interval.mainFlag == self.flag and interval.end - interval.begin < iir.ms2Timestamp(self.minTime))]
 
 class IIRPassMerge(IIRPass):
-    def __init__(self, pred: typing.Callable[[Interval, Interval], bool]):
+    def __init__(self, pred: typing.Callable[[IIR, Interval, Interval], bool]):
         self.pred = pred
 
     def apply(self, iir: IIR):
@@ -444,7 +444,7 @@ class IIRPassMerge(IIRPass):
             if len(newIntervals) == 0:
                 newIntervals.append(iir.intervals[i])
                 continue
-            if self.pred(newIntervals[-1], iir.intervals[i]):
+            if self.pred(iir, newIntervals[-1], iir.intervals[i]):
                 newIntervals[-1] = newIntervals[-1].merge(iir.intervals[i])
             else:
                 newIntervals.append(iir.intervals[i])
