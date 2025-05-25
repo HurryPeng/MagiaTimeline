@@ -158,15 +158,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         # Quick mask iou check before performing ocr on the intersection of the two images
         intersectMask = cv.bitwise_and(oldMask, newMask)
         unionMask = cv.bitwise_or(oldMask, newMask)
-        oldArea = np.sum(oldMask) / 255
-        newArea = np.sum(newMask) / 255
         intersectArea = np.sum(intersectMask) / 255
         unionArea = np.sum(unionMask) / 255
-
-        if self.debugLevel >= 2:
-            debugFrameNew = cv.addWeighted(newImage, 0.5, cv.cvtColor(newMask, cv.COLOR_GRAY2BGR), 0.5, 0)
-            debugFrameOld = cv.addWeighted(oldImage, 0.5, cv.cvtColor(oldMask, cv.COLOR_GRAY2BGR), 0.5, 0)
-            debugFrame = cv.addWeighted(debugFrameNew, 0.5, debugFrameOld, 0.5, 0)
         
         if unionArea == 0:
             return False
@@ -203,11 +196,12 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         newImageGrey = cv.cvtColor(newImage, cv.COLOR_BGR2GRAY)
 
         warp = np.eye(2, 3, dtype=np.float32)
-        cc: float = cv.computeECC(
+        ccInit: float = cv.computeECC(
             templateImage=newImageGrey,
             inputImage=oldImageGrey,
             inputMask=unionMask,
         )
+        cc = ccInit
 
         if cc < 0.9:
             self.statDecideFeatureMergeFindTransformECC += 1
@@ -239,54 +233,45 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         if self.debugLevel >= 1:
             print("cc:", cc)
-        if self.debugLevel >= 2:
-            warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
-            combinedImage = cv.addWeighted(oldImage, 0.5, warpedImage, 0.5, 0)
-            combinedImage = cv.bitwise_and(combinedImage, combinedImage, mask=unionMask)
-            cv.imshow("DebugFrame", combinedImage)
-            cv.waitKey(0)
         
         if cc < 0.1:
             return False
 
         warpedImage = newImage
         warpDist = np.linalg.norm(warp[0:2, 2])
-        if warpDist > 2 and warpDist < 100:
+        if warpDist > 1 and warpDist < 100 and cc > ccInit:
             warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
+
+        if self.debugLevel >= 2:
+            combinedImage = cv.addWeighted(oldImage, 0.5, warpedImage, 0.5, 0)
+            combinedImage = cv.bitwise_and(combinedImage, combinedImage, mask=unionMask)
+            cv.imshow("DebugFrame", combinedImage)
+            cv.waitKey(0)
         
         self.statDecideFeatureMergeOCR += 1
-        
-        if self.debugLevel >= 2:
-            cv.imshow("DebugFrame", debugFrame)
-            cv.waitKey(0)
+
+        # INPAINT
+
+        diffMask = rgbDiffMask(oldImage, warpedImage, self.colourTolerance)
 
         if self.debugLevel >= 2:
             cv.imshow("DebugFrame", diffMask)
             cv.waitKey(0)
 
-        # INPAINT
+        oldImageSobel = rgbSobel(oldImage, 1)
+        warpedImageSobel = rgbSobel(warpedImage, 1)
+        oldImageSobelBin = cv.threshold(oldImageSobel, 32, 255, cv.THRESH_BINARY)[1]
+        warpedImageSobelBin = cv.threshold(warpedImageSobel, 32, 255, cv.THRESH_BINARY)[1]
+        oldImageSobelBinDilate = cv.morphologyEx(oldImageSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
+        warpedImageSobelBinDilate = cv.morphologyEx(warpedImageSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
+        commonSobelBin = cv.bitwise_and(oldImageSobelBinDilate, warpedImageSobelBinDilate)
 
         inpaintMask = cv.bitwise_and(cv.bitwise_not(diffMask), unionMask)
-        inpaintMask = cv.dilate(inpaintMask, np.ones((3, 3), np.uint8))
-        warpedImageInpaint = cv.inpaint(warpedImage, inpaintMask, 3, cv.INPAINT_TELEA)
+        inpaintMaskGradient = cv.morphologyEx(inpaintMask, cv.MORPH_GRADIENT, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
+        inpaintMaskGradientAndCommonSobel = cv.bitwise_and(inpaintMaskGradient, commonSobelBin)
+        cv.copyTo(src=inpaintMaskGradientAndCommonSobel, dst=inpaintMask, mask=inpaintMaskGradient)
 
-        # STACK BLUR
-        # inpaintMask = cv.bitwise_and(cv.bitwise_not(diffMask), unionMask)
-        # inpaintMask = cv.dilate(inpaintMask, np.ones((3, 3), np.uint8), iterations=1)
-        # notInpaintMask = cv.bitwise_not(inpaintMask)
-        # notInpaintMaskF32 = np.float32(inpaintMask) / 255
-        # warpedImageMasked = cv.bitwise_and(warpedImage, warpedImage, mask=notInpaintMask)
-        # warpedImageMaskedF32 = np.float32(warpedImageMasked)
-
-        # warpedImageMaskedF32Blur = cv.stackBlur(warpedImageMaskedF32, (201, 201))
-        # notInpaintMaskF32Blur = cv.stackBlur(notInpaintMaskF32, (201, 201))
-
-        # notInpaintMaskF32Blur3C = cv.merge([notInpaintMaskF32Blur] * 3)
-        # warpedImageMaskedF32BlurNormalized = cv.divide(warpedImageMaskedF32Blur, notInpaintMaskF32Blur3C + 1e-6)
-        # warpedImageMaskedBlurNormalized = cv.convertScaleAbs(warpedImageMaskedF32BlurNormalized, alpha=1.0, beta=0)
-
-        # warpedImageInpaint = warpedImage.copy()
-        # cv.copyTo(dst=warpedImageInpaint, src=warpedImageMaskedBlurNormalized, mask=inpaintMask)
+        warpedImageInpaint = cv.inpaint(warpedImage, inpaintMask, 1, cv.INPAINT_TELEA)
 
         if self.debugLevel >= 2:
             cv.imshow("DebugFrame", inpaintMask)
@@ -295,7 +280,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             cv.imshow("DebugFrame", warpedImageInpaint)
             cv.waitKey(0)
         
-        # Perform ocr on the noisified image and recompute iou
+        # Perform ocr on the inpainted image and recompute iou
         ocrMask, _, _ = self.ocrPass(warpedImageInpaint)
 
         ocrIntersectMask = cv.bitwise_and(ocrMask, unionMask)
