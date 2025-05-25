@@ -344,9 +344,9 @@ dtd:
     # boxVerticalExpansion: vertical expansion ratio of the detected dialog box
     boxVerticalExpansion: 0.20
     # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
-    nonMajorBoxSuppressionMaxRatio: 0.3
+    nonMajorBoxSuppressionMaxRatio: 0.2
     # nonMajorBoxSuppressionMinRank: but at least this number of boxes will be kept
-    nonMajorBoxSuppressionMinRank: 1
+    nonMajorBoxSuppressionMinRank: 2
     # colourTolerance: distance from the selected mean colour to be filtered for text
     colourTolerance: 70
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept

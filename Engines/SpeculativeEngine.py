@@ -331,6 +331,7 @@ class SpeculativeEngine(AbstractEngine):
             print("statDecideFeatureMergeDiff", strategy.statDecideFeatureMergeDiff)
             print("statDecideFeatureMergeComputeECC", strategy.statDecideFeatureMergeComputeECC)
             print("statDecideFeatureMergeFindTransformECC", strategy.statDecideFeatureMergeFindTransformECC)
+            print("statDecideFeatureMergeInpaint", strategy.statDecideFeatureMergeInpaint)
             print("statDecideFeatureMergeOCR", strategy.statDecideFeatureMergeOCR)
 
         return intervalGrower
