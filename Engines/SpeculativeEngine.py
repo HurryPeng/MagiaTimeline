@@ -20,11 +20,17 @@ class IntervalGrower(IIR):
         fps: fractions.Fraction,
         timeBase: fractions.Fraction,
         mainFlagIndex: AbstractFlagIndex,
+        featureFlagIndex: AbstractFlagIndex,
+        aggregateFeatures: typing.Callable[[typing.List[typing.Any]], typing.Any],
+        aggregateAndMoveFeatureToIntervalOnHook: bool = False,
         ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None,
         verbose: bool = False
     ) -> None:
         super().__init__(flagIndexType, fps, timeBase)
-        self.mainFlag: AbstractFlagIndex = mainFlagIndex
+        self.mainFlagIndex: AbstractFlagIndex = mainFlagIndex
+        self.featureFlagIndex: AbstractFlagIndex = featureFlagIndex
+        self.aggregateFeatures: typing.Callable[[typing.List[typing.Any]], typing.Any] = aggregateFeatures
+        self.aggregateAndMoveFeatureToIntervalOnHook: bool = aggregateAndMoveFeatureToIntervalOnHook
         self.ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = ocrFrameFlagIndex
 
         self.proposalStride: fractions.Fraction = fractions.Fraction(1, 2)
@@ -61,18 +67,18 @@ class IntervalGrower(IIR):
         propose: int = math.floor(prev.end + (next.begin - prev.end) * self.proposalStride)
         return propose, prev, next
     
-    def insertInterval(self, framePoint: FramePoint, frame: typing.Optional[av.frame.Frame]) -> Interval:
-        interval = Interval(self.flagIndexType, self.mainFlag, framePoint.timestamp, framePoint.timestamp, [framePoint])
+    def insertInterval(self, framePoint: FramePoint, image: typing.Optional[cv.Mat]) -> Interval:
+        interval = Interval(self.flagIndexType, self.mainFlagIndex, framePoint.timestamp, framePoint.timestamp, [framePoint])
         if self.ocrFrameFlagIndex is not None:
-            assert frame is not None
-            interval.setFlag(self.ocrFrameFlagIndex, frame)
+            assert image is not None
+            interval.setFlag(self.ocrFrameFlagIndex, image, inDiskCache=True)
         self.intervals.append(interval)
         self.sort()
         if self.verbose:
             print("insertInterval       ", f"({interval.begin}, {interval.end}) {(interval.end - interval.begin)}", formatTimestamp(self.timeBase, interval.begin))
         return interval
 
-    def extendInterval(self, interval: Interval, framePoint: FramePoint):
+    def extendInterval(self, interval: Interval, framePoint: FramePoint) -> None:
         if interval.begin > framePoint.timestamp:
             interval.begin = framePoint.timestamp
             if self.verbose:
@@ -87,14 +93,20 @@ class IntervalGrower(IIR):
     def hookInterval(self, intervalL: Interval, intervalR: Interval):
         assert intervalL.end < intervalR.begin
         intervalL.end = intervalR.begin
+        if self.aggregateAndMoveFeatureToIntervalOnHook:
+            features = [framePoint.getFlag(self.featureFlagIndex) for framePoint in intervalL.framePoints]
+            featuresAggregated = self.aggregateFeatures(features)
+            intervalL.setFlag(self.featureFlagIndex, featuresAggregated, inDiskCache=True)
+            for framePoint in intervalL.framePoints:
+                framePoint.setFlag(self.featureFlagIndex, None)
         if self.verbose:
             print("hookInterval         ", f"[{intervalL.begin}, {intervalL.end}}} {(intervalL.end - intervalL.begin)}", formatTimestamp(self.timeBase, intervalL.end))
 
 
 class FrameCache:
-    def __init__(self, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> None:
-        self.container: "av.container.InputContainer" = container
-        self.stream: "av.video.stream.VideoStream" = stream
+    def __init__(self, container: av.container.InputContainer, stream: av.video.stream.VideoStream) -> None:
+        self.container: av.container.InputContainer = container
+        self.stream: av.video.stream.VideoStream = stream
         self.cache: typing.List[av.frame.Frame] = []
         self.begin: int = 0
         self.end: int = 0
@@ -206,7 +218,7 @@ class SpeculativeEngine(AbstractEngine):
     def getRequiredAbstractStrategyType(self) -> type[AbstractStrategy]:
         return AbstractSpeculativeStrategy
 
-    def run(self, strategy: AbstractSpeculativeStrategy, container: "av.container.InputContainer", stream: "av.video.stream.VideoStream") -> IIR:
+    def run(self, strategy: AbstractSpeculativeStrategy, container: av.container.InputContainer, stream: av.video.stream.VideoStream) -> IIR:
         timeBase: fractions.Fraction = stream.time_base
         fps: fractions.Fraction = stream.average_rate
         frameCount: float = stream.frames
@@ -219,7 +231,16 @@ class SpeculativeEngine(AbstractEngine):
 
         self.emptyFeatureMaxTimestamp: int = ms2Timestamp(self.emptyGapForceCheck, timeBase)
 
-        intervalGrower: IntervalGrower = IntervalGrower(strategy.getFlagIndexType(), fps, timeBase, mainFlagIndex, ocrFrameFlagIndex, self.debug)
+        intervalGrower: IntervalGrower = IntervalGrower(
+            strategy.getFlagIndexType(),
+            fps,
+            timeBase,
+            mainFlagIndex,
+            featureFlagIndex,
+            strategy.aggregateFeatures,
+            strategy.aggregateAndMoveFeatureToIntervalOnHook(),
+            ocrFrameFlagIndex,
+            self.debug)
         frameCache: FrameCache = FrameCache(container, stream)
 
         print("==== IIR Building ====")
@@ -245,29 +266,32 @@ class SpeculativeEngine(AbstractEngine):
                     lastSegment = True
                     frameI2 = frameCache.getFrame(frameCache.end, frameCache.begin, frameCache.nextI)
                 frameI1 = frameCache.getFrame(frameCache.begin, frameCache.begin, frameCache.nextI)
-                framePoint1 = strategy.genFramePoint(avFrame2CvMat(frameI1), frameI1.pts)
-                interval1 = intervalGrower.insertInterval(framePoint1, frameI1)
+                imageI1 = avFrame2CvMat(frameI1)
+                framePoint1 = strategy.genFramePoint(imageI1, frameI1.pts)
+                interval1 = intervalGrower.insertInterval(framePoint1, imageI1)
                 prev = interval1
-                framePoint2 = strategy.genFramePoint(avFrame2CvMat(frameI2), frameI2.pts)
+                imageI2 = avFrame2CvMat(frameI2)
+                framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts)
                 merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in interval1.framePoints], [framePoint2.getFlag(featureFlagIndex)])
                 if merge:
                     intervalGrower.extendInterval(interval1, framePoint2)
                 else:
-                    intervalGrower.insertInterval(framePoint2, frameI2)
+                    intervalGrower.insertInterval(framePoint2, imageI2)
             elif proposeC == -1: # leap to the next next I-frame
                 assert prev is not None and next is None
                 frameI2 = frameCache.leap()
                 if frameI2 is None: # Last segment
                     lastSegment = True
                     frameI2 = frameCache.getFrame(frameCache.end, frameCache.begin, frameCache.nextI)
-                framePoint2 = strategy.genFramePoint(avFrame2CvMat(frameI2), frameI2.pts)
+                imageI2 = avFrame2CvMat(frameI2)
+                framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts)
                 print(framePoint2.toString(timeBase))
                 merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint2.getFlag(featureFlagIndex)])
                 dist = prev.distFramePoint(framePoint2)
-                if merge and not (strategy.isEmptyFeature(framePoint2.getFlag(featureFlagIndex)) and dist > self.emptyFeatureMaxTimestamp):
+                if merge and not dist > self.emptyFeatureMaxTimestamp:
                     intervalGrower.extendInterval(prev, framePoint2)
                 else:
-                    intervalGrower.insertInterval(framePoint2, frameI2)
+                    intervalGrower.insertInterval(framePoint2, imageI2)
             else: # reasonable proposal
                 assert prev is not None and next is not None
                 frame = frameCache.getFrame(proposeC, prev.end + 1, next.begin)
@@ -275,7 +299,8 @@ class SpeculativeEngine(AbstractEngine):
                     # The two intervals have no more frames in between
                     intervalGrower.hookInterval(prev, next)
                     continue
-                framePoint = strategy.genFramePoint(avFrame2CvMat(frame), frame.pts)
+                image = avFrame2CvMat(frame)
+                framePoint = strategy.genFramePoint(image, frame.pts)
                 isEmptyFeature = strategy.isEmptyFeature(framePoint.getFlag(featureFlagIndex))
 
                 mergeLeft = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint.getFlag(featureFlagIndex)])
@@ -283,12 +308,12 @@ class SpeculativeEngine(AbstractEngine):
                 if mergeLeft and not (isEmptyFeature and distLeft > self.emptyFeatureMaxTimestamp):
                     intervalGrower.extendInterval(prev, framePoint)
                 else:
-                    mergeRight = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in next.framePoints], [framePoint.getFlag(featureFlagIndex)])
+                    mergeRight = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex)], [framePoint.getFlag(featureFlagIndex) for framePoint in next.framePoints])
                     distRight = next.distFramePoint(framePoint)
                     if mergeRight and not (isEmptyFeature and distRight > self.emptyFeatureMaxTimestamp):
                         intervalGrower.extendInterval(next, framePoint)
                     else:
-                        intervalGrower.insertInterval(framePoint, frame)
+                        intervalGrower.insertInterval(framePoint, image)
         
         print("==== IIR Passes ====")
 
@@ -300,5 +325,13 @@ class SpeculativeEngine(AbstractEngine):
             iirPass.apply(intervalGrower)
 
         print("totalFrames/decoded/analyzed", frameCount, frameCache.statDecodedFrames, strategy.statAnalyzedFrames)
+
+        if hasattr(strategy, "statDecideFeatureMerge"):
+            print("statDecideFeatureMerge", strategy.statDecideFeatureMerge)
+            print("statDecideFeatureMergeDiff", strategy.statDecideFeatureMergeDiff)
+            print("statDecideFeatureMergeComputeECC", strategy.statDecideFeatureMergeComputeECC)
+            print("statDecideFeatureMergeFindTransformECC", strategy.statDecideFeatureMergeFindTransformECC)
+            print("statDecideFeatureMergeInpaint", strategy.statDecideFeatureMergeInpaint)
+            print("statDecideFeatureMergeOCR", strategy.statDecideFeatureMergeOCR)
 
         return intervalGrower

@@ -4,6 +4,98 @@ import cv2 as cv
 import numpy as np
 import fractions
 import av.frame
+import tempfile
+import threading
+import uuid
+import diskcache
+import atexit
+import pickle
+import lz4
+
+class CompressedDisk(diskcache.Disk):
+    """Cache key and value using zlib compression."""
+
+    def __init__(self, directory, compress_level=4, **kwargs):
+        self.compress_level = compress_level
+        super().__init__(directory, **kwargs)
+
+    def put(self, key):
+        pickle_bytes = pickle.dumps(key)
+        data = lz4.frame.compress(pickle_bytes, compression_level=self.compress_level)
+        return super().put(data)
+
+    def get(self, key, raw):
+        data = super().get(key, raw)
+        return pickle.loads(lz4.frame.decompress(data)) if data else None
+
+    def store(self, value, read, key):
+        if not read:
+            pickle_bytes = pickle.dumps(value)
+            value = lz4.frame.compress(pickle_bytes, compression_level=self.compress_level)
+        return super().store(value, read, key=key)
+
+    def fetch(self, mode, filename, value, read):
+        data = super().fetch(mode, filename, value, read)
+        if not read:
+            data = pickle.loads(lz4.frame.decompress(data))
+        return data
+
+# Private globals for cache initialization
+_tempLock = threading.Lock()
+_tempDir = tempfile.TemporaryDirectory(prefix="MagiaTimeline_")
+_cacheInstance: diskcache.Cache | None = None
+
+def getCache() -> diskcache.Cache:
+    """
+    Return a singleton diskcache.Cache instance.
+    On first invocation, this function:
+        1. Creates a temp subdirectory named 'MagiaTimeline_{uuid}'.
+        2. Initializes and returns a diskcache.Cache bound to that directory.
+    Thread-safe and uses lazy initialization.
+    """
+    global _cacheInstance
+    if _cacheInstance is None:
+        with _tempLock:
+            if _cacheInstance is None:
+                print(f"Disk cache initialized at {_tempDir.name}")
+                _cacheInstance = diskcache.Cache(_tempDir.name, eviction_policy='none', disk=CompressedDisk)
+    return _cacheInstance
+
+@atexit.register
+def _cleanupCache():
+    global _cacheInstance
+    if _cacheInstance is not None:
+        _cacheInstance.close()
+        _cacheInstance = None
+    _tempDir.cleanup()
+
+class DiskCacheHandle:
+    def __init__(self, value: typing.Any):
+        self.key = uuid.uuid4().hex
+        getCache()[self.key] = value
+
+    def get(self) -> typing.Any:
+        value = getCache()[self.key]
+        assert value is not None, "Cache value has been deleted!"
+        return value
+    
+def containsLargeNdarray(obj: typing.Any) -> bool:
+    """
+    Recursively check whether `obj` (which may be a list or tuple
+    of arbitrary nesting) contains at least one numpy.ndarray whose
+    size is greater than 1kB.
+    Returns True on the first array found; otherwise False.
+    """
+    # Base case: found an ndarray
+    if isinstance(obj, np.ndarray) and obj.size > 1024:
+        return True
+    # If it's a list or tuple, recurse into each element
+    if isinstance(obj, (list, tuple)):
+        for item in obj:
+            if containsLargeNdarray(item):
+                return True
+    # All other types are ignored
+    return False
 
 def formatTimestamp(timeBase: fractions.Fraction, timestamp: int) -> str:
     dTimestamp = datetime.datetime.fromtimestamp(float(timestamp * timeBase), datetime.timezone(datetime.timedelta()))
@@ -49,6 +141,10 @@ def rgbSobel(image: cv.Mat, ksize: int) -> cv.Mat:
     imageSobelB = cv.convertScaleAbs(cv.addWeighted(cv.convertScaleAbs(imageSobelBX), 1, cv.convertScaleAbs(imageSobelBY), 1, 0))
     imageSobel = cv.convertScaleAbs(cv.addWeighted(cv.addWeighted(imageSobelR, 1/3, imageSobelG, 1/3, 0), 1, imageSobelB, 1/3, 0))
     return imageSobel
+
+def rgbDiffMask(lhs: cv.Mat, rhs: cv.Mat, threshold: int) -> cv.Mat:
+    diff = cv.absdiff(lhs, rhs)
+    return cv.bitwise_not(cv.inRange(diff, (0, 0, 0), (threshold, threshold, threshold)))
 
 def ensureMat(frame):
     if isinstance(frame, cv.UMat):

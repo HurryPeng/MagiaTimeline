@@ -77,7 +77,7 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
 
         self.specIirPasses = collections.OrderedDict()
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
-            lambda interval0, interval1:
+            lambda iir, interval0, interval1:
                 self.decideFeatureMerge(
                     [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval0.framePoints],
                     [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval1.framePoints]
@@ -124,8 +124,17 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
     def getSpecIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.specIirPasses
     
-    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.Any) -> bool:
+    def decideFeatureMerge(self, oldFeatures: typing.List[np.ndarray], newFeatures: typing.List[np.ndarray]) -> bool:
         return np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < self.featureJumpThreshold
+
+    def aggregateFeatures(self, features: typing.List[np.ndarray]) -> np.ndarray:
+        return np.mean(features, axis=0)
+
+    def aggregateAndMoveFeatureToIntervalOnHook(self) -> bool:
+        return False
+    
+    def releaseFeatureOnHook(self) -> bool:
+        return False
     
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)

@@ -72,7 +72,15 @@ class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeature: typing.List[typing.Any]) -> bool:
+    def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.List[typing.Any]) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def aggregateFeatures(self, features: typing.List[typing.Any]) -> typing.Any:
+        pass
+
+    @abc.abstractmethod
+    def aggregateAndMoveFeatureToIntervalOnHook(self) -> bool:
         pass
 
     def genFramePoint(self, frame: cv.Mat, timestamp: int) -> FramePoint:
@@ -80,6 +88,7 @@ class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
         framePoint = FramePoint(self.getFlagIndexType(), timestamp)
         for cvPass in self.getCvPasses():
             cvPass(frame, framePoint)
+        framePoint.clearDebugFrame()
         return framePoint
     
     def getStatAnalyzedFrames(self) -> int:

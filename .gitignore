@@ -25,6 +25,6 @@ test*
 !/requirements.txt
 /venv/
 /ChatGPT.py
-/PaddleOCRModels/
+/PaddleOCRModels*
 /build/
 /dist/

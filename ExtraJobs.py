@@ -33,9 +33,7 @@ class IIROcrPass(IIRPass):
         for i, interval in enumerate(iir.intervals):
             buff: str = ""
             name: str = interval.getName(i)
-            frame: av.frame.Frame = interval.getFlag(ocrFrameFlagIndex)
-
-            img: cv.Mat = avFrame2CvMat(frame)
+            img: cv.Mat = interval.getFlag(ocrFrameFlagIndex)
 
             if self.doPaddle:
                 paddleFrame = self.strategy.cutOcrFrame(img)

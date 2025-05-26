@@ -25,6 +25,7 @@ from Strategies.ParakoStrategy import *
 from Strategies.BanGDreamStrategy import *
 from Strategies.OutlineStrategy import *
 from Strategies.BoxColourStatStrategy import *
+from Strategies.DiffTextDetection import *
 from Engines.SpeculativeEngine import *
 from Engines.FramewiseEngine import *
 from ExtraJobs import *
@@ -69,8 +70,8 @@ def main():
         print("")
         print("Task {}: {} -> {}".format(nTask, src, dst))
 
-        srcContainer: "av.container.InputContainer" = av.open(src, mode='r')
-        srcStream: "av.video.stream.VideoStream" = srcContainer.streams.video[0]
+        srcContainer: av.container.InputContainer = av.open(src, mode='r')
+        srcStream: av.video.stream.VideoStream = srcContainer.streams.video[0]
         srcStream.thread_type = 'FRAME'
         size: typing.Tuple[int, int] = (srcStream.codec_context.width, srcStream.codec_context.height)
         timeBase: fractions.Fraction = srcStream.time_base
@@ -106,6 +107,8 @@ def main():
             strategy = OutlineStrategy(strategyConfig, contentRect)
         elif config["strategy"] == "bcs":
             strategy = BoxColourStatStrategy(strategyConfig, contentRect)
+        elif config["strategy"] == "dtd":
+            strategy = DiffTextDetectionStrategy(strategyConfig, contentRect)
         else:
             raise Exception("Unknown strategy! ")
         assert strategy is not None

@@ -62,7 +62,7 @@ class ParakoStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy):
 
         self.specIirPasses = collections.OrderedDict()
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
-            lambda interval0, interval1:
+            lambda iir, interval0, interval1:
                 self.decideFeatureMerge(
                     [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval0.framePoints],
                     [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval1.framePoints]
