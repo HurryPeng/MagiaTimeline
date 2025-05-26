@@ -39,7 +39,7 @@ class FramewiseEngine(AbstractEngine):
                 continue
 
             timestamp: int = frame.pts
-            img: cv.Mat = frame.to_ndarray(format='bgr24')
+            img: cv.Mat = avFrame2CvMat(frame)
 
             # CV and frame point building
             framePoint = FramePoint(flagIndexType, timestamp)

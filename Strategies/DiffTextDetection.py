@@ -57,34 +57,12 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         self.fpirPasses = collections.OrderedDict()
 
-        # self.fpirPasses["fpirPassDetectDialogJump"] = FPIRPassDetectFeatureJump(
-        #     featFlag=DiffOcrBooleanStrategy.FlagIndex.DialogFeat,
-        #     dstFlag=DiffOcrBooleanStrategy.FlagIndex.DialogFeatJump, 
-        #     featOpMean=lambda feats : np.mean(feats, axis=0),
-        #     featOpDist=lambda lhs, rhs : np.linalg.norm(lhs - rhs),
-        #     threshDist=0.1,
-        #     windowSize=5,
-        #     featOpStd=lambda feats: np.mean(np.std(feats, axis=0)),
-        #     threshStd=0.005
-        # )
-
-
-        # def breakDialogJump(framePoint: FramePoint):
-        #     framePoint.setFlag(DiffTextDetectionStrategy.FlagIndex.Dialog,
-        #         framePoint.getFlag(DiffTextDetectionStrategy.FlagIndex.Dialog)
-        #         and not framePoint.getFlag(DiffTextDetectionStrategy.FlagIndex.DialogFeatJump)
-        #     )
-        # self.fpirPasses["fpirPassBreakDialogJump"] = FPIRPassFramewiseFunctional(
-        #     func=breakDialogJump
-        # )
-        
         self.fpirToIirPasses = collections.OrderedDict()
         self.fpirToIirPasses["fpirPassBuildIntervals"] = FPIRPassBooleanBuildIntervals(
             DiffTextDetectionStrategy.FlagIndex.Dialog
         )
 
         self.iirPasses = collections.OrderedDict()
-        # self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(DiffOcrBooleanStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime, meetPoint=1.0)
         
         self.specIirPasses = collections.OrderedDict()
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
@@ -242,7 +220,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         warpedImage = newImage
         warpDist = np.linalg.norm(warp[0:2, 2])
-        if warpDist > 1 and warpDist < 100 and cc > ccInit:
+        if warpDist > 1 and warpDist < 50 and cc > ccInit:
             warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
 
         if self.debugLevel >= 2:
@@ -280,7 +258,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         inpaintMaskGradientAndCommonSobel = cv.bitwise_and(inpaintMaskGradient, intersectSobelBinMasked)
         cv.copyTo(src=inpaintMaskGradientAndCommonSobel, dst=inpaintMask, mask=inpaintMaskGradient)
 
-        warpedImageInpaint = cv.inpaint(warpedImage, inpaintMask, 2, cv.INPAINT_TELEA)
+        warpedImageInpaint = cv.inpaint(warpedImage, inpaintMask, 1, cv.INPAINT_TELEA)
 
         # Post-inpaint Sobel Iou Filtering
 
