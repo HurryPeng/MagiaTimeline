@@ -30,7 +30,7 @@ from Engines.SpeculativeEngine import *
 from Engines.FramewiseEngine import *
 from ExtraJobs import *
 
-VERSION = "1.0.0"
+VERSION = "1.1.0-beta.1"
 
 def main():
     parser = argparse.ArgumentParser(
