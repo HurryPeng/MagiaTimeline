@@ -30,7 +30,7 @@ Currently, only win_amd64 is supported. No Python installation is needed. You ca
 
 #### Install from Source
 
-1. Install [Python](https://www.python.org) 3.12.6 (or above, but < 3.13), 64-bit version. 
+1. Install [Python](https://www.python.org) 3.12.8 (or above, but < 3.13), 64-bit version. 
 2. Run `install.bat` (for Windows) or `install.sh` (for GNU/Linux or macOS). This automatically installs dependencies listed in `requirements.txt` into a Python virtual environment.
 3. *(For Extra Job `ocr` only, not required for basic timeline generation)* Install Tesseract OCR v5.3.3.20231005 (or above).
 
@@ -41,7 +41,7 @@ Currently, only win_amd64 is supported. No Python installation is needed. You ca
 For beginners, the following settings are recommended:
 
 - Specify the input video file in the `source` section.
-- Set `strategy` to `bcs` and `preset` to `default`. This should already be the default.
+- Set `strategy` to `dtd` and `preset` to `default`. This should already be the default.
 - Set `engine` to `speculative`. This should also be the default.
 
 **Debug Running**: Run in debug mode to check whether the subtitle area is included in the detection window.
@@ -51,7 +51,7 @@ Temporarily make these changes to `config.yml`:
 - Set `engine` to `framewise`.
 - Under the `framewise` section, set `debug` to `true` (this is the default).
 
-Then, run `MagiaTimeline.bat`/`MagiaTimeline.exe` (Windows) or `MagiaTimeline.sh` (GNU/Linux or macOS). A window will pop up showing the frames from your video with a red box at the bottom. The red box should cover the area where the subtitles appear. If it does not, adjust `dialogRect` under the `bcs`, `default` section and rerun. You don’t need to run the entire program in debug mode—quit by typing `q` in the display window whenever you’re done checking.
+Then, run `MagiaTimeline.bat`/`MagiaTimeline.exe` (Windows) or `MagiaTimeline.sh` (GNU/Linux or macOS). A window will pop up showing the frames from your video with a red box at the bottom. The red box should cover the area where the subtitles appear. If it does not, adjust `dialogRect` under the `dtd`, `default` section and rerun. You don’t need to run the entire program in debug mode—quit by typing `q` in the display window whenever you’re done checking.
 
 If the video’s resolution is too high for the display window, consider adjusting `debugPyrDown` under the `framewise` section.
 
@@ -63,9 +63,10 @@ If the video’s resolution is too high for the display window, consider adjusti
 
 A *Strategy* is a set of CV algorithms that tells the framework how to identify subtitles in a frame. You can choose which Strategy to use for your video.
 
-MagiaTimeline provides two recommended general-purpose Strategies:
+MagiaTimeline provides three recommended general-purpose Strategies:
 
-- **Box colour stat (`bcs`)**: A CV pipeline consisting of ML-based text detection, color statistics, and feature extraction. This strategy works for most videos without tuning and is the top recommendation.
+- **Diff text detection (`dtd`)**: Finds text changes by performing ML-based text detection on the difference of two frames. This strategy works for most videos without tuning and is the top recommendation.
+- **Box colour stat (`bcs`)**: Performs colour statistics on regions boxed by ML-based text detection to find out text changes. This is a backup choice if `dtd` does not work.
 - **Outline (`otl`)**: A CV pipeline that relies on predefined parameters for text and outline color and weight to detect subtitles. It is much faster than `bcs` in applicable cases, but it requires manual parameter adjustments.
 
 Traditionally, there are also Strategies specialized for certain types of videos. These are fast and accurate but not generalizable:
@@ -81,21 +82,15 @@ Traditionally, there are also Strategies specialized for certain types of videos
 An *Engine* determines how frames are sampled before they are processed by Strategies. MagiaTimeline provides two Engines:
 
 - **Framewise**: Processes every frame (or every n-th frame, where n is configurable) to form a linear string of features before connecting them as subtitle intervals. This engine is slow but supports all Strategies. In debug mode, it provides a visual window showing the currently processed frame, useful for debugging and tuning parameters.
-- **Speculative**: Processes fewer frames by skipping those unlikely to contain subtitle changes. This engine is about 20× faster than the Framewise engine but only supports the `bcs` and `otl` general-purpose strategies.
+- **Speculative**: Processes fewer frames by skipping those unlikely to contain subtitle changes. This engine is about 20× faster than the Framewise engine but only supports the `dtd`, `bcs` and `otl` general-purpose strategies.
 
 ## Troubleshooting
 
 ### Enabling Entire-Frame Detection
 
-By default, the `bcs` strategy only detects subtitles in the bottom quarter of the screen (`dialogRect` starts at `0.75`). This is because the upper part of the screen often contains text or other content that may interfere with subtitle detection.
+By default, the `dtd` and `bcs` strategies only detects subtitles in the bottom quarter of the screen (`dialogRect` starts at `0.75`). This is because the upper part of the screen often contains text or other content that may interfere with subtitle detection.
 
-If your video has subtitles above this region and you need full-screen detection, open `config.yml`. Under the `bcs:` → `default:` section, locate the `dialogRect:` parameter and change the `0.75` to `0.00`. This allows subtitle detection across the entire frame.
-
-### Black-and-White Subtitles
-
-If your video features black-and-white (or gray) subtitles, you may find the `bcs` strategy difficult to detect them. MagiaTimeline assigns a lower priority to pure grayscale colors (black/white/gray), which helps reduce false positives but can interfere with accurately picking up purely black-and-white subtitles.
- 
-To improve black-and-white subtitle detection, open `config.yml` and go to `bcs:` → `default:`. Find `maxGreyscalePenalty: 0.70` and change it to `0.00`. This removes the penalty for grayscale pixels and may significantly improve the recognition of black-and-white subtitles.
+If your video has subtitles above this region and you need full-screen detection, open `config.yml`. Under the `dtd:` (or `bcs:`) -> `default:` section, locate the `dialogRect:` parameter and change the `0.75` to `0.00`. This allows subtitle detection across the entire frame.
 
 ## Architecture
 
