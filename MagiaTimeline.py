@@ -32,7 +32,7 @@ from ExtraJobs import *
 
 VERSION = "1.1.0-beta.1"
 
-def main():
+def cli():
     parser = argparse.ArgumentParser(
         description=f"MagiaTimeline {VERSION} - https://github.com/HurryPeng/MagiaTimeline",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -44,6 +44,11 @@ def main():
     
     schema = json.load(open(args.schema, "r"))
     config = yaml.load(open(args.config, "r").read(), Loader=yaml.FullLoader)
+
+    main(config, schema)
+
+def main(config: dict, schema: dict):
+
     if True: # config validation
         jsonschema.validate(config, schema=schema) # raises exception on failure
         if len(config["source"]) != len(config["destination"]):
@@ -132,6 +137,8 @@ def main():
         dstAss.write(asstStr)
         dstAss.close()
 
+        print("Result written to", dst + ".ass")
+
         timeTimelineEnd = time.time()
         timeTimelineElapsed = timeTimelineEnd - timeStart
         
@@ -156,7 +163,7 @@ def main():
 
 if __name__ == "__main__":
     try:
-        main()
+        cli()
     except Exception as e:
         print("Exception caught: ", e)
         traceback.print_exc()

@@ -9,12 +9,10 @@ import av.video
 import fractions
 import random
 import sys
-from multiprocessing import Process, Queue
+import multiprocessing
 import threading
 import json
 import yaml
-
-import MagiaTimeline
 
 # Initialize appearance
 customtkinter.set_appearance_mode("Dark")  # Modes: System, Dark, Light
@@ -66,7 +64,7 @@ class QueueWriter:
 class MagiaTimelineGUI(customtkinter.CTk):
     def __init__(self):
         super().__init__()
-        self.title(f"MagiaTimeline {MagiaTimeline.VERSION} GUI")
+        self.title(f"MagiaTimeline-GUI")
         self.geometry("1100x500")
         self.wm_iconbitmap()
         self.iconphoto(False, ImageTk.PhotoImage(file="./logo/MagiaTimeline-Logo-Transparent.png"))
@@ -80,8 +78,8 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.player: typing.Optional[VideoPlayer] = None
         self.current_pil_image: typing.Optional[Image.Image] = None
         self.rect_id: typing.Optional[int] = None
-        self.process: typing.Optional[Process] = None
-        self.queue = Queue()
+        self.process: typing.Optional[multiprocessing.Process] = None
+        self.queue = multiprocessing.Queue()
 
         # Left frame
         self.left_frame = customtkinter.CTkFrame(self)
@@ -104,14 +102,14 @@ class MagiaTimelineGUI(customtkinter.CTk):
 
         self.slider_top = customtkinter.CTkSlider(self.video_frame, from_=0, to=1, orientation="vertical", command=self._on_slider_change("top"))
         self.slider_bottom = customtkinter.CTkSlider(self.video_frame, from_=0, to=1, orientation="vertical", command=self._on_slider_change("bottom"))
-        self.slider_top.grid(row=0, column=1, sticky="ns", padx=2)
+        self.slider_top.grid(row=0, column=1, sticky="ns", padx=(4, 2))
         self.slider_top.set(1 - 0.75)
         self.slider_bottom.grid(row=0, column=2, sticky="ns", padx=2)
         self.slider_bottom.set(1 - 0.99)
 
         # Horizontal sliders
         self.horizontal_slider_frame = customtkinter.CTkFrame(self.left_frame)
-        self.horizontal_slider_frame.grid(row=1, column=0, sticky="ews", pady=(10,0))
+        self.horizontal_slider_frame.grid(row=1, column=0, sticky="ews", pady=(2,0))
         self.horizontal_slider_frame.grid_columnconfigure(0, weight=1)
         self.slider_left = customtkinter.CTkSlider(self.horizontal_slider_frame, from_=0, to=1, command=self._on_slider_change("left"))
         self.slider_right = customtkinter.CTkSlider(self.horizontal_slider_frame, from_=0, to=1, command=self._on_slider_change("right"))
@@ -291,6 +289,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
     @staticmethod
     def process_worker(queue, *args, **kwargs):
         sys.stdout = sys.stderr = QueueWriter(queue)
+        import MagiaTimeline
         MagiaTimeline.main(*args, **kwargs)
         sys.stdout = sys.__stdout__
         sys.stderr = sys.__stderr__
@@ -319,7 +318,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.after(100, self.gui_poll)
 
     @staticmethod
-    def start_with_hook(p: Process, on_exit: typing.Callable[[], None]):
+    def start_with_hook(p: multiprocessing.Process, on_exit: typing.Callable[[], None]):
         p.start()
         threading.Thread(target=lambda: (p.join(), on_exit()), daemon=True).start()
         return p
@@ -343,7 +342,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         config["dtd"]["default"]["dialogRect"] = [lw, rw, th, bh]
 
         self.write_console("Starting process...\n")
-        self.process = Process(
+        self.process = multiprocessing.Process(
             target=MagiaTimelineGUI.process_worker,
             args=(self.queue, config, schema)
         )
@@ -395,5 +394,6 @@ class MagiaTimelineGUI(customtkinter.CTk):
             self.abort_process()
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support() # For Windows compatibility
     app = MagiaTimelineGUI()
     app.mainloop()
