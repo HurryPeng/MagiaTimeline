@@ -9,3 +9,5 @@ scikit-learn>=1.5
 pytesseract>=0.3
 diskcache>=5.6
 lz4>=4.4
+customtkinter>=5.2
+pillow>=11.2
