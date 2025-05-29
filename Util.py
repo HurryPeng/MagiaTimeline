@@ -42,41 +42,45 @@ class CompressedDisk(diskcache.Disk):
 
 # Private globals for cache initialization
 _tempLock = threading.Lock()
-_tempDir = tempfile.TemporaryDirectory(prefix="MagiaTimeline_")
-_cacheInstance: diskcache.Cache | None = None
+_tempDir: typing.Optional[tempfile.TemporaryDirectory] = None
+_tempDirPath: typing.Optional[str] = None
+_cacheInstance: typing.Optional[diskcache.Cache] = None
 
-def getCache() -> diskcache.Cache:
-    """
-    Return a singleton diskcache.Cache instance.
-    On first invocation, this function:
-        1. Creates a temp subdirectory named 'MagiaTimeline_{uuid}'.
-        2. Initializes and returns a diskcache.Cache bound to that directory.
-    Thread-safe and uses lazy initialization.
-    """
+def initDiskCache(tempDirPath: typing.Optional[str] = None):
+    # If tempDirPath is provided, use it and whoever provided it is responsible for cleaning it up.
+    # If not, create a temporary directory that will be cleaned up automatically.
+    global _tempLock, _tempDir, _tempDirPath, _cacheInstance
+    with _tempLock:
+        if tempDirPath is not None:
+            _tempDirPath = tempDirPath
+        else:
+            _tempDir = tempfile.TemporaryDirectory(prefix="MagiaTimeline_")
+            _tempDirPath = _tempDir.name
+        _cacheInstance = diskcache.Cache(_tempDirPath, eviction_policy='none', disk=CompressedDisk)
+        print(f"Disk cache initialized at {_tempDirPath}")
+
+    @atexit.register
+    def _cleanupCache():
+        global _cacheInstance, _tempDir
+        if _cacheInstance is not None:
+            _cacheInstance.close()
+            _cacheInstance = None
+        if _tempDir is not None:
+            _tempDir.cleanup()
+
+def getDiskCache() -> diskcache.Cache:
     global _cacheInstance
-    if _cacheInstance is None:
-        with _tempLock:
-            if _cacheInstance is None:
-                print(f"Disk cache initialized at {_tempDir.name}")
-                _cacheInstance = diskcache.Cache(_tempDir.name, eviction_policy='none', disk=CompressedDisk)
+    assert _cacheInstance is not None
     return _cacheInstance
-
-@atexit.register
-def _cleanupCache():
-    global _cacheInstance
-    if _cacheInstance is not None:
-        _cacheInstance.close()
-        _cacheInstance = None
-    _tempDir.cleanup()
 
 class DiskCacheHandle:
     def __init__(self, value: typing.Any):
         self.key = uuid.uuid4().hex
-        getCache()[self.key] = value
+        getDiskCache()[self.key] = value
 
     def get(self) -> typing.Any:
-        value = getCache()[self.key]
-        assert value is not None, "Cache value has been deleted!"
+        value = getDiskCache()[self.key]
+        assert value is not None
         return value
     
 def containsLargeNdarray(obj: typing.Any) -> bool:
