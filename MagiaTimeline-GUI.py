@@ -145,6 +145,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.rightFrame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         self.rightFrame.grid_rowconfigure(0, weight=1)
         self.rightFrame.grid_rowconfigure(1, weight=0)
+        self.rightFrame.grid_rowconfigure(2, weight=0)
         self.rightFrame.grid_columnconfigure(0, weight=1)
 
         # Console output textbox (read-only)
@@ -153,9 +154,15 @@ class MagiaTimelineGUI(customtkinter.CTk):
         # make textbox read-only
         self.textbox.configure(state="disabled")
 
+        # Progress bar
+        self.progressBar = customtkinter.CTkProgressBar(self.rightFrame, mode="determinate")
+        self.progressBar.grid(row=1, column=0, sticky="ew", padx=5, pady=(0,10))
+        self.progressBar.set(1.0)
+        self.progressBar.stop()
+
         # Action buttons: Start and Abort
         self.actionFrame = customtkinter.CTkFrame(self.rightFrame)
-        self.actionFrame.grid(row=1, column=0, sticky="ew")
+        self.actionFrame.grid(row=2, column=0, sticky="ew")
         self.actionFrame.grid_columnconfigure(0, weight=1)
         self.actionFrame.grid_columnconfigure(1, weight=1)
 
@@ -374,6 +381,8 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.btnOpen.configure(state="disabled")
         self.btnJump.configure(state="disabled")
         self.btnRandom.configure(state="disabled")
+        self.progressBar.configure(mode="indeterminate")
+        self.progressBar.start()
 
     def abortProcess(self):
         if self.process and self.process.is_alive():
@@ -401,6 +410,9 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.btnOpen.configure(state="normal")
         self.btnJump.configure(state="normal")
         self.btnRandom.configure(state="normal")
+        self.progressBar.configure(mode="determinate")
+        self.progressBar.set(1.0)
+        self.progressBar.stop()
 
     def onClosing(self):
         if self.process and self.process.is_alive():
