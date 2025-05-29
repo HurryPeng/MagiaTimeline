@@ -13,6 +13,7 @@ import multiprocessing
 import threading
 import json
 import yaml
+import tempfile
 
 # Initialize appearance
 customtkinter.set_appearance_mode("Dark")  # Modes: System, Dark, Light
@@ -37,7 +38,7 @@ class VideoPlayer:
         # Duration (in seconds)
         self.duration = float(self.frames) / float(self.fps)
     
-    def get_frame_at(self, seconds: float):
+    def getFrameAt(self, seconds: float):
         """Seek to the nearest keyframe before seconds and decode next frame."""
         # Convert seconds to pts
         target_pts = int(seconds / float(self.time_base))
@@ -65,148 +66,150 @@ class MagiaTimelineGUI(customtkinter.CTk):
     def __init__(self):
         super().__init__()
         self.title(f"MagiaTimeline-GUI")
-        self.geometry("1100x500")
+        self.geometry("1080x500")
         self.wm_iconbitmap()
         self.iconphoto(False, ImageTk.PhotoImage(file="./logo/MagiaTimeline-Logo-Transparent.png"))
-        self.bind("<Destroy>", lambda e: self.on_closing())
+        self.bind("<Destroy>", lambda e: self.onClosing())
 
         # Layout: Left=video, Right=console
-        self.grid_columnconfigure(0, weight=3)
-        self.grid_columnconfigure(1, weight=2)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=0)
         self.grid_rowconfigure(0, weight=1)
 
         self.player: typing.Optional[VideoPlayer] = None
-        self.current_pil_image: typing.Optional[Image.Image] = None
-        self.rect_id: typing.Optional[int] = None
+        self.currentPilImage: typing.Optional[Image.Image] = None
+        self.rectId: typing.Optional[int] = None
         self.process: typing.Optional[multiprocessing.Process] = None
         self.queue = multiprocessing.Queue()
 
         # Left frame
-        self.left_frame = customtkinter.CTkFrame(self)
-        self.left_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-        self.left_frame.grid_columnconfigure(0, weight=1)
-        self.left_frame.grid_rowconfigure(0, weight=1)
+        self.leftFrame = customtkinter.CTkFrame(self)
+        self.leftFrame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        self.leftFrame.grid_columnconfigure(0, weight=1)
+        self.leftFrame.grid_rowconfigure(0, weight=1)
 
         # Video canvas with vertical sliders
-        self.video_frame = customtkinter.CTkFrame(self.left_frame)
-        self.video_frame.grid(row=0, column=0, sticky="nsew")
-        self.video_frame.grid_columnconfigure(0, weight=1)
-        self.video_frame.grid_columnconfigure(1, weight=0)
-        self.video_frame.grid_columnconfigure(2, weight=0)
-        self.video_frame.grid_rowconfigure(0, weight=1)
+        self.videoFrame = customtkinter.CTkFrame(self.leftFrame)
+        self.videoFrame.grid(row=0, column=0, sticky="nsew")
+        self.videoFrame.grid_columnconfigure(0, weight=1)
+        self.videoFrame.grid_columnconfigure(1, weight=0)
+        self.videoFrame.grid_columnconfigure(2, weight=0)
+        self.videoFrame.grid_rowconfigure(0, weight=1)
 
-        self.canvas = tk.Canvas(self.video_frame, bg="black")
+        self.canvas = tk.Canvas(self.videoFrame, bg="black")
         self.canvas.grid(row=0, column=0, sticky="nsew")
         # Bind resizing to auto-scale image
-        self.canvas.bind('<Configure>', self._on_canvas_resize)
+        self.canvas.bind('<Configure>', self.onCanvasResize)
 
-        self.slider_top = customtkinter.CTkSlider(self.video_frame, from_=0, to=1, orientation="vertical", command=self._on_slider_change("top"))
-        self.slider_bottom = customtkinter.CTkSlider(self.video_frame, from_=0, to=1, orientation="vertical", command=self._on_slider_change("bottom"))
-        self.slider_top.grid(row=0, column=1, sticky="ns", padx=(4, 2))
-        self.slider_top.set(1 - 0.75)
-        self.slider_bottom.grid(row=0, column=2, sticky="ns", padx=2)
-        self.slider_bottom.set(1 - 0.99)
+        self.sliderTop = customtkinter.CTkSlider(self.videoFrame, from_=0, to=1, orientation="vertical", command=self.onSliderChange("top"))
+        self.sliderBottom = customtkinter.CTkSlider(self.videoFrame, from_=0, to=1, orientation="vertical", command=self.onSliderChange("bottom"))
+        self.sliderTop.grid(row=0, column=1, sticky="ns", padx=(4, 2))
+        self.sliderTop.set(1 - 0.75)
+        self.sliderBottom.grid(row=0, column=2, sticky="ns", padx=2)
+        self.sliderBottom.set(1 - 0.995)
 
         # Horizontal sliders
-        self.horizontal_slider_frame = customtkinter.CTkFrame(self.left_frame)
-        self.horizontal_slider_frame.grid(row=1, column=0, sticky="ews", pady=(2,0))
-        self.horizontal_slider_frame.grid_columnconfigure(0, weight=1)
-        self.slider_left = customtkinter.CTkSlider(self.horizontal_slider_frame, from_=0, to=1, command=self._on_slider_change("left"))
-        self.slider_right = customtkinter.CTkSlider(self.horizontal_slider_frame, from_=0, to=1, command=self._on_slider_change("right"))
-        self.slider_left.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
-        self.slider_left.set(0.01)
-        self.slider_right.grid(row=1, column=0, sticky="ew", padx=5, pady=2)
-        self.slider_right.set(0.99)
+        self.horizontalSliderFrame = customtkinter.CTkFrame(self.leftFrame)
+        self.horizontalSliderFrame.grid(row=1, column=0, sticky="ews", pady=(2,0))
+        self.horizontalSliderFrame.grid_columnconfigure(0, weight=1)
+        self.sliderLeft = customtkinter.CTkSlider(self.horizontalSliderFrame, from_=0, to=1, command=self.onSliderChange("left"))
+        self.sliderRight = customtkinter.CTkSlider(self.horizontalSliderFrame, from_=0, to=1, command=self.onSliderChange("right"))
+        self.sliderLeft.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
+        self.sliderLeft.set(0.005)
+        self.sliderRight.grid(row=1, column=0, sticky="ew", padx=5, pady=2)
+        self.sliderRight.set(0.995)
 
         # Bottom video controls: open, timestamp entry, jump, random
-        self.control_frame = customtkinter.CTkFrame(self.left_frame)
-        self.control_frame.grid(row=2, column=0, sticky="ews", pady=(10,0))
-        self.control_frame.grid_columnconfigure((0,1,2,3), weight=1)
+        self.controlFrame = customtkinter.CTkFrame(self.leftFrame)
+        self.controlFrame.grid(row=2, column=0, sticky="ews", pady=(10,0))
+        self.controlFrame.grid_columnconfigure((0,1,2,3), weight=1)
 
         # Open video file button
-        self.btn_open = customtkinter.CTkButton(self.control_frame, text="Open Video", command=self.open_video)
-        self.btn_open.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self.btnOpen = customtkinter.CTkButton(self.controlFrame, text="Open Video", command=self.openVideo)
+        self.btnOpen.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
         # Timestamp entry
-        self.entry_time = customtkinter.CTkEntry(self.control_frame, placeholder_text="HH:MM:SS.ss")
-        self.entry_time.insert(0, "00:00:00.00")
-        self.entry_time.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.entryTime = customtkinter.CTkEntry(self.controlFrame, placeholder_text="HH:MM:SS.ss")
+        self.entryTime.insert(0, "00:00:00.00")
+        self.entryTime.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
         # Jump to time button
-        self.btn_jump = customtkinter.CTkButton(self.control_frame, text="Go To", command=self.jump_to_time)
-        self.btn_jump.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
+        self.btnJump = customtkinter.CTkButton(self.controlFrame, text="Go To", command=self.jumpToTime)
+        self.btnJump.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
         # Random time button
-        self.btn_random = customtkinter.CTkButton(self.control_frame, text="Random", command=self.jump_random)
-        self.btn_random.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
+        self.btnRandom = customtkinter.CTkButton(self.controlFrame, text="Random", command=self.jumpRandom)
+        self.btnRandom.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
 
         # Right frame: console output and action buttons
-        self.right_frame = customtkinter.CTkFrame(self)
-        self.right_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        self.right_frame.grid_rowconfigure(0, weight=1)
-        self.right_frame.grid_rowconfigure(1, weight=0)
-        self.right_frame.grid_columnconfigure(0, weight=1)
+        self.rightFrame = customtkinter.CTkFrame(self, width=100)
+        self.rightFrame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        self.rightFrame.grid_rowconfigure(0, weight=1)
+        self.rightFrame.grid_rowconfigure(1, weight=0)
+        self.rightFrame.grid_columnconfigure(0, weight=1)
 
         # Console output textbox (read-only)
-        self.textbox = customtkinter.CTkTextbox(self.right_frame)
+        self.textbox = customtkinter.CTkTextbox(self.rightFrame)
         self.textbox.grid(row=0, column=0, sticky="nsew", pady=(0,10))
         # make textbox read-only
         self.textbox.configure(state="disabled")
 
         # Action buttons: Start and Abort
-        self.action_frame = customtkinter.CTkFrame(self.right_frame)
-        self.action_frame.grid(row=1, column=0, sticky="ew")
-        self.action_frame.grid_columnconfigure(0, weight=1)
-        self.action_frame.grid_columnconfigure(1, weight=1)
+        self.actionFrame = customtkinter.CTkFrame(self.rightFrame)
+        self.actionFrame.grid(row=1, column=0, sticky="ew")
+        self.actionFrame.grid_columnconfigure(0, weight=1)
+        self.actionFrame.grid_columnconfigure(1, weight=1)
 
         # Abort button
-        self.btn_abort = customtkinter.CTkButton(self.action_frame, text="Abort", fg_color="#ff4d4d", hover_color="#ff1a1a", command=self.abort_process)
-        self.btn_abort.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        self.btn_abort.configure(state="disabled") # Initially disabled
+        self.btnAbort = customtkinter.CTkButton(self.actionFrame, text="Abort", fg_color="#ff4d4d", hover_color="#ff1a1a", command=self.abortProcess)
+        self.btnAbort.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
+        self.btnAbort.configure(state="disabled") # Initially disabled
         # Start button
-        self.btn_start = customtkinter.CTkButton(self.action_frame, text="Start", command=self.start_process)
-        self.btn_start.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.btnStart = customtkinter.CTkButton(self.actionFrame, text="Start", command=self.startProcess)
+        self.btnStart.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
 
-        self.after(100, self.gui_poll)
+        self.after(100, self.consolePoll)
 
-    def write_console(self, msg: str):
+        self.tempDir: typing.Optional[tempfile.TemporaryDirectory] = None
+
+    def writeConsole(self, msg: str):
         """Helper to append text to the read-only console."""
         self.textbox.configure(state="normal")
         self.textbox.insert("end", msg)
         self.textbox.see("end")
         self.textbox.configure(state="disabled")
 
-    def open_video(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Video Files", "*.mp4")])
-        if file_path:
-            self.player = VideoPlayer(file_path)
-            img = self.player.get_frame_at(0.0)
+    def openVideo(self):
+        filePath = filedialog.askopenfilename(filetypes=[("Video Files", "*.mp4")])
+        if filePath:
+            self.player = VideoPlayer(filePath)
+            img = self.player.getFrameAt(0.0)
             if img:
-                self.current_pil_image = img
-                self._display_scaled_image()
-                self.write_console(f"Opened video: {file_path}\n")
+                self.currentPilImage = img
+                self.displayScaledImage()
+                self.writeConsole(f"Opened video: {filePath}\n")
 
-    def jump_to_time(self):
-        ts = self.entry_time.get()
+    def jumpToTime(self):
+        ts = self.entryTime.get()
         parts = ts.split(':')
         try:
             h, m = int(parts[0]), int(parts[1])
             s = float(parts[2])
             total = h*3600 + m*60 + s
         except:
-            self.write_console(f"Invalid timestamp: {ts}\n")
+            self.writeConsole(f"Invalid timestamp: {ts}\n")
             return
         if self.player:
-            img = self.player.get_frame_at(total)
+            img = self.player.getFrameAt(total)
             if img:
-                self.current_pil_image = img
-                self._display_scaled_image()
-                self.write_console(f"Jumped to: {ts}\n")
+                self.currentPilImage = img
+                self.displayScaledImage()
+                self.writeConsole(f"Jumped to: {ts}\n")
         else:
-            self.write_console("No video loaded.\n")
+            self.writeConsole("No video loaded.\n")
 
-    def jump_random(self):
+    def jumpRandom(self):
         if not self.player:
-            return self.write_console("No video loaded.\n")
+            return self.writeConsole("No video loaded.\n")
         total = random.uniform(0, self.player.duration)
-        img = self.player.get_frame_at(total)
+        img = self.player.getFrameAt(total)
         if img:
             # format hh:mm:ss.ss
             h = int(total // 3600)
@@ -214,126 +217,129 @@ class MagiaTimelineGUI(customtkinter.CTk):
             s = total % 60
             ts_str = f"{h:02d}:{m:02d}:{s:05.2f}"
             # update entry field
-            self.entry_time.delete(0, "end")
-            self.entry_time.insert(0, ts_str)
+            self.entryTime.delete(0, "end")
+            self.entryTime.insert(0, ts_str)
             # show frame
-            self.current_pil_image = img
-            self._display_scaled_image()
-            self.write_console(f"Jumped random to: {ts_str}\n")
+            self.currentPilImage = img
+            self.displayScaledImage()
+            self.writeConsole(f"Jumped random to: {ts_str}\n")
 
-    def _display_scaled_image(self):
-        if not self.current_pil_image:
+    def displayScaledImage(self):
+        if not self.currentPilImage:
             return
-        canvas_w = self.canvas.winfo_width()
-        canvas_h = self.canvas.winfo_height()
-        if canvas_w < 1 or canvas_h < 1:
+        canvasW = self.canvas.winfo_width()
+        canvasH = self.canvas.winfo_height()
+        if canvasW < 1 or canvasH < 1:
             return
         # stretch to fill
-        resized = self.current_pil_image.resize((canvas_w, canvas_h))
+        resized = self.currentPilImage.resize((canvasW, canvasH))
         self.tk_image = ImageTk.PhotoImage(resized)
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor='nw', image=self.tk_image)
         # draw crop rectangle on top
-        self.update_rectangle()
+        self.updateRectangle()
 
-    def _on_canvas_resize(self, event):
-        self._display_scaled_image()
+    def onCanvasResize(self, event):
+        self.displayScaledImage()
 
-    def _on_slider_change(self, slider_id):
-        def _on_slider_change_impl(val):
-            th = 1 - self.slider_top.get()
-            bh = 1 - self.slider_bottom.get()
-            lw = self.slider_left.get()
-            rw = self.slider_right.get()
+    def onSliderChange(self, slider_id):
+        def onSliderChangeImpl(val):
+            th = 1 - self.sliderTop.get()
+            bh = 1 - self.sliderBottom.get()
+            lw = self.sliderLeft.get()
+            rw = self.sliderRight.get()
 
             # enforce bounds
             if lw > rw:
                 if slider_id == "left":
                     rw = lw
-                    self.slider_right.set(rw)
+                    self.sliderRight.set(rw)
                 if slider_id == "right":
                     lw = rw
-                    self.slider_left.set(lw)
+                    self.sliderLeft.set(lw)
             if th > bh:
                 if slider_id == "top":
                     bh = th
-                    self.slider_bottom.set(1 - bh)
+                    self.sliderBottom.set(1 - bh)
                 if slider_id == "bottom":
                     th = bh
-                    self.slider_top.set(1 - th)
+                    self.sliderTop.set(1 - th)
             
-            self._display_scaled_image()
-        return _on_slider_change_impl
+            self.displayScaledImage()
+        return onSliderChangeImpl
 
-    def update_rectangle(self):
+    def updateRectangle(self):
         """Draw a hollow red rectangle according to sliders (left≤right, top≤bottom)."""
-        if not self.current_pil_image:
+        if not self.currentPilImage:
             return
-        th = 1 - self.slider_top.get()
-        bh = 1 - self.slider_bottom.get()
-        lw = self.slider_left.get()
-        rw = self.slider_right.get()
+        th = 1 - self.sliderTop.get()
+        bh = 1 - self.sliderBottom.get()
+        lw = self.sliderLeft.get()
+        rw = self.sliderRight.get()
         W = self.canvas.winfo_width()
         H = self.canvas.winfo_height()
         x1 = lw * W; x2 = rw * W
         y1 = th * H; y2 = bh * H
         # remove old
-        if self.rect_id:
-            self.canvas.delete(self.rect_id)
+        if self.rectId:
+            self.canvas.delete(self.rectId)
         # draw new
-        self.rect_id = self.canvas.create_rectangle(
+        self.rectId = self.canvas.create_rectangle(
             x1, y1, x2, y2,
             outline='red', width=4
         )
 
     @staticmethod
-    def process_worker(queue, *args, **kwargs):
+    def processWorker(queue, *args, **kwargs):
         sys.stdout = sys.stderr = QueueWriter(queue)
         import MagiaTimeline
         MagiaTimeline.main(*args, **kwargs)
         sys.stdout = sys.__stdout__
         sys.stderr = sys.__stderr__
 
-    def gui_poll(self):
+    def consolePollOnce(self):
         try:
             while True:
                 msg: str = self.queue.get_nowait()
-                self.write_console(msg)
+                self.writeConsole(msg)
                 # Update entry field and video frame on messages like:
                 # frame 00:01:01.72
                 if msg.startswith("frame "):
                     ts_str = msg.split()[1]
-                    self.entry_time.configure(state="normal")
-                    self.entry_time.delete(0, "end")
-                    self.entry_time.insert(0, ts_str)
-                    self.entry_time.configure(state="readonly")
+                    self.entryTime.configure(state="normal")
+                    self.entryTime.delete(0, "end")
+                    self.entryTime.insert(0, ts_str)
+                    self.entryTime.configure(state="readonly")
                     # Jump to the frame
                     if self.player:
-                        img = self.player.get_frame_at(float(ts_str.split(':')[0]) * 3600 + float(ts_str.split(':')[1]) * 60 + float(ts_str.split(':')[2]))
+                        img = self.player.getFrameAt(float(ts_str.split(':')[0]) * 3600 + float(ts_str.split(':')[1]) * 60 + float(ts_str.split(':')[2]))
                         if img:
-                            self.current_pil_image = img
-                            self._display_scaled_image()
+                            self.currentPilImage = img
+                            self.displayScaledImage()
         except:
             pass
-        self.after(100, self.gui_poll)
+
+    def consolePoll(self):
+        self.consolePollOnce()
+        self.after(100, self.consolePoll)
 
     @staticmethod
-    def start_with_hook(p: multiprocessing.Process, on_exit: typing.Callable[[], None]):
+    def startWithHook(p: multiprocessing.Process, on_exit: typing.Callable[[], None]):
         p.start()
         threading.Thread(target=lambda: (p.join(), on_exit()), daemon=True).start()
         return p
 
-    def start_process(self):
+    def startProcess(self):
         if self.process and self.process.is_alive():
-            return self.write_console("Process already running.\n")
+            return self.writeConsole("Process already running.\n")
 
         if not self.player:
-            return self.write_console("No video loaded.\n")
+            return self.writeConsole("No video loaded.\n")
         
-        th = 1 - self.slider_top.get()
-        bh = 1 - self.slider_bottom.get()
-        lw = self.slider_left.get()
-        rw = self.slider_right.get()
+        th = 1 - self.sliderTop.get()
+        bh = 1 - self.sliderBottom.get()
+        lw = self.sliderLeft.get()
+        rw = self.sliderRight.get()
 
         schema = json.load(open("ConfigSchema.json", "r"))
         config = yaml.load(open("config.yml", "r").read(), Loader=yaml.FullLoader)
@@ -341,57 +347,69 @@ class MagiaTimelineGUI(customtkinter.CTk):
         config["source"] = [self.player.path]
         config["dtd"]["default"]["dialogRect"] = [lw, rw, th, bh]
 
-        self.write_console("Starting process...\n")
+        self.writeConsole("Starting process...\n")
+        self.tempDir = tempfile.TemporaryDirectory(prefix="MagiaTimeline_")
         self.process = multiprocessing.Process(
-            target=MagiaTimelineGUI.process_worker,
-            args=(self.queue, config, schema)
+            target=MagiaTimelineGUI.processWorker,
+            args=(self.queue, config, schema, self.tempDir.name)
         )
-        self.start_with_hook(
+        self.startWithHook(
             self.process,
-            on_exit=self.enable_controls
+            on_exit=self.enableControls
         )
 
-        self.disable_controls()
-        self.write_console("Process started.\n")
+        self.disableControls()
+        self.writeConsole("Process started.\n")
 
-    def disable_controls(self):
-        self.btn_start.configure(state="disabled")
-        self.btn_abort.configure(state="normal")
-        self.slider_top.configure(state="disabled")
-        self.slider_bottom.configure(state="disabled")
-        self.slider_left.configure(state="disabled")
-        self.slider_right.configure(state="disabled")
-        self.entry_time.configure(state="disabled")
-        self.btn_open.configure(state="disabled")
-        self.btn_jump.configure(state="disabled")
-        self.btn_random.configure(state="disabled")
+    def disableControls(self):
+        self.btnStart.configure(state="disabled")
+        self.btnAbort.configure(state="normal")
+        self.sliderTop.configure(state="disabled")
+        self.sliderBottom.configure(state="disabled")
+        self.sliderLeft.configure(state="disabled")
+        self.sliderRight.configure(state="disabled")
+        self.entryTime.configure(state="disabled")
+        self.btnOpen.configure(state="disabled")
+        self.btnJump.configure(state="disabled")
+        self.btnRandom.configure(state="disabled")
 
-    def abort_process(self):
+    def abortProcess(self):
         if self.process and self.process.is_alive():
-            self.write_console("Aborting process...\n")
+            self.writeConsole("Aborting process...\n")
             self.process.terminate()
             self.process.join()
             self.process = None
-            self.write_console("Process aborted.\n")
-            self.enable_controls()
+            self.consolePollOnce()
+            self.writeConsole("Process aborted.\n")
+            assert self.tempDir is not None
+            self.tempDir.cleanup()
+            self.tempDir = None
+            self.enableControls()
         else:
-            self.write_console("No process running.\n")
+            self.writeConsole("No process running.\n")
 
-    def enable_controls(self):
-        self.btn_start.configure(state="normal")
-        self.btn_abort.configure(state="disabled")
-        self.slider_top.configure(state="normal")
-        self.slider_bottom.configure(state="normal")
-        self.slider_left.configure(state="normal")
-        self.slider_right.configure(state="normal")
-        self.entry_time.configure(state="normal")
-        self.btn_open.configure(state="normal")
-        self.btn_jump.configure(state="normal")
-        self.btn_random.configure(state="normal")
+    def enableControls(self):
+        self.btnStart.configure(state="normal")
+        self.btnAbort.configure(state="disabled")
+        self.sliderTop.configure(state="normal")
+        self.sliderBottom.configure(state="normal")
+        self.sliderLeft.configure(state="normal")
+        self.sliderRight.configure(state="normal")
+        self.entryTime.configure(state="normal")
+        self.btnOpen.configure(state="normal")
+        self.btnJump.configure(state="normal")
+        self.btnRandom.configure(state="normal")
 
-    def on_closing(self):
+    def onClosing(self):
         if self.process and self.process.is_alive():
-            self.abort_process()
+            self.process.terminate()
+            self.process.join(timeout=1)
+            if self.process.is_alive():
+                self.process.kill()
+            self.process = None
+            assert self.tempDir is not None
+            self.tempDir.cleanup()
+            self.tempDir = None
 
 if __name__ == "__main__":
     multiprocessing.freeze_support() # For Windows compatibility

@@ -29,6 +29,7 @@ from Strategies.DiffTextDetection import *
 from Engines.SpeculativeEngine import *
 from Engines.FramewiseEngine import *
 from ExtraJobs import *
+from Util import *
 
 VERSION = "1.1.0-beta.1"
 
@@ -47,7 +48,7 @@ def cli():
 
     main(config, schema)
 
-def main(config: dict, schema: dict):
+def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
 
     if True: # config validation
         jsonschema.validate(config, schema=schema) # raises exception on failure
@@ -66,6 +67,8 @@ def main(config: dict, schema: dict):
     engineConfig = config[config["engine"]]
 
     cv.ocl.setUseOpenCL(config["enableOpenCL"])
+
+    initDiskCache(tempDirPath)
 
     for nTask, src in enumerate(config["source"]):
         timeStart = time.time()
