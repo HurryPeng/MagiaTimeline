@@ -31,7 +31,7 @@ from Engines.FramewiseEngine import *
 from ExtraJobs import *
 from Util import *
 
-VERSION = "1.1.0-beta.1"
+from Version import VERSION
 
 def cli():
     parser = argparse.ArgumentParser(

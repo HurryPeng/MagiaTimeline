@@ -15,6 +15,8 @@ import json
 import yaml
 import tempfile
 
+from Version import VERSION
+
 # Initialize appearance
 customtkinter.set_appearance_mode("Dark")  # Modes: System, Dark, Light
 customtkinter.set_default_color_theme("blue")  # Themes: blue, green, dark-blue
@@ -65,7 +67,7 @@ class QueueWriter:
 class MagiaTimelineGUI(customtkinter.CTk):
     def __init__(self):
         super().__init__()
-        self.title(f"MagiaTimeline-GUI")
+        self.title(f"MagiaTimeline {VERSION} GUI")
         self.geometry("1080x500")
         self.wm_iconbitmap()
         self.iconphoto(False, ImageTk.PhotoImage(file="./logo/MagiaTimeline-Logo-Transparent.png"))
