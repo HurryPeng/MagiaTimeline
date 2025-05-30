@@ -36,6 +36,8 @@ Currently, only win_amd64 is supported. No Python installation is needed. You ca
 
 ### Workflow
 
+#### Command-line Interface
+
 **Configuration**: Open `config.yml` to review the configurations. You can open this file with any text editor, but using an IDE that provides syntax checks and formatting is recommended. The detailed comments in `config.yml` will guide you through the setup.
 
 For beginners, the following settings are recommended:
@@ -57,11 +59,15 @@ If the video’s resolution is too high for the display window, consider adjusti
 
 **Productive Running**: Debug mode significantly slows down the program. After verifying alignment in debug mode, run the full video with debug off. Reset the parameters as described in the **Configuration** section, then run `MagiaTimeline.bat`/`MagiaTimeline.exe` (Windows) or `MagiaTimeline.sh` (GNU/Linux or macOS). Once the program finishes, you should see a `MagiaTimelineOutput.ass` file generated. As a video creator, you should already be familiar with this file format. Enjoy!
 
+#### Graphical User Interface
+
+Run `MagiaTimeline-GUI.py` for an experimental GUI. Only the default `dtd` strategy is supported. 
+
 ## Toolbox
 
 ### Strategies
 
-A *Strategy* is a set of CV algorithms that tells the framework how to identify subtitles in a frame. You can choose which Strategy to use for your video.
+A *Strategy* is a set of CV algorithms that tells the framework how to identify subtitles in a frame. You can choose which strategy to use for your video.
 
 MagiaTimeline provides three recommended general-purpose Strategies:
 

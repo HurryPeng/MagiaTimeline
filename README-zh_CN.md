@@ -36,6 +36,8 @@
 
 ### 工作流程
 
+#### 命令行界面
+
 **配置阶段**：用文本编辑器打开`config.yml`查看配置项，配置文件里每一个配置项都有详细注释，建议使用支持语法检查和自动格式化的IDE
 
 新手推荐配置：
@@ -54,6 +56,10 @@
 如果视频分辨率过高，调试窗口在屏幕上显示不下，可以调整`framewise`下的`debugPyrDown`参数。
 
 **正式打轴**：调试模式会明显比较慢，检查对齐之后，请关闭调试模式正式打轴。恢复**配置阶段**的参数设置，运行`MagiaTimeline.bat`/`MagiaTimeline.exe`（Windows）或`MagiaTimeline.sh`（GNU/Linux或macOS）。程序运行结束后，文件夹里会出现`MagiaTimelineOutput.ass`。拿去吧你！
+
+#### 图形界面
+
+运行`MagiaTimeline-GUI.py`打开实验性图形界面。目前只支持默认的`dtd`策略组。
 
 ## 概念讲解
 
