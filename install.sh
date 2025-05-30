@@ -10,4 +10,5 @@ python3 -m venv venv || exit 1
 source venv/bin/activate || exit 1
 python3 -m pip install --upgrade pip -i https://pypi.mirrors.ustc.edu.cn/simple/ || exit 1
 pip install -r requirements.txt -i https://pypi.mirrors.ustc.edu.cn/simple/ || exit 1
+python3 TouchPaddle.py || exit 1
 echo "Installation complete."

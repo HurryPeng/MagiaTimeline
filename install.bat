@@ -11,6 +11,7 @@ call python -m venv venv
 call venv\Scripts\activate.bat
 call python -m pip install --upgrade pip -i https://pypi.mirrors.ustc.edu.cn/simple/
 call python -m pip install -r requirements.txt -i https://pypi.mirrors.ustc.edu.cn/simple/
+call python TouchPaddle.py
 if %errorlevel% neq 0 (
     echo Installation failed. Please check the error message above.
     pause

@@ -26,17 +26,21 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 False,
                 None
             ]
-
-    def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
-        AbstractStrategy.__init__(self, contentRect)
-        AbstractSpeculativeStrategy.__init__(self)
-
-        self.ocr = paddleocr.PaddleOCR(
+        
+    @staticmethod
+    def genOcrEngine() -> paddleocr.PaddleOCR:
+        return paddleocr.PaddleOCR(
             det=True, rec=False, cls=False, use_angle_cls=False, show_log=False,
             det_model_dir="./PaddleOCRModels/ch_PP-OCRv4_det_infer/",
             rec_model_dir="./PaddleOCRModels/ch_PP-OCRv4_rec_infer/",
             cls_model_dir="./PaddleOCRModels/ch_ppocr_mobile_v2.0_cls_infer/"
         )
+
+    def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
+        AbstractStrategy.__init__(self, contentRect)
+        AbstractSpeculativeStrategy.__init__(self)
+
+        self.ocr = DiffTextDetectionStrategy.genOcrEngine()
 
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         self.rectangles["dialogRect"] = RatioRectangle(contentRect, *config["dialogRect"])
@@ -309,6 +313,30 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             debugFrame = cv.addWeighted(warpedImageInpaint, 0.5, cv.cvtColor(ocrIntersectMask, cv.COLOR_GRAY2BGR), 0.5, 0)
             cv.imshow("DebugFrame", debugFrame)
             cv.waitKey(0)
+
+        # self.log.write(f"{sobelIou},{postInpaintSobelIou},{ocrIou},{1 if ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou else 0}\n")
+        # self.log.flush()
+
+        # if sobelIou > 0.9 and postInpaintSobelIou < 0.1 and not (ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou):
+        #     print(f"sobelIou: {sobelIou}, postInpaintSobelIou: {postInpaintSobelIou}, ocrIntersectVal: {ocrIntersectVal}, ocrIou: {ocrIou}")
+        #     cv.imshow("DebugFrame", cv.addWeighted(oldImage, 0.5, warpedImage, 0.5, 0))
+        #     cv.waitKey(0)
+        #     cv.imshow("DebugFrame", oldImage)
+        #     cv.waitKey(0)
+        #     cv.imshow("DebugFrame", warpedImage)
+        #     cv.waitKey(0)
+        #     cv.imshow("DebugFrame", oldImageSobelBinDilate)
+        #     cv.waitKey(0)
+        #     cv.imshow("DebugFrame", warpedImageSobelBinDilate)
+        #     cv.waitKey(0)
+        #     cv.imshow("DebugFrame", intersectSobelBinMasked)
+        #     cv.waitKey(0)
+        #     cv.imshow("DebugFrame", warpedImageInpaint)
+        #     cv.waitKey(0)
+        #     cv.imshow("DebugFrame", warpedImageInpaintSobelBinDilateMasked)
+        #     cv.waitKey(0)
+        #     cv.imshow("DebugFrame", intersectPostInpaintSobel)
+        #     cv.waitKey(0)
 
         return ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou
     

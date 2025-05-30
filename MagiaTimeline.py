@@ -25,7 +25,7 @@ from Strategies.ParakoStrategy import *
 from Strategies.BanGDreamStrategy import *
 from Strategies.OutlineStrategy import *
 from Strategies.BoxColourStatStrategy import *
-from Strategies.DiffTextDetection import *
+from Strategies.DiffTextDetectionStrategy import *
 from Engines.SpeculativeEngine import *
 from Engines.FramewiseEngine import *
 from ExtraJobs import *
