@@ -344,9 +344,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         # simply return the last feature
         return features[-1]
 
-    def aggregateAndMoveFeatureToIntervalOnHook(self) -> bool:
-        return True
-
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
     

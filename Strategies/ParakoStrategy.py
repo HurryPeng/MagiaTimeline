@@ -64,8 +64,8 @@ class ParakoStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy):
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
             lambda iir, interval0, interval1:
                 self.decideFeatureMerge(
-                    [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval0.framePoints],
-                    [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval1.framePoints]
+                    [interval0.getFlag(self.getFeatureFlagIndex())],
+                    [interval1.getFlag(self.getFeatureFlagIndex())]
                 )
         )
         self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(ParakoStrategy.FlagIndex.Dialog, 100)
@@ -107,7 +107,10 @@ class ParakoStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy):
     
     def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.List[typing.Any]) -> bool:
         return bool(np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < 0.1)
-
+    
+    def aggregateFeatures(self, features: typing.List[np.ndarray]) -> np.ndarray:
+        return np.mean(features, axis=0)
+    
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)
         roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)

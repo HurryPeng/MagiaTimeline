@@ -100,9 +100,9 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
             lambda iir, interval0, interval1:
                 self.decideFeatureMerge(
-                    [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval0.framePoints],
-                    [framePoint.getFlag(self.getFeatureFlagIndex()) for framePoint in interval1.framePoints]
-                )
+                    [interval0.getFlag(self.getFeatureFlagIndex())],
+                    [interval1.getFlag(self.getFeatureFlagIndex())]
+                ) and iir.ms2Timestamp(self.iirPassDenoiseMinTime) > interval0.dist(interval1)
         )
         self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(BoxColourStatStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
         self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
@@ -151,9 +151,6 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
     def aggregateFeatures(self, features: typing.List[np.ndarray]) -> np.ndarray:
         return np.mean(features, axis=0)
 
-    def aggregateAndMoveFeatureToIntervalOnHook(self) -> bool:
-        return False
-    
     def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
     
