@@ -135,7 +135,12 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         iir: IIR = engine.checkAndRun(strategy, srcContainer, srcStream)
 
         print("==== IIR to ASS ====")
-        asstStr = asstStr.format(styles = "".join(strategy.getStyles()), events = iir.toAss(timeBase))
+        asstStr = asstStr.format(
+            playResX = size[0],
+            playResY = size[1],
+            styles = "".join(strategy.getStyles()),
+            events = iir.toAss(timeBase)
+        )
 
         dstAss.write(asstStr)
         dstAss.close()
