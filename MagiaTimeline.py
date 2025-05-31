@@ -169,6 +169,12 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
 
         srcContainer.close()
 
+        # Print disk cache directory size
+        getDiskCacheDir = getDiskCache().directory
+        cacheDir = pathlib.Path(getDiskCacheDir)
+        cacheSize = sum(f.stat().st_size for f in cacheDir.glob('**/*') if f.is_file())
+        print(f"Disk cache size: {cacheSize // (1024 * 1024)} MB")
+
 if __name__ == "__main__":
     try:
         cli()

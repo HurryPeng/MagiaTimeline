@@ -15,7 +15,7 @@ import lz4
 class CompressedDisk(diskcache.Disk):
     """Cache key and value using zlib compression."""
 
-    def __init__(self, directory, compress_level=4, **kwargs):
+    def __init__(self, directory, compress_level=3, **kwargs):
         self.compress_level = compress_level
         super().__init__(directory, **kwargs)
 
