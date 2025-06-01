@@ -12,6 +12,8 @@ import time
 import typing
 import traceback
 
+import pathlib
+
 from Rectangle import *
 from IR import *
 from Util import *

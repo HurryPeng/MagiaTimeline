@@ -350,23 +350,25 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     def cutCleanOcrFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
     
-    def detectTextBoxes(self, frame: cv.Mat, doRec: bool) -> typing.List[typing.Tuple[int, int, int, int]]:
-        result = self.ocr.ocr(frame, det=True, cls=False, rec=doRec)
-
-        # print("ocr result:", result)
-
+    def detectTextBoxes(self, frame: cv.Mat, maxResolution: int = 1800) -> typing.List[typing.Tuple[int, int, int, int]]:
+        # Halve the resolution until both dimensions are less or equal to maxResolution
         imgH, imgW = frame.shape[:2]
+        scale: int = 1
+        while imgH // scale > maxResolution or imgW // scale > maxResolution:
+            scale *= 2
+        frameScaled = frame
+        if scale > 1:
+            frameScaled = cv.resize(frame, (imgW // scale, imgH // scale), interpolation=cv.INTER_AREA)
+
+        result = self.ocr.ocr(frameScaled, det=True, cls=False, rec=False)
 
         if result[0] is None:
             return []
 
         boxes = []
         for wordInfo in result[0]:
-            if doRec:
-                confidence = wordInfo[1][1]
-                if confidence < 0.9:
-                    continue
-                wordInfo = wordInfo[0]
+            wordInfo = np.array(wordInfo, np.int32)
+            wordInfo *= scale
             x0, y0 = wordInfo[0]
             x1, y1 = wordInfo[1]
             x2, y2 = wordInfo[2]
@@ -377,7 +379,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             if np.abs(angle) > np.pi / 180 * 3:
                 continue
 
-            wordInfo = np.array(wordInfo, np.int32).reshape((-1, 1, 2))
             x0, y0, w0, h0 = cv.boundingRect(wordInfo)
             expand = int(h0 * self.boxVerticalExpansion)
             x = max(0, x0 - expand)
@@ -407,10 +408,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         return False
 
-    def ocrPass(self, frame: cv.Mat, doRec: bool = False) -> typing.Tuple[cv.Mat, float, cv.Mat | None]:
+    def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, float, cv.Mat | None]:
         # returns mask, dialogVal, debugFrame
 
-        boxes = self.detectTextBoxes(frame, doRec)
+        boxes = self.detectTextBoxes(frame)
 
         mask: cv.Mat = np.zeros_like(frame[:, :, 0])
         boxSizeSum = 0
