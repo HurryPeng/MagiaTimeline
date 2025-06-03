@@ -11,6 +11,8 @@ import diskcache
 import atexit
 import pickle
 import lz4
+import queue
+import concurrent.futures
 
 class CompressedDisk(diskcache.Disk):
     """Cache key and value using zlib compression."""
@@ -44,44 +46,75 @@ class CompressedDisk(diskcache.Disk):
 _tempLock = threading.Lock()
 _tempDir: typing.Optional[tempfile.TemporaryDirectory] = None
 _tempDirPath: typing.Optional[str] = None
-_cacheInstance: typing.Optional[diskcache.Cache] = None
+_diskCache: typing.Optional[diskcache.Cache] = None
+_writeQueue: typing.Optional[queue.Queue] = None
+_writeWorker: typing.Optional[threading.Thread] = None
 
 def initDiskCache(tempDirPath: typing.Optional[str] = None):
     # If tempDirPath is provided, use it and whoever provided it is responsible for cleaning it up.
     # If not, create a temporary directory that will be cleaned up automatically.
-    global _tempLock, _tempDir, _tempDirPath, _cacheInstance
+    global _tempLock, _tempDir, _tempDirPath, _diskCache, _writeQueue, _writeWorker
     with _tempLock:
         if tempDirPath is not None:
             _tempDirPath = tempDirPath
         else:
             _tempDir = tempfile.TemporaryDirectory(prefix="MagiaTimeline_")
             _tempDirPath = _tempDir.name
-        _cacheInstance = diskcache.Cache(_tempDirPath, eviction_policy='none', disk=CompressedDisk)
+        _diskCache = diskcache.Cache(_tempDirPath, eviction_policy='none', disk=CompressedDisk)
+        _writeQueue = queue.Queue(maxsize=100)
+        _writeWorker = threading.Thread(target=_writeWorkerThread, daemon=True)
+        _writeWorker.start()
         print(f"Disk cache initialized at {_tempDirPath}")
 
     @atexit.register
     def _cleanupCache():
-        global _cacheInstance, _tempDir
-        if _cacheInstance is not None:
-            _cacheInstance.close()
-            _cacheInstance = None
+        global _tempDir, _diskCache, _writeQueue, _writeWorker
+        if _writeQueue is not None:
+            assert _writeWorker is not None
+            assert _diskCache is not None
+            _writeQueue.put((None, None, None))
+            _writeWorker.join()
+            _diskCache.close() # Close in both threads to avoid file handle leaks
         if _tempDir is not None:
             _tempDir.cleanup()
 
 def getDiskCache() -> diskcache.Cache:
-    global _cacheInstance
-    assert _cacheInstance is not None
-    return _cacheInstance
+    global _diskCache
+    assert _diskCache is not None
+    return _diskCache
 
 class DiskCacheHandle:
     def __init__(self, value: typing.Any):
+        global _writeQueue
+        assert _writeQueue is not None
         self.key = uuid.uuid4().hex
-        getDiskCache()[self.key] = value
+        self.future = concurrent.futures.Future()
+        _writeQueue.put((self.key, value, self.future))
 
     def get(self) -> typing.Any:
-        value = getDiskCache()[self.key]
+        global _diskCache
+        assert _diskCache is not None
+        if not self.future.done():
+            self.future.result()
+        value = _diskCache[self.key]
         assert value is not None
         return value
+    
+def _writeWorkerThread():
+    global _writeQueue, _diskCache
+    assert _writeQueue is not None
+    assert _diskCache is not None
+    while True:
+        key, value, future = _writeQueue.get()
+        if key is None:
+            # None key is a signal to stop the worker
+            _writeQueue.task_done()
+            break
+        _diskCache[key] = value
+        future.set_result(None)
+        _writeQueue.task_done()
+
+    _diskCache.close() # Close in both threads to avoid file handle leaks
     
 def containsLargeNdarray(obj: typing.Any) -> bool:
     """
