@@ -28,12 +28,11 @@ source:
 # - src2.mp4
 
 # destination: path(s) of destination subtitle files with no extension
-# Include only the name of the file, without the extension,
-# because they may also be used by extra jobs.
 # There must be equal number of source(s) and destination(s). 
+# Leave as "..." for auto naming, or specify a name for each destination.
 destination:
-- MagiaTimelineOutput
-# - MagiaTimelineOutput2
+- ...
+# - src2.ass
 
 # assTemplate: template ass file defining the header of destination ass file, in asst format
 # The default template should work for most cases. 

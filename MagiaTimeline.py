@@ -1,8 +1,5 @@
 import cv2 as cv
-import av.container
-import av.container.input
-import av.video
-import av.video.stream
+import av
 import argparse
 import json
 import jsonschema
@@ -76,6 +73,8 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         timeStart = time.time()
 
         dst = config["destination"][nTask]
+        if dst == "...":
+            dst = autoNumberedNaming(src)
 
         print("")
         print("Task {}: {} -> {}".format(nTask, src, dst))

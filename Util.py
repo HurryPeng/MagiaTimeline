@@ -13,11 +13,12 @@ import pickle
 import lz4
 import queue
 import concurrent.futures
+import os
 
 class CompressedDisk(diskcache.Disk):
     """Cache key and value using zlib compression."""
 
-    def __init__(self, directory, compress_level=3, **kwargs):
+    def __init__(self, directory, compress_level=4, **kwargs):
         self.compress_level = compress_level
         super().__init__(directory, **kwargs)
 
@@ -209,3 +210,32 @@ def avFrame2CvMat(frame: av.frame.Frame) -> cv.Mat:
 
 def ms2Timestamp(ms: int, timeBase: fractions.Fraction) -> int:
     return int(ms / timeBase / 1000)
+
+# Generate a unique filename based on the source path.
+# If the file already exists, try the next letter. '
+# Example: "./video.mp4" -> "./video#20250603a" (no extension).
+# If any file starting with "./video#20250603a" already exists (any suffix),
+# e.g. "./video#20250603a.ass", "./video#20250603a-ref.txt" etc.,
+# then try "./video#20250603b", "./video#20250603c", etc.
+def autoNumberedNaming(srcPath: str) -> str:
+    base, ext = os.path.splitext(srcPath)
+    dateStr = datetime.datetime.now().strftime("%Y%m%d")
+    suffix = 'a'
+    
+    dirPath = os.path.dirname(srcPath) or '.'
+    
+    while True:
+        targetPrefix = f"{base}#{dateStr}{suffix}"
+        
+        conflictExists = False
+        for filename in os.listdir(dirPath):
+            if filename.startswith(os.path.basename(targetPrefix)):
+                conflictExists = True
+                break
+        
+        if not conflictExists:
+            return targetPrefix
+        
+        suffix = chr(ord(suffix) + 1)
+        if suffix > 'z':
+            raise Exception("Too many files with the same base name, please clean up the directory.")
