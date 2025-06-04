@@ -189,6 +189,32 @@ def ensureMat(frame):
         return frame.get()
     return frame
 
+def maxResScaleDown(
+    src: cv.Mat,
+    maxResolution: int = 1800
+) -> typing.Tuple[cv.Mat, int]:
+    scale: int = 1
+    while src.shape[0] // scale > maxResolution or src.shape[1] // scale > maxResolution:
+        scale *= 2
+    dst = src
+    if scale > 1:
+        dst = cv.resize(src, (src.shape[1] // scale, src.shape[0] // scale), interpolation=cv.INTER_AREA)
+    return dst, scale
+
+def phaseCorrelateMaxRes(
+    src1: cv.Mat,
+    src2: cv.Mat,
+    maxResolution: int = 1800,
+) -> typing.Tuple[cv.typing.Point2d, float]:
+    src1, scale1 = maxResScaleDown(src1, maxResolution)
+    src2, scale2 = maxResScaleDown(src2, maxResolution)
+    assert scale1 == scale2
+    hann = cv.createHanningWindow(src1.shape[::-1], cv.CV_32F)
+    (shiftX, shiftY), response = cv.phaseCorrelate(src1, src2, window=hann)
+    shiftX *= scale1
+    shiftY *= scale2
+    return (shiftX, shiftY), response
+
 def morphologyWeightUpperBound(image: cv.Mat, erodeWeight: int, dilateWeight: int) -> cv.Mat:
     imageErode = cv.morphologyEx(image, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (erodeWeight, erodeWeight)))
     imageErodeDialate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWeight, dilateWeight)))

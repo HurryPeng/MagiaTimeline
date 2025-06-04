@@ -89,7 +89,6 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         templateAsst = open(config["assTemplate"], "r")
         asstStr: str = templateAsst.read()
         templateAsst.close()
-        dstAss = open(dst + ".ass", "w")
 
         contentRect = RatioRectangle(SrcRectangle(*size), *config["contentRect"])
 
@@ -143,6 +142,7 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
             events = iir.toAss(timeBase)
         )
 
+        dstAss = open(dst + ".ass", "w")
         dstAss.write(asstStr)
         dstAss.close()
 

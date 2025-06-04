@@ -188,22 +188,21 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         )
         cc = ccInit
 
-        if cc < 0.9:
-            self.statDecideFeatureMergeFindTransformECC += 1
-            
-            oldImageGreyMasked = cv.bitwise_and(oldImageGrey, oldImageGrey, mask=oldMask)
-            newImageGreyMasked = cv.bitwise_and(newImageGrey, newImageGrey, mask=newMask)
-            oldImageGreyMaskedF32 = np.float32(oldImageGreyMasked)
-            newImageGreyMaskedF32 = np.float32(newImageGreyMasked)
-            hann = cv.createHanningWindow(oldImageGreyMaskedF32.shape[::-1], cv.CV_32F)
-            (shiftX, shiftY), response = cv.phaseCorrelate(
-                src1=newImageGreyMaskedF32,
-                src2=oldImageGreyMaskedF32,
-                window=hann,
-            )
-            if response > 0.1:
-                warp = np.array([[1, 0, shiftX], [0, 1, shiftY]], dtype=np.float32)
+        oldImageGreyMasked = cv.bitwise_and(oldImageGrey, oldImageGrey, mask=oldMask)
+        newImageGreyMasked = cv.bitwise_and(newImageGrey, newImageGrey, mask=newMask)
+        oldImageGreyMaskedF32 = np.float32(oldImageGreyMasked)
+        newImageGreyMaskedF32 = np.float32(newImageGreyMasked)
+        (shiftX, shiftY), response = phaseCorrelateMaxRes(
+            src1=newImageGreyMaskedF32,
+            src2=oldImageGreyMaskedF32,
+            maxResolution=1800
+        )
+        if response > 0.1:
+            warp = np.array([[1, 0, shiftX], [0, 1, shiftY]], dtype=np.float32)
+        pcWarpDist = np.linalg.norm(warp[0:2, 2])
+        if pcWarpDist > 1 and pcWarpDist < 50:
             try:
+                self.statDecideFeatureMergeFindTransformECC += 1
                 cc, warp = cv.findTransformECC(
                     templateImage=newImageGrey,
                     inputImage=oldImageGrey,
@@ -218,9 +217,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         if self.debugLevel >= 1:
             print("cc:", cc)
-        
-        if cc < 0.1:
-            return False
 
         warpedImage = newImage
         warpDist = np.linalg.norm(warp[0:2, 2])
@@ -351,14 +347,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         return self.dialogRect.cutRoi(frame)
     
     def detectTextBoxes(self, frame: cv.Mat, maxResolution: int = 1800) -> typing.List[typing.Tuple[int, int, int, int]]:
-        # Halve the resolution until both dimensions are less or equal to maxResolution
         imgH, imgW = frame.shape[:2]
-        scale: int = 1
-        while imgH // scale > maxResolution or imgW // scale > maxResolution:
-            scale *= 2
-        frameScaled = frame
-        if scale > 1:
-            frameScaled = cv.resize(frame, (imgW // scale, imgH // scale), interpolation=cv.INTER_AREA)
+        frameScaled, scale = maxResScaleDown(frame, maxResolution)
 
         result = self.ocr.ocr(frameScaled, det=True, cls=False, rec=False)
 
