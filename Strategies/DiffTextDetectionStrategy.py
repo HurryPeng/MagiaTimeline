@@ -200,7 +200,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if response > 0.1:
             warp = np.array([[1, 0, shiftX], [0, 1, shiftY]], dtype=np.float32)
         pcWarpDist = np.linalg.norm(warp[0:2, 2])
-        if pcWarpDist > 1 and pcWarpDist < 50:
+        if pcWarpDist > 0.5 and pcWarpDist < 50:
             try:
                 self.statDecideFeatureMergeFindTransformECC += 1
                 cc, warp = cv.findTransformECC(
@@ -215,13 +215,15 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 cc = 0
                 warp = np.eye(2, 3, dtype=np.float32)
 
-        if self.debugLevel >= 1:
-            print("cc:", cc)
-
         warpedImage = newImage
         warpDist = np.linalg.norm(warp[0:2, 2])
-        if warpDist > 1 and warpDist < 50 and cc > ccInit:
+        if warpDist > 0.5 and warpDist < 50 and cc > ccInit:
             warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
+
+        if self.debugLevel >= 1:
+            print("cc:", cc)
+            print("warp:", warp)
+            print("warpDist:", warpDist)
 
         if self.debugLevel >= 2:
             combinedImage = cv.addWeighted(oldImage, 0.5, warpedImage, 0.5, 0)
@@ -271,6 +273,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         postInpaintSobelIou = np.sum(intersectPostInpaintSobel) / np.sum(unionPostInpaintSobel)
 
         sobelIouDiff = sobelIou - postInpaintSobelIou
+        if self.debugLevel >= 1:
+            print("sobelIou:", sobelIou)
+            print("postInpaintSobelIou:", postInpaintSobelIou)
+            print("sobelIouDiff:", sobelIouDiff)
 
         if sobelIouDiff > 0.8:
             return True
@@ -313,7 +319,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         # self.log.write(f"{sobelIou},{postInpaintSobelIou},{ocrIou},{1 if ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou else 0}\n")
         # self.log.flush()
 
-        # if sobelIou > 0.9 and postInpaintSobelIou < 0.1 and not (ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou):
+        # if not (ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou):
         #     print(f"sobelIou: {sobelIou}, postInpaintSobelIou: {postInpaintSobelIou}, ocrIntersectVal: {ocrIntersectVal}, ocrIou: {ocrIou}")
         #     cv.imshow("DebugFrame", cv.addWeighted(oldImage, 0.5, warpedImage, 0.5, 0))
         #     cv.waitKey(0)
@@ -327,9 +333,13 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         #     cv.waitKey(0)
         #     cv.imshow("DebugFrame", intersectSobelBinMasked)
         #     cv.waitKey(0)
+        #     cv.imshow("DebugFrame", inpaintMask)
+        #     cv.waitKey(0)
         #     cv.imshow("DebugFrame", warpedImageInpaint)
         #     cv.waitKey(0)
         #     cv.imshow("DebugFrame", warpedImageInpaintSobelBinDilateMasked)
+        #     cv.waitKey(0)
+        #     cv.imshow("DebugFrame", cv.addWeighted(warpedImageInpaint, 0.5, cv.cvtColor(ocrIntersectMask, cv.COLOR_GRAY2BGR), 0.5, 0))
         #     cv.waitKey(0)
         #     cv.imshow("DebugFrame", intersectPostInpaintSobel)
         #     cv.waitKey(0)

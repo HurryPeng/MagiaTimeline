@@ -12,6 +12,7 @@ import av.frame
 import typing
 import fractions
 import math
+import time
 
 class IntervalGrower(IIR):
     def __init__(
@@ -120,6 +121,7 @@ class FrameCache:
         self.unitTimestamp: int = int(1 / self.timeBase / self.fps)
 
         self.statDecodedFrames: int = 0
+        self.statDecodeTimeElapsed: float = 0.0
 
     # Get the frame that is closest to C within the [L, R) range
     # May return None if there is no frame in the range
@@ -151,6 +153,7 @@ class FrameCache:
     # Proceed until the latest frame timestamp is greater than or equal to tgtTimestamp
     # If tgtTimestamp == -1, then proceed until the end of the video
     def proceedTo(self, tgtTimestamp: int) -> None:
+        startTime = time.time()
         if tgtTimestamp <= self.end and not tgtTimestamp == -1:
             return
         try:
@@ -164,8 +167,12 @@ class FrameCache:
         except av.EOFError:
             pass
         self.end = self.cache[-1].pts
+        endTime = time.time() - startTime
+        self.statDecodeTimeElapsed += endTime
+
     
     def leap(self) -> typing.Optional[av.frame.Frame]:
+        startTime = time.time()
         # leap to the next next I-frame (using seek) and take down that frame
         # return to the next I-frame and build an empty cache that is large enough for all frames in between
         # return the frame
@@ -207,6 +214,10 @@ class FrameCache:
             # last segment
             self.proceedTo(-1)
             self.nextI = self.end + 1
+
+        endTime = time.time() - startTime
+        self.statDecodeTimeElapsed += endTime
+
         return frameI2
 
 class SpeculativeEngine(AbstractEngine):
@@ -324,6 +335,7 @@ class SpeculativeEngine(AbstractEngine):
             iirPass.apply(intervalGrower)
 
         print("totalFrames/decoded/analyzed", frameCount, frameCache.statDecodedFrames, strategy.statAnalyzedFrames)
+        print("decodeTimeElapsed", frameCache.statDecodeTimeElapsed)
 
         if hasattr(strategy, "statDecideFeatureMerge"):
             print("statDecideFeatureMerge", strategy.statDecideFeatureMerge)
