@@ -14,7 +14,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractOcrStrategy):
+class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractExtraJobStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogVal = enum.auto()
@@ -120,7 +120,7 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         return cls.FlagIndex.DialogFeat
     
     @classmethod
-    def getOcrFrameFlagIndex(cls) -> AbstractFlagIndex:
+    def getExtraJobFrameFlagIndex(cls) -> AbstractFlagIndex:
         return cls.FlagIndex.OcrFrame
     
     @classmethod
@@ -151,11 +151,8 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
     def aggregateFeatures(self, features: typing.List[np.ndarray]) -> np.ndarray:
         return np.mean(features, axis=0)
 
-    def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
+    def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
-    
-    def cutCleanOcrFrame(self, frame: cv.Mat) -> cv.Mat:
-        return self.ocrPass(frame)[0]
     
     def detectTextBoxes(self, frame: cv.Mat) -> typing.List[typing.Tuple[int, int, int, int]]:
         result = self.ocr.ocr(frame, det=True, cls=False, rec=False)

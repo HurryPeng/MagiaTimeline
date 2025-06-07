@@ -23,14 +23,16 @@ class IntervalGrower(IIR):
         mainFlagIndex: AbstractFlagIndex,
         featureFlagIndex: AbstractFlagIndex,
         aggregateFeatures: typing.Callable[[typing.List[typing.Any]], typing.Any],
-        ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None,
+        extraJobFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None,
+        cutExtraJobFrame: typing.Optional[typing.Callable[[cv.Mat], cv.Mat]] = None,
         verbose: bool = False
     ) -> None:
         super().__init__(flagIndexType, fps, timeBase)
         self.mainFlagIndex: AbstractFlagIndex = mainFlagIndex
         self.featureFlagIndex: AbstractFlagIndex = featureFlagIndex
         self.aggregateFeatures: typing.Callable[[typing.List[typing.Any]], typing.Any] = aggregateFeatures
-        self.ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = ocrFrameFlagIndex
+        self.extraJobFrameFlagIndex: typing.Optional[AbstractFlagIndex] = extraJobFrameFlagIndex
+        self.cutExtraJobFrame: typing.Optional[typing.Callable[[cv.Mat], cv.Mat]] = cutExtraJobFrame
 
         self.proposalStride: fractions.Fraction = fractions.Fraction(1, 2)
 
@@ -68,9 +70,11 @@ class IntervalGrower(IIR):
     
     def insertInterval(self, framePoint: FramePoint, image: typing.Optional[cv.Mat]) -> Interval:
         interval = Interval(self.flagIndexType, self.mainFlagIndex, framePoint.timestamp, framePoint.timestamp, [framePoint])
-        if self.ocrFrameFlagIndex is not None:
+        if self.extraJobFrameFlagIndex is not None:
             assert image is not None
-            interval.setFlag(self.ocrFrameFlagIndex, image, inDiskCache=True)
+            assert self.cutExtraJobFrame is not None
+            extraJobFrame = self.cutExtraJobFrame(image)
+            interval.setFlag(self.extraJobFrameFlagIndex, extraJobFrame, inDiskCache=True)
         self.intervals.append(interval)
         self.sort()
         if self.verbose:
@@ -236,9 +240,11 @@ class SpeculativeEngine(AbstractEngine):
 
         mainFlagIndex: AbstractFlagIndex = strategy.getMainFlagIndex()
         featureFlagIndex: AbstractFlagIndex = strategy.getFeatureFlagIndex()
-        ocrFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None
-        if isinstance(strategy, AbstractOcrStrategy):
-            ocrFrameFlagIndex = strategy.getOcrFrameFlagIndex()
+        extraJobFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None
+        cutExtraJobFrame: typing.Optional[typing.Callable[[cv.Mat], cv.Mat]] = None
+        if isinstance(strategy, AbstractExtraJobStrategy):
+            extraJobFrameFlagIndex = strategy.getExtraJobFrameFlagIndex()
+            cutExtraJobFrame = strategy.cutExtraJobFrame
 
         self.emptyFeatureMaxTimestamp: int = ms2Timestamp(self.emptyGapForceCheck, timeBase)
 
@@ -249,7 +255,8 @@ class SpeculativeEngine(AbstractEngine):
             mainFlagIndex,
             featureFlagIndex,
             strategy.aggregateFeatures,
-            ocrFrameFlagIndex,
+            extraJobFrameFlagIndex,
+            cutExtraJobFrame,
             self.debug)
         frameCache: FrameCache = FrameCache(container, stream)
 

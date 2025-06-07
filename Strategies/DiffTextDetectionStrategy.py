@@ -9,7 +9,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractOcrStrategy):
+class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractExtraJobStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogVal = enum.auto()
@@ -100,7 +100,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         return cls.FlagIndex.DialogFeat
     
     @classmethod
-    def getOcrFrameFlagIndex(cls) -> AbstractFlagIndex:
+    def getExtraJobFrameFlagIndex(cls) -> AbstractFlagIndex:
         return cls.FlagIndex.OcrFrame
     
     @classmethod
@@ -350,10 +350,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         # simply return the last feature
         return features[-1]
 
-    def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
-        return self.dialogRect.cutRoi(frame)
-    
-    def cutCleanOcrFrame(self, frame: cv.Mat) -> cv.Mat:
+    def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
     
     def detectTextBoxes(self, frame: cv.Mat, maxResolution: int = 1800) -> typing.List[typing.Tuple[int, int, int, int]]:
@@ -392,7 +389,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
 
-        image = self.cutOcrFrame(frame)
+        image = self.cutExtraJobFrame(frame)
 
         mask, dialogVal, debugFrame = self.ocrPass(image)
 

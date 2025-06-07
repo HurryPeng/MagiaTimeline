@@ -9,7 +9,7 @@ from AbstractFlagIndex import *
 from Rectangle import *
 from IR import *
 
-class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractOcrStrategy):
+class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractExtraJobStrategy):
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogFeat = enum.auto()
@@ -103,7 +103,7 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
         return np.all(feature == 0)
     
     @classmethod
-    def getOcrFrameFlagIndex(cls) -> AbstractFlagIndex:
+    def getExtraJobFrameFlagIndex(cls) -> AbstractFlagIndex:
         return cls.FlagIndex.OcrFrame
 
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
@@ -133,12 +133,9 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
     def releaseFeatureOnHook(self) -> bool:
         return False
     
-    def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
+    def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
     
-    def cutCleanOcrFrame(self, frame: cv.Mat) -> cv.Mat:
-        return self.ocrPass(frame, fastMode=False)[0]
-
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialogText, debugFrame = self.ocrPass(frame, fastMode=False)
 

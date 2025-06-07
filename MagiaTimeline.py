@@ -156,7 +156,7 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
 
         if "ocr" in config["extraJobs"]:
             print("Extra job: ocr")
-            if not isinstance(strategy, AbstractOcrStrategy):
+            if not isinstance(strategy, AbstractExtraJobStrategy):
                 print("Error: Strategy does not support OCR. Skipping. ")
                 continue
             iirOcrPass = IIROcrPass(config["ocr"], dst, strategy)

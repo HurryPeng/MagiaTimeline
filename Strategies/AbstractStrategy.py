@@ -90,15 +90,11 @@ class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
     def getStatAnalyzedFrames(self) -> int:
         return self.statAnalyzedFrames
 
-class AbstractOcrStrategy(abc.ABC):
+class AbstractExtraJobStrategy(abc.ABC):
     @abc.abstractmethod
-    def cutOcrFrame(self, frame: cv.Mat) -> cv.Mat:
+    def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         pass
 
     @abc.abstractmethod
-    def cutCleanOcrFrame(self, frame: cv.Mat) -> cv.Mat:
-        pass
-
-    @abc.abstractmethod
-    def getOcrFrameFlagIndex(self) -> AbstractFlagIndex:
+    def getExtraJobFrameFlagIndex(self) -> AbstractFlagIndex:
         pass

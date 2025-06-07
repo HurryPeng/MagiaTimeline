@@ -10,10 +10,10 @@ from IR import *
 from Strategies.AbstractStrategy import *
 
 class IIROcrPass(IIRPass):
-    def __init__(self, config: dict, dest: str, strategy: AbstractOcrStrategy):
+    def __init__(self, config: dict, dest: str, strategy: AbstractExtraJobStrategy):
         self.config: dict = config
         self.dest: str = dest
-        self.strategy: AbstractOcrStrategy = strategy
+        self.strategy: AbstractExtraJobStrategy = strategy
         self.suffix: str = config["suffix"]
         self.separator: str = config["separator"]
         self.doPaddle: bool = config["doPaddle"]
@@ -28,15 +28,15 @@ class IIROcrPass(IIRPass):
         print(f"Writing to {self.filename}")
         
         paddle = paddleocr.PaddleOCR(use_angle_cls=True, lang=self.paddleLang, show_log=False)
-        ocrFrameFlagIndex: AbstractFlagIndex = self.strategy.getOcrFrameFlagIndex()
+        extraJobFrameFlagIndex: AbstractFlagIndex = self.strategy.getExtraJobFrameFlagIndex()
 
         for i, interval in enumerate(iir.intervals):
             buff: str = ""
             name: str = interval.getName(i)
-            img: cv.Mat = interval.getFlag(ocrFrameFlagIndex)
+            img: cv.Mat = interval.getFlag(extraJobFrameFlagIndex)
 
             if self.doPaddle:
-                paddleFrame = self.strategy.cutOcrFrame(img)
+                paddleFrame = img
                 paddleResult = paddle.ocr(paddleFrame, cls=False, bin=False)
                 paddleText: str = ""
                 for line in paddleResult:
@@ -50,7 +50,7 @@ class IIROcrPass(IIRPass):
             if self.doTeseract:
                 if buff != "":
                     buff += self.separator
-                tesseractFrame = self.strategy.cutCleanOcrFrame(img)
+                tesseractFrame = img
                 tesseractFrame = ensureMat(tesseractFrame)
                 tesseractText: str = pytesseract.image_to_string(tesseractFrame, config=f"-l {self.tesseractLang} --psm 6")
                 tesseractText = tesseractText[:-1].replace("\n", "")
