@@ -429,8 +429,7 @@ extraJobs: []
 
 ocr:
   suffix: "-ocr.txt"
-  separator: "@"
+  separator: ""
   doPaddle: true
-  paddleLang: "japan"
-  doTesseract: true
+  doTesseract: false
   tesseractLang: "jpn"

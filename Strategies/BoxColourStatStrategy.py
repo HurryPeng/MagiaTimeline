@@ -7,6 +7,8 @@ import scipy.spatial
 import sklearn
 import scipy
 import sklearn.preprocessing
+import warnings
+import multiprocessing
 
 from Util import *
 from Strategies.AbstractStrategy import *
@@ -27,12 +29,18 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
             return [False, 0.0, np.zeros(64), False, None]
         
     @staticmethod
-    def genOcrEngine() -> paddleocr.PaddleOCR:
-        return paddleocr.PaddleOCR(
-            det=True, rec=False, cls=False, use_angle_cls=False, det_algorithm="DB", show_log=False,
-            det_model_dir="./PaddleOCRModels/ch_PP-OCRv4_det_infer/",
-            rec_model_dir="./PaddleOCRModels/ch_PP-OCRv4_rec_infer/",
-            cls_model_dir="./PaddleOCRModels/ch_ppocr_mobile_v2.0_cls_infer/"
+    def genOcrEngine() -> paddleocr.TextDetection:
+        warnings.filterwarnings("ignore", 
+                        message="No ccache found", 
+                        category=UserWarning,
+                        module="paddle.utils.cpp_extension")
+        return paddleocr.TextDetection(
+            model_name="PP-OCRv4_mobile_det",
+            model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
+            limit_type="max",
+            limit_side_len=720,
+            device="cpu",
+            cpu_threads=multiprocessing.cpu_count(),
         )
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
@@ -155,15 +163,23 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         return self.dialogRect.cutRoi(frame)
     
     def detectTextBoxes(self, frame: cv.Mat) -> typing.List[typing.Tuple[int, int, int, int]]:
-        result = self.ocr.ocr(frame, det=True, cls=False, rec=False)
-
         imgH, imgW = frame.shape[:2]
 
-        if result[0] is None:
+        result = self.ocr.predict(frame)
+        result = result[0]
+        dtPolys: typing.List[np.ndarray] = result["dt_polys"]
+        dtScores: typing.List[float] = result["dt_scores"]
+        n = len(dtPolys)
+        assert n == len(dtScores)
+        
+        if n == 0:
             return []
 
         boxes = []
-        for wordInfo in result[0]:
+        for i in range(n):
+            wordInfo = dtPolys[i]
+            confidence = dtScores[i]
+            wordInfo = np.array(wordInfo, np.int32)
             x0, y0 = wordInfo[0]
             x1, y1 = wordInfo[1]
             x2, y2 = wordInfo[2]
@@ -174,7 +190,6 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
             if np.abs(angle) > np.pi / 180 * 3:
                 continue
 
-            wordInfo = np.array(wordInfo, np.int32).reshape((-1, 1, 2))
             x0, y0, w0, h0 = cv.boundingRect(wordInfo)
             expand = int(h0 * self.boxVerticalExpansion)
             x = max(0, x0 - expand)

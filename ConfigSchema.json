@@ -773,10 +773,6 @@
                     "type": "boolean",
                     "description": "Whether to perform OCR using PaddleOCR."
                 },
-                "paddleLang": {
-                    "type": "string",
-                    "description": "Language setting for PaddleOCR (e.g., japan for Japanese)."
-                },
                 "doTesseract": {
                     "type": "boolean",
                     "description": "Whether to perform OCR using Tesseract."
@@ -790,7 +786,6 @@
                 "suffix",
                 "separator",
                 "doPaddle",
-                "paddleLang",
                 "doTesseract",
                 "tesseractLang"
             ],

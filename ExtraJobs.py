@@ -2,6 +2,7 @@ from __future__ import annotations
 import typing
 import pytesseract
 import paddleocr
+import multiprocessing
 
 from IR import IIR
 from Util import *
@@ -17,7 +18,6 @@ class IIROcrPass(IIRPass):
         self.suffix: str = config["suffix"]
         self.separator: str = config["separator"]
         self.doPaddle: bool = config["doPaddle"]
-        self.paddleLang: str = config["paddleLang"]
         self.doTeseract: bool = config["doTesseract"]
         self.tesseractLang: str = config["tesseractLang"]
 
@@ -27,7 +27,17 @@ class IIROcrPass(IIRPass):
         file = open(self.filename, "w", encoding="utf-8")
         print(f"Writing to {self.filename}")
         
-        paddle = paddleocr.PaddleOCR(use_angle_cls=True, lang=self.paddleLang, show_log=False)
+        paddle = paddleocr.PaddleOCR(
+            text_detection_model_name="PP-OCRv4_mobile_det",
+            text_detection_model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
+            text_recognition_model_name="PP-OCRv5_mobile_rec",
+            text_recognition_model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_rec",
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+            device="cpu",
+            cpu_threads=multiprocessing.cpu_count(),
+        )
         extraJobFrameFlagIndex: AbstractFlagIndex = self.strategy.getExtraJobFrameFlagIndex()
 
         for i, interval in enumerate(iir.intervals):
@@ -37,13 +47,12 @@ class IIROcrPass(IIRPass):
 
             if self.doPaddle:
                 paddleFrame = img
-                paddleResult = paddle.ocr(paddleFrame, cls=False, bin=False)
+                paddleResult = paddle.predict(paddleFrame)
+                paddleResult = paddleResult[0]
+                recTexts = paddleResult["rec_texts"]
                 paddleText: str = ""
-                for line in paddleResult:
-                    if line is None:
-                        continue
-                    lineText = "".join([wordInfo[1][0] for wordInfo in line])
-                    paddleText += lineText + '\n'
+                for line in recTexts:
+                    paddleText += line + ' '
                 paddleText = paddleText.strip()
                 buff += paddleText
 

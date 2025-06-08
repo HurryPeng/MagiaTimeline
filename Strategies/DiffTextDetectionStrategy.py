@@ -2,6 +2,8 @@ import typing
 import enum
 import collections
 import paddleocr
+import multiprocessing
+import warnings
 
 from Util import *
 from Strategies.AbstractStrategy import *
@@ -28,12 +30,18 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             ]
         
     @staticmethod
-    def genOcrEngine() -> paddleocr.PaddleOCR:
-        return paddleocr.PaddleOCR(
-            det=True, rec=False, cls=False, use_angle_cls=False, show_log=False,
-            det_model_dir="./PaddleOCRModels/ch_PP-OCRv4_det_infer/",
-            rec_model_dir="./PaddleOCRModels/ch_PP-OCRv4_rec_infer/",
-            cls_model_dir="./PaddleOCRModels/ch_ppocr_mobile_v2.0_cls_infer/"
+    def genOcrEngine() -> paddleocr.TextDetection:
+        warnings.filterwarnings("ignore", 
+                        message="No ccache found", 
+                        category=UserWarning,
+                        module="paddle.utils.cpp_extension")
+        return paddleocr.TextDetection(
+            model_name="PP-OCRv4_mobile_det",
+            model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
+            limit_type="max",
+            limit_side_len=720,
+            device="cpu",
+            cpu_threads=multiprocessing.cpu_count(),
         )
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
@@ -355,17 +363,22 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     
     def detectTextBoxes(self, frame: cv.Mat, maxResolution: int = 1800) -> typing.List[typing.Tuple[int, int, int, int]]:
         imgH, imgW = frame.shape[:2]
-        frameScaled, scale = maxResScaleDown(frame, maxResolution)
 
-        result = self.ocr.ocr(frameScaled, det=True, cls=False, rec=False)
-
-        if result[0] is None:
+        result = self.ocr.predict(frame)
+        result = result[0]
+        dtPolys: typing.List[np.ndarray] = result["dt_polys"]
+        dtScores: typing.List[float] = result["dt_scores"]
+        n = len(dtPolys)
+        assert n == len(dtScores)
+        
+        if n == 0:
             return []
 
         boxes = []
-        for wordInfo in result[0]:
+        for i in range(n):
+            wordInfo = dtPolys[i]
+            confidence = dtScores[i]
             wordInfo = np.array(wordInfo, np.int32)
-            wordInfo *= scale
             x0, y0 = wordInfo[0]
             x1, y1 = wordInfo[1]
             x2, y2 = wordInfo[2]
