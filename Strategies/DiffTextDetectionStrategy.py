@@ -2,7 +2,6 @@ import typing
 import enum
 import collections
 import paddleocr
-import multiprocessing
 import warnings
 
 from Util import *
@@ -41,7 +40,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             limit_type="max",
             limit_side_len=720,
             device="cpu",
-            cpu_threads=multiprocessing.cpu_count(),
+            enable_mkldnn=True
         )
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
@@ -361,7 +360,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
     
-    def detectTextBoxes(self, frame: cv.Mat, maxResolution: int = 1800) -> typing.List[typing.Tuple[int, int, int, int]]:
+    def detectTextBoxes(self, frame: cv.Mat) -> typing.List[typing.Tuple[int, int, int, int]]:
         imgH, imgW = frame.shape[:2]
 
         result = self.ocr.predict(frame)

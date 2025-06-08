@@ -8,7 +8,6 @@ import sklearn
 import scipy
 import sklearn.preprocessing
 import warnings
-import multiprocessing
 
 from Util import *
 from Strategies.AbstractStrategy import *
@@ -40,7 +39,7 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
             limit_type="max",
             limit_side_len=720,
             device="cpu",
-            cpu_threads=multiprocessing.cpu_count(),
+            enable_mkldnn=True
         )
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:

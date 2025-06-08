@@ -1,8 +1,6 @@
 from __future__ import annotations
-import typing
 import pytesseract
 import paddleocr
-import multiprocessing
 
 from IR import IIR
 from Util import *
@@ -36,7 +34,7 @@ class IIROcrPass(IIRPass):
             use_doc_unwarping=False,
             use_textline_orientation=False,
             device="cpu",
-            cpu_threads=multiprocessing.cpu_count(),
+            enable_mkldnn=True
         )
         extraJobFrameFlagIndex: AbstractFlagIndex = self.strategy.getExtraJobFrameFlagIndex()
 
