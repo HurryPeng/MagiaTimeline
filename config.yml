@@ -428,7 +428,8 @@ speculative:
 extraJobs: []
 
 ocr:
-  suffix: "-ocr.txt"
+  standaloneOutput: false
+  standaloneOutputSuffix: "-ocr.txt"
   separator: ""
   doPaddle: true
   doTesseract: false

@@ -13,17 +13,21 @@ class IIROcrPass(IIRPass):
         self.config: dict = config
         self.dest: str = dest
         self.strategy: AbstractExtraJobStrategy = strategy
-        self.suffix: str = config["suffix"]
+        self.standaloneOutput: bool = config["standaloneOutput"]
+        self.standaloneOutputSuffix: str = config["standaloneOutputSuffix"]
         self.separator: str = config["separator"]
         self.doPaddle: bool = config["doPaddle"]
         self.doTeseract: bool = config["doTesseract"]
         self.tesseractLang: str = config["tesseractLang"]
 
-        self.filename = self.dest + self.suffix
-
     def apply(self, iir: IIR):
-        file = open(self.filename, "w", encoding="utf-8")
-        print(f"Writing to {self.filename}")
+        file = None
+        if self.standaloneOutput:
+            filename = self.dest + self.standaloneOutputSuffix
+            print(f"Standalone output enabled. Writing to {filename}")
+            file = open(filename, "w", encoding="utf-8")
+        else:
+            print("Standalone output disabled. Writing to ass file.")
         
         paddle = paddleocr.PaddleOCR(
             text_detection_model_name="PP-OCRv4_mobile_det",
@@ -63,8 +67,14 @@ class IIROcrPass(IIRPass):
                 tesseractText = tesseractText[:-1].replace("\n", "")
                 buff += tesseractText
 
-            file.write(f"{name},{buff}\n")
+            if file is not None:
+                file.write(f"{name},{buff}\n")
+            else:
+                interval.text = buff
+
             if i % 10 == 0:
                 print(name)
 
-        file.close()
+        if file is not None:
+            file.close()
+            print(f"Output written to {file.name}")

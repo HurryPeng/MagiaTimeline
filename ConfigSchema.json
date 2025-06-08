@@ -761,7 +761,11 @@
         "ocr": {
             "type": "object",
             "properties": {
-                "suffix": {
+                "standaloneOutput": {
+                    "type": "boolean",
+                    "description": "Whether to output OCR results to a standalone file instead of embedding them in the subtitle file."
+                },
+                "standaloneOutputSuffix": {
                     "type": "string",
                     "description": "Suffix for the OCR output file."
                 },
@@ -783,7 +787,8 @@
                 }
             },
             "required": [
-                "suffix",
+                "standaloneOutput",
+                "standaloneOutputSuffix",
                 "separator",
                 "doPaddle",
                 "doTesseract",

@@ -203,6 +203,7 @@ class Interval:
         self.begin: int = begin # timestamp
         self.end: int = end # timestamp
         self.style: str = "Default"
+        self.text: str = ""
         self.flags: typing.List[typing.Any] = flags
         if len(self.flags) == 0:
             self.flags = self.flagIndexType.getDefaultFlags()
@@ -225,8 +226,10 @@ class Interval:
         template = "Dialogue: 0,{},{},{},,0,0,0,,{}"
         sBegin = formatTimestamp(timeBase, self.begin)
         sEnd = formatTimestamp(timeBase, self.end)
-        name = self.getName(id)
-        return template.format(sBegin, sEnd, self.style, name)
+        text = self.text
+        if text == "":
+            text = self.getName(id)
+        return template.format(sBegin, sEnd, self.style, text)
 
     def dist(self, other: Interval) -> int:
         l = self

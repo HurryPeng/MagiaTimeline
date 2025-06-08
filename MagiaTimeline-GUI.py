@@ -146,6 +146,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.rightFrame.grid_rowconfigure(0, weight=1)
         self.rightFrame.grid_rowconfigure(1, weight=0)
         self.rightFrame.grid_rowconfigure(2, weight=0)
+        self.rightFrame.grid_rowconfigure(3, weight=0)
         self.rightFrame.grid_columnconfigure(0, weight=1)
 
         # Console output textbox (read-only)
@@ -154,15 +155,19 @@ class MagiaTimelineGUI(customtkinter.CTk):
         # make textbox read-only
         self.textbox.configure(state="disabled")
 
+        # Checkbox: Enable Text Extraction
+        self.checkboxTextExtraction = customtkinter.CTkCheckBox(self.rightFrame, text="Enable Text Extraction")
+        self.checkboxTextExtraction.grid(row=1, column=0, sticky="ew", padx=5, pady=(0,10))
+
         # Progress bar
         self.progressBar = customtkinter.CTkProgressBar(self.rightFrame, mode="determinate")
-        self.progressBar.grid(row=1, column=0, sticky="ew", padx=5, pady=(0,10))
+        self.progressBar.grid(row=2, column=0, sticky="ew", padx=5, pady=(0,10))
         self.progressBar.set(1.0)
         self.progressBar.stop()
 
         # Action buttons: Start and Abort
         self.actionFrame = customtkinter.CTkFrame(self.rightFrame)
-        self.actionFrame.grid(row=2, column=0, sticky="ew")
+        self.actionFrame.grid(row=3, column=0, sticky="ew")
         self.actionFrame.grid_columnconfigure(0, weight=1)
         self.actionFrame.grid_columnconfigure(1, weight=1)
 
@@ -355,6 +360,10 @@ class MagiaTimelineGUI(customtkinter.CTk):
 
         config["source"] = [self.player.path]
         config["dtd"]["default"]["dialogRect"] = [lw, rw, th, bh]
+        if self.checkboxTextExtraction.get():
+            config["extraJobs"]= ["ocr"]
+        else:
+            config["extraJobs"] = []
 
         self.writeConsole("Starting process...\n")
         self.tempDir = tempfile.TemporaryDirectory(prefix="MagiaTimeline_")
@@ -381,6 +390,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.btnOpen.configure(state="disabled")
         self.btnJump.configure(state="disabled")
         self.btnRandom.configure(state="disabled")
+        self.checkboxTextExtraction.configure(state="disabled")
         self.progressBar.configure(mode="indeterminate")
         self.progressBar.start()
 
@@ -410,6 +420,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.btnOpen.configure(state="normal")
         self.btnJump.configure(state="normal")
         self.btnRandom.configure(state="normal")
+        self.checkboxTextExtraction.configure(state="normal")
         self.progressBar.configure(mode="determinate")
         self.progressBar.set(1.0)
         self.progressBar.stop()

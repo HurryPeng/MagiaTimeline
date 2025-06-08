@@ -134,20 +134,6 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         print("==== Running Engine ====")
         iir: IIR = engine.checkAndRun(strategy, srcContainer, srcStream)
 
-        print("==== IIR to ASS ====")
-        asstStr = asstStr.format(
-            playResX = size[0],
-            playResY = size[1],
-            styles = "".join(strategy.getStyles()),
-            events = iir.toAss(timeBase)
-        )
-
-        dstAss = open(dst + ".ass", "w")
-        dstAss.write(asstStr)
-        dstAss.close()
-
-        print("Result written to", dst + ".ass")
-
         timeTimelineEnd = time.time()
         timeTimelineElapsed = timeTimelineEnd - timeStart
         
@@ -161,6 +147,20 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
                 continue
             iirOcrPass = IIROcrPass(config["ocr"], dst, strategy)
             iirOcrPass.apply(iir)
+
+        print("==== IIR to ASS ====")
+        asstStr = asstStr.format(
+            playResX = size[0],
+            playResY = size[1],
+            styles = "".join(strategy.getStyles()),
+            events = iir.toAss(timeBase)
+        )
+
+        dstAss = open(dst + ".ass", "w")
+        dstAss.write(asstStr)
+        dstAss.close()
+
+        print("Result written to", dst + ".ass")
 
         timeOverallEnd = time.time()
         timeOverallElapsed = timeOverallEnd - timeStart
