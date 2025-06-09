@@ -4,16 +4,43 @@ from PyInstaller.utils.hooks import collect_all
 from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT
 
 
-paddleocr_datas, paddleocr_binaries, paddleocr_hiddenimports = collect_all("paddleocr")
-cython_datas, cython_binaries, cython_hiddenimports = collect_all("Cython")
-customtkinter_datas, customtkinter_binaries, customtkinter_hiddenimports = collect_all("customtkinter")
+
+def collect_all_list(package_names):
+    extra_datas = []
+    extra_binaries = []
+    extra_hiddenimports = []
+    for package_name in package_names:
+        datas, binaries, hiddenimports = collect_all(package_name)
+        extra_datas.extend(datas)
+        extra_binaries.extend(binaries)
+        extra_hiddenimports.extend(hiddenimports)
+    return extra_datas, extra_binaries, extra_hiddenimports
+
+extra_datas, extra_binaries, extra_hiddenimports = collect_all_list([
+    "paddleocr",
+    "paddlex",
+    "pypdfium2",
+    "customtkinter",
+    # paxxled[ocr] hooks
+    "ftfy",
+    "imagesize",
+    "lxml",
+    "cv2",
+    "openpyxl",
+    "premailer",
+    "pyclipper",
+    "pypdfium2",
+    "sklearn",
+    "shapely",
+    "tokenizers"
+])
 
 a1 = Analysis(
     ["MagiaTimeline.py"],
     pathex=[],
     binaries=[
         ("venv/Lib/site-packages/paddle/libs/", "paddle/libs/"),
-    ] + paddleocr_binaries + cython_binaries,
+    ] + extra_binaries,
     datas=[
         ("README.md", "move_to_root"),
         ("README-zh_CN.md", "move_to_root"),
@@ -22,8 +49,8 @@ a1 = Analysis(
         ("template.asst", "move_to_root"),
         ("PaddleOCRModels/", "move_to_root/PaddleOCRModels/"),
         ("logo/", "move_to_root/logo/"),
-    ] + paddleocr_datas + cython_datas,
-    hiddenimports=[] + paddleocr_hiddenimports + cython_hiddenimports,
+    ] + extra_datas,
+    hiddenimports=[] + extra_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -56,9 +83,9 @@ a2 = Analysis(
     pathex=[],
         binaries=[
         ("venv/Lib/site-packages/paddle/libs/", "paddle/libs/"),
-    ] + paddleocr_binaries + cython_binaries + customtkinter_binaries,
-    datas=paddleocr_datas + cython_datas + customtkinter_datas,
-    hiddenimports=[] + paddleocr_hiddenimports + cython_hiddenimports + customtkinter_hiddenimports,
+    ] + extra_binaries,
+    datas=extra_datas,
+    hiddenimports=[] + extra_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
