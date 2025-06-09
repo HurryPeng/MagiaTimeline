@@ -3,7 +3,8 @@
 from PyInstaller.utils.hooks import collect_all
 from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT
 
-
+import os
+os.environ["PADDLE_PDX_CACHE_HOME"] = "./PaddleOCRModels"
 
 def collect_all_list(package_names):
     extra_datas = []
