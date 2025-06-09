@@ -8,8 +8,9 @@ import fractions
 import time
 import typing
 import traceback
-
 import pathlib
+
+import TouchPaddle # Before anything that imports paddleocr
 
 from Rectangle import *
 from IR import *
