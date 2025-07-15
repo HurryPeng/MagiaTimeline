@@ -30,7 +30,7 @@ class FramewiseEngine(AbstractEngine):
         debugMp4: typing.Any = None
 
         print("==== FPIR Building ====")
-        fpir = FPIR(flagIndexType, self.sampleInterval)
+        fpir = FPIR(flagIndexType, self.sampleInterval, timeBase)
         frameIndex: int = 0
 
         for frame in container.decode(stream):
@@ -42,14 +42,14 @@ class FramewiseEngine(AbstractEngine):
             img: cv.Mat = avFrame2CvMat(frame)
 
             # CV and frame point building
-            framePoint = FramePoint(flagIndexType, timestamp)
+            framePoint = FramePoint(flagIndexType, timestamp, timeBase)
             for cvPass in strategy.getCvPasses():
                 cvPass(img, framePoint)
             fpir.framePoints.append(framePoint)
 
             # Outputs
             if frameIndex % 720 == 0:
-                print(framePoint.toString(timeBase))
+                print(framePoint.toString())
 
             if self.debug:
                 frameOut = img

@@ -284,11 +284,11 @@ class SpeculativeEngine(AbstractEngine):
                     frameI2 = frameCache.getFrame(frameCache.end, frameCache.begin, frameCache.nextI)
                 frameI1 = frameCache.getFrame(frameCache.begin, frameCache.begin, frameCache.nextI)
                 imageI1 = avFrame2CvMat(frameI1)
-                framePoint1 = strategy.genFramePoint(imageI1, frameI1.pts)
+                framePoint1 = strategy.genFramePoint(imageI1, frameI1.pts, timeBase)
                 interval1 = intervalGrower.insertInterval(framePoint1, imageI1)
                 prev = interval1
                 imageI2 = avFrame2CvMat(frameI2)
-                framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts)
+                framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts, timeBase)
                 merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in interval1.framePoints], [framePoint2.getFlag(featureFlagIndex)])
                 if merge:
                     intervalGrower.extendInterval(interval1, framePoint2)
@@ -301,8 +301,8 @@ class SpeculativeEngine(AbstractEngine):
                     lastSegment = True
                     frameI2 = frameCache.getFrame(frameCache.end, frameCache.begin, frameCache.nextI)
                 imageI2 = avFrame2CvMat(frameI2)
-                framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts)
-                print(framePoint2.toString(timeBase))
+                framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts, timeBase)
+                print(framePoint2.toString())
                 merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint2.getFlag(featureFlagIndex)])
                 dist = prev.distFramePoint(framePoint2)
                 if merge and not dist > self.emptyFeatureMaxTimestamp:
@@ -317,7 +317,7 @@ class SpeculativeEngine(AbstractEngine):
                     intervalGrower.hookInterval(prev, next)
                     continue
                 image = avFrame2CvMat(frame)
-                framePoint = strategy.genFramePoint(image, frame.pts)
+                framePoint = strategy.genFramePoint(image, frame.pts, timeBase)
                 isEmptyFeature = strategy.isEmptyFeature(framePoint.getFlag(featureFlagIndex))
 
                 mergeLeft = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint.getFlag(featureFlagIndex)])

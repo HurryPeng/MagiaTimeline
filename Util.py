@@ -11,7 +11,6 @@ import diskcache
 import atexit
 import pickle
 import lz4
-import queue
 import concurrent.futures
 import os
 
@@ -48,7 +47,6 @@ _threadPool: concurrent.futures.ThreadPoolExecutor = concurrent.futures.ThreadPo
 def getThreadPool() -> concurrent.futures.ThreadPoolExecutor:
     global _threadPool
     return _threadPool
-
 
 # Private globals for cache initialization
 _tempLock = threading.Lock()
@@ -99,7 +97,12 @@ class DiskCacheHandle:
         value = _diskCache[self.key]
         assert value is not None
         return value
-    
+
+def imwriteAsync(frame: cv.Mat, filename: str, params: typing.Optional[list[int]] = None) -> concurrent.futures.Future:
+    global _threadPool
+    future = _threadPool.submit(cv.imwrite, filename, frame, params)
+    return future
+
 def containsLargeNdarray(obj: typing.Any) -> bool:
     """
     Recursively check whether `obj` (which may be a list or tuple

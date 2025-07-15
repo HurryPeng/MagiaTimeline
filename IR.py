@@ -7,9 +7,10 @@ from Util import *
 from AbstractFlagIndex import *
 
 class FramePoint:
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], timestamp: int):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], timestamp: int, timeBase: fractions.Fraction):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.timestamp: int = timestamp
+        self.timeBase: fractions.Fraction = timeBase
         self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
         self.debugFrame: cv.Mat | None = None
 
@@ -42,30 +43,31 @@ class FramePoint:
     def getDebugFrame(self) -> cv.Mat | None:
         return self.debugFrame
 
-    def toString(self, timeBase: fractions.Fraction) -> str:
-        return "frame {}".format(formatTimestamp(timeBase, self.timestamp))
+    def toString(self) -> str:
+        return "frame {}".format(formatTimestamp(self.timeBase, self.timestamp))
 
-    def toStringFull(self, timeBase: fractions.Fraction) -> str:
-        return "frame {} {}".format(formatTimestamp(timeBase, self.timestamp), self.flags)
+    def toStringFull(self) -> str:
+        return "frame {} {}".format(formatTimestamp(self.timeBase, self.timestamp), self.flags)
 
 class FPIR: # Frame Point Intermediate Representation
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], sampleRate: int):
+    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], sampleRate: int, timeBase: fractions.Fraction):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.framePoints: typing.List[FramePoint] = []
         self.sampleRate: int = sampleRate
+        self.timeBase: fractions.Fraction = timeBase
 
     def genVirtualEnd(self) -> FramePoint:
         index: int = len(self.framePoints)
         timestamp: int = self.framePoints[-1].timestamp
-        return FramePoint(self.flagIndexType, timestamp)
+        return FramePoint(self.flagIndexType, timestamp, self.timeBase)
 
     def getFramePointsWithVirtualEnd(self, length: int = 1) -> typing.List[FramePoint]:
         return self.framePoints + [self.genVirtualEnd()] * length
-    
-    def toStringFull(self, timeBase: fractions.Fraction) -> str:
+
+    def toStringFull(self) -> str:
         lines = []
         for framePoint in self.framePoints:
-            lines.append(framePoint.toStringFull(timeBase) + "\n")
+            lines.append(framePoint.toStringFull() + "\n")
         return "".join(lines)
 
 class FPIRPass(abc.ABC):
@@ -448,6 +450,7 @@ class IIRPassMerge(IIRPass):
                 newIntervals.append(iir.intervals[i])
                 continue
             if self.pred(iir, newIntervals[-1], iir.intervals[i]):
+                print(f"Merging success!")
                 newIntervals[-1] = newIntervals[-1].merge(iir.intervals[i])
             else:
                 newIntervals.append(iir.intervals[i])

@@ -79,9 +79,9 @@ class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
     def aggregateFeatures(self, features: typing.List[typing.Any]) -> typing.Any:
         pass
 
-    def genFramePoint(self, frame: cv.Mat, timestamp: int) -> FramePoint:
+    def genFramePoint(self, frame: cv.Mat, timestamp: int, timeBase: fractions.Fraction) -> FramePoint:
         self.statAnalyzedFrames += 1
-        framePoint = FramePoint(self.getFlagIndexType(), timestamp)
+        framePoint = FramePoint(self.getFlagIndexType(), timestamp, timeBase)
         for cvPass in self.getCvPasses():
             cvPass(frame, framePoint)
         framePoint.clearDebugFrame()
