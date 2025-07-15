@@ -43,6 +43,7 @@ class CompressedDisk(diskcache.Disk):
             data = pickle.loads(lz4.frame.decompress(data))
         return data
 
+_threadPool: concurrent.futures.ThreadPoolExecutor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 # Private globals for cache initialization
 _tempLock = threading.Lock()
 _tempDir: typing.Optional[tempfile.TemporaryDirectory] = None
