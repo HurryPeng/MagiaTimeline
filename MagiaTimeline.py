@@ -177,6 +177,8 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         cacheSize = sum(f.stat().st_size for f in cacheDir.glob('**/*') if f.is_file())
         print(f"Disk cache size: {cacheSize // (1024 * 1024)} MB")
 
+    getThreadPool().shutdown(wait=True)
+
 if __name__ == "__main__":
     try:
         cli()
