@@ -42,6 +42,9 @@ class FramePoint:
 
     def getDebugFrame(self) -> cv.Mat | None:
         return self.debugFrame
+    
+    def timeString(self) -> str:
+        return formatTimestamp(self.timeBase, self.timestamp)
 
     def toString(self) -> str:
         return "frame {}".format(formatTimestamp(self.timeBase, self.timestamp))

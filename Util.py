@@ -87,6 +87,7 @@ class DiskCacheHandle:
         def writeTask():
             assert _diskCache is not None
             _diskCache[self.key] = value
+            _diskCache.close() # Close for this thread
         self.future = _threadPool.submit(writeTask)
 
     def get(self) -> typing.Any:
@@ -98,9 +99,9 @@ class DiskCacheHandle:
         assert value is not None
         return value
 
-def imwriteAsync(frame: cv.Mat, filename: str, params: typing.Optional[list[int]] = None) -> concurrent.futures.Future:
+def imwriteAsync(filename: str, frame: cv.Mat) -> concurrent.futures.Future:
     global _threadPool
-    future = _threadPool.submit(cv.imwrite, filename, frame, params)
+    future = _threadPool.submit(cv.imwrite, filename, frame)
     return future
 
 def containsLargeNdarray(obj: typing.Any) -> bool:
@@ -219,6 +220,8 @@ def morphologyNear(base: cv.Mat, ref: cv.Mat, Weight: int) -> cv.Mat:
 
 def avFrame2CvMat(frame: av.frame.Frame) -> cv.Mat:
     return frame.to_ndarray(format='bgr24')
+    # return cv.resize(frame.to_ndarray(format='bgr24'), (frame.width // 2, frame.height // 2), interpolation=cv.INTER_LINEAR)
+    # return cv.resize(frame.to_ndarray(format='bgr24'), (frame.width // 4, frame.height // 4), interpolation=cv.INTER_LINEAR)
 
 def ms2Timestamp(ms: int, timeBase: fractions.Fraction) -> int:
     return int(ms / timeBase / 1000)

@@ -302,10 +302,11 @@ class SpeculativeEngine(AbstractEngine):
                     frameI2 = frameCache.getFrame(frameCache.end, frameCache.begin, frameCache.nextI)
                 imageI2 = avFrame2CvMat(frameI2)
                 framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts, timeBase)
+                isEmptyFeature = strategy.isEmptyFeature(framePoint2.getFlag(featureFlagIndex))
                 print(framePoint2.toString())
                 merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint2.getFlag(featureFlagIndex)])
                 dist = prev.distFramePoint(framePoint2)
-                if merge and not dist > self.emptyFeatureMaxTimestamp:
+                if merge and not (isEmptyFeature and dist > self.emptyFeatureMaxTimestamp):
                     intervalGrower.extendInterval(prev, framePoint2)
                 else:
                     intervalGrower.insertInterval(framePoint2, imageI2)

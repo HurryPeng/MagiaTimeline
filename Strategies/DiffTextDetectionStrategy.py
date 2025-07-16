@@ -14,7 +14,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
         DialogVal = enum.auto()
-        DialogFeat = enum.auto() # (frame, mask)
+        DialogFeat = enum.auto() # (frame, mask, timeStr)
         DialogFeatJump = enum.auto()
         OcrFrame = enum.auto()
 
@@ -23,7 +23,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             return [
                 False,
                 0.0,
-                (None, None),
+                (None, None, None),
                 False,
                 None
             ]
@@ -92,7 +92,16 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.statDecideFeatureMergeFindTransformECC = 0
         self.statDecideFeatureMergeInpaint = 0
         self.statDecideFeatureMergeOCR = 0
-        # self.log = open("log.csv", "w")
+        
+        if self.debugLevel >= 2:
+            self.log = open("dtdLog.csv", "w")
+            self.log.write("time0,time1,level,reason,val\n")
+            self.log.flush()
+            if os.path.exists("./dtdDebug"):
+                # Remove whole dir and all contents
+                shutil.rmtree("./dtdDebug")
+            os.makedirs("./dtdDebug", exist_ok=True)
+            self.decidingNewInterval = False
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
@@ -143,8 +152,19 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if self.isEmptyFeature(oldFeature) or self.isEmptyFeature(newFeature):
             return False
 
-        oldImage, oldMask = oldFeature
-        newImage, newMask = newFeature
+        oldImage, oldMask, oldTimeStr = oldFeature
+        newImage, newMask, newTimeStr = newFeature
+
+        if self.debuglevel == 2 and self.decidingNewInterval:
+            # Save oldImage and newImage to "dtdDebug/<oldTimeStr>.png" and "dtdDebug/<newTimeStr>.png"
+            oldTimeStrSemicolon = oldTimeStr.replace(":", ";")
+            newTimeStrSemicolon = newTimeStr.replace(":", ";")
+            # Remove dir and rebuild
+            def saveFrames():
+                imwriteAsync(f"./dtdDebug/{oldTimeStrSemicolon}-{newTimeStrSemicolon}-0old.png", oldImage)
+                imwriteAsync(f"./dtdDebug/{oldTimeStrSemicolon}-{newTimeStrSemicolon}-1new.png", newImage)
+            def saveExtra(step: str, image: cv.Mat):
+                imwriteAsync(f"./dtdDebug/{oldTimeStrSemicolon}-{newTimeStrSemicolon}-{step}.png", image)
 
         # Quick mask iou check before performing ocr on the intersection of the two images
         intersectMask = cv.bitwise_and(oldMask, newMask)
@@ -153,21 +173,29 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         unionArea = np.sum(unionMask) / 255
         
         if unionArea == 0:
+            if self.debuglevel == 2 and self.decidingNewInterval:
+                self.log.write(f"{oldTimeStr},{newTimeStr},0,empty mask,0\n")
+                saveFrames()
             return False
         
         maskIou = intersectArea / unionArea
-        if self.debugLevel >= 1:
+        if self.debugLevel == 1:
             print("intersectArea:", intersectArea)
             print("unionArea:", unionArea)
             print("iou:", maskIou)
 
-        if self.debugLevel >= 1:
+        if self.debugLevel == 1:
             if maskIou < self.minMaskIou:
                 print("NO")
             else:
                 print("WAIT")
         
         if maskIou < self.minMaskIou:
+            if self.debuglevel == 2 and self.decidingNewInterval:
+                self.log.write(f"{oldTimeStr},{newTimeStr},1,mask iou too low,{maskIou}\n")
+                saveFrames()
+                saveExtra("2oldMask", oldMask)
+                saveExtra("3newMask", newMask)
             return False
         
         self.statDecideFeatureMergeDiff += 1
@@ -176,7 +204,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         # The rate of pixels that are close enough
         diffArea = np.sum(diffMask) / 255
         diffRate = diffArea / unionArea
-        if self.debugLevel >= 1:
+        if self.debugLevel == 1:
             print("diffRate:", diffRate)
         if diffRate < 0.1:
             return True
@@ -227,16 +255,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if warpDist > 0.5 and warpDist < 50 and cc > ccInit:
             warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
 
-        if self.debugLevel >= 1:
+        if self.debugLevel == 1:
             print("cc:", cc)
             print("warp:", warp)
             print("warpDist:", warpDist)
-
-        if self.debugLevel >= 2:
-            combinedImage = cv.addWeighted(oldImage, 0.5, warpedImage, 0.5, 0)
-            combinedImage = cv.bitwise_and(combinedImage, combinedImage, mask=unionMask)
-            cv.imshow("DebugFrame", combinedImage)
-            cv.waitKey(0)
         
         # Sobel Iou Filtering
 
@@ -258,14 +280,14 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         diffMask = rgbDiffMask(oldImage, warpedImage, self.colourTolerance)
 
-        if self.debugLevel >= 2:
-            cv.imshow("DebugFrame", diffMask)
-            cv.waitKey(0)
-
         inpaintMask = cv.bitwise_and(cv.bitwise_not(diffMask), unionMask)
         inpaintMaskGradient = cv.morphologyEx(inpaintMask, cv.MORPH_GRADIENT, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         inpaintMaskGradientAndCommonSobel = cv.bitwise_and(inpaintMaskGradient, intersectSobelBinMasked)
         cv.copyTo(src=inpaintMaskGradientAndCommonSobel, dst=inpaintMask, mask=inpaintMaskGradient)
+
+        inpaintMaskDilate = cv.morphologyEx(inpaintMask, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
+        inpaintMaskDilateErode = cv.morphologyEx(inpaintMaskDilate, cv.MORPH_ERODE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
+        inpaintMask = cv.bitwise_or(inpaintMask, inpaintMaskDilateErode) # Denoise small black dots
 
         warpedImageInpaint = cv.inpaint(warpedImage, inpaintMask, 1, cv.INPAINT_TELEA)
 
@@ -280,7 +302,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         postInpaintSobelIou = np.sum(intersectPostInpaintSobel) / np.sum(unionPostInpaintSobel)
 
         sobelIouDiff = sobelIou - postInpaintSobelIou
-        if self.debugLevel >= 1:
+        if self.debugLevel == 1:
             print("sobelIou:", sobelIou)
             print("postInpaintSobelIou:", postInpaintSobelIou)
             print("sobelIouDiff:", sobelIouDiff)
@@ -288,14 +310,17 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if sobelIouDiff > 0.8:
             return True
         if sobelIouDiff < 0.2:
+            if self.debuglevel == 2 and self.decidingNewInterval:
+                self.log.write(f"{oldTimeStr},{newTimeStr},2,sobel iou diff too low,{sobelIouDiff}\n")
+                saveFrames()
+                saveExtra("2oldSobel", oldImageSobelBinDilate)
+                saveExtra("3newSobel", warpedImageSobelBinDilate)
+                saveExtra("4intersectSobel", intersectSobelBin)
+                saveExtra("5unionSobel", unionSobelBin)
+                saveExtra("6diffMask", diffMask)
+                saveExtra("7inpaintMask", inpaintMask)
+                saveExtra("8inpaint", warpedImageInpaint)
             return False
-
-        if self.debugLevel >= 2:
-            cv.imshow("DebugFrame", inpaintMask)
-            cv.waitKey(0)
-        if self.debugLevel >= 2:
-            cv.imshow("DebugFrame", warpedImageInpaint)
-            cv.waitKey(0)
         
         # OCR
         self.statDecideFeatureMergeOCR += 1
@@ -307,51 +332,32 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         ocrIntersectArea = np.sum(ocrIntersectMask) / 255
         ocrIou = ocrIntersectArea / unionArea
 
-        if self.debugLevel >= 1:
+        if self.debugLevel == 1:
             print("ocrIntersectVal:", ocrIntersectVal)
             print("unionArea:", unionArea)
             print("ocrIou:", ocrIou)
 
         # After inpainting the common area, detecting no text means the original texts are the same
-        if self.debugLevel >= 1:
+        if self.debugLevel == 1:
             if ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou:
                 print("YES")
             else:
                 print("NOO")
-        if self.debugLevel >= 2:
-            debugFrame = cv.addWeighted(warpedImageInpaint, 0.5, cv.cvtColor(ocrIntersectMask, cv.COLOR_GRAY2BGR), 0.5, 0)
-            cv.imshow("DebugFrame", debugFrame)
-            cv.waitKey(0)
 
-        # self.log.write(f"{sobelIou},{postInpaintSobelIou},{ocrIou},{1 if ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou else 0}\n")
-        # self.log.flush()
+        ocrDecision = ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou
+        if self.debuglevel == 2 and self.decidingNewInterval and not ocrDecision:
+            self.log.write(f"{oldTimeStr},{newTimeStr},3,ocr decision false,{ocrIou}\n")
+            saveFrames()
+            saveExtra("2oldSobel", oldImageSobelBinDilate)
+            saveExtra("3newSobel", warpedImageSobelBinDilate)
+            saveExtra("4intersectSobel", intersectSobelBin)
+            saveExtra("5unionSobel", unionSobelBin)
+            saveExtra("6diffMask", diffMask)
+            saveExtra("7inpaintMask", inpaintMask)
+            saveExtra("8inpaint", warpedImageInpaint)
+            saveExtra("9ocrMask", ocrMask)
 
-        # if not (ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou):
-        #     print(f"sobelIou: {sobelIou}, postInpaintSobelIou: {postInpaintSobelIou}, ocrIntersectVal: {ocrIntersectVal}, ocrIou: {ocrIou}")
-        #     cv.imshow("DebugFrame", cv.addWeighted(oldImage, 0.5, warpedImage, 0.5, 0))
-        #     cv.waitKey(0)
-        #     cv.imshow("DebugFrame", oldImage)
-        #     cv.waitKey(0)
-        #     cv.imshow("DebugFrame", warpedImage)
-        #     cv.waitKey(0)
-        #     cv.imshow("DebugFrame", oldImageSobelBinDilate)
-        #     cv.waitKey(0)
-        #     cv.imshow("DebugFrame", warpedImageSobelBinDilate)
-        #     cv.waitKey(0)
-        #     cv.imshow("DebugFrame", intersectSobelBinMasked)
-        #     cv.waitKey(0)
-        #     cv.imshow("DebugFrame", inpaintMask)
-        #     cv.waitKey(0)
-        #     cv.imshow("DebugFrame", warpedImageInpaint)
-        #     cv.waitKey(0)
-        #     cv.imshow("DebugFrame", warpedImageInpaintSobelBinDilateMasked)
-        #     cv.waitKey(0)
-        #     cv.imshow("DebugFrame", cv.addWeighted(warpedImageInpaint, 0.5, cv.cvtColor(ocrIntersectMask, cv.COLOR_GRAY2BGR), 0.5, 0))
-        #     cv.waitKey(0)
-        #     cv.imshow("DebugFrame", intersectPostInpaintSobel)
-        #     cv.waitKey(0)
-
-        return ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou
+        return ocrDecision
     
     def aggregateFeatures(self, features: typing.List[typing.Any]) -> typing.Any:
         # simply return the last feature
@@ -407,9 +413,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         hasDialog = dialogVal > self.featureThreshold
 
-        feat: typing.Tuple[cv.Mat, cv.Mat] = (None, None)
+        feat: typing.Tuple[cv.Mat, cv.Mat, str] = (None, None, None)
         if hasDialog:
-            feat = (image, mask)
+            timeString = framePoint.timeString()
+            feat = (image, mask, timeString)
 
         framePoint.setFlag(DiffTextDetectionStrategy.FlagIndex.Dialog, hasDialog)
         framePoint.setFlag(DiffTextDetectionStrategy.FlagIndex.DialogVal, dialogVal)
