@@ -94,7 +94,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.statDecideFeatureMergeInpaint = 0
         self.statDecideFeatureMergeOCR = 0
         
-        if self.debugLevel >= 2:
+        if self.debugLevel == 2:
             self.log = open("dtdLog.csv", "w")
             self.log.write("time0,time1,level,reason,val\n")
             self.log.flush()
@@ -156,7 +156,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         oldImage, oldMask, oldTimeStr = oldFeature
         newImage, newMask, newTimeStr = newFeature
 
-        if self.debuglevel == 2 and self.decidingNewInterval:
+        if self.debugLevel == 2 and self.decidingNewInterval:
             # Save oldImage and newImage to "dtdDebug/<oldTimeStr>.png" and "dtdDebug/<newTimeStr>.png"
             oldTimeStrSemicolon = oldTimeStr.replace(":", ";")
             newTimeStrSemicolon = newTimeStr.replace(":", ";")
@@ -174,7 +174,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         unionArea = np.sum(unionMask) / 255
         
         if unionArea == 0:
-            if self.debuglevel == 2 and self.decidingNewInterval:
+            if self.debugLevel == 2 and self.decidingNewInterval:
                 self.log.write(f"{oldTimeStr},{newTimeStr},0,empty mask,0\n")
                 saveFrames()
             return False
@@ -192,7 +192,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 print("WAIT")
         
         if maskIou < self.minMaskIou:
-            if self.debuglevel == 2 and self.decidingNewInterval:
+            if self.debugLevel == 2 and self.decidingNewInterval:
                 self.log.write(f"{oldTimeStr},{newTimeStr},1,mask iou too low,{maskIou}\n")
                 saveFrames()
                 saveExtra("2oldMask", oldMask)
@@ -311,7 +311,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if sobelIouDiff > 0.8:
             return True
         if sobelIouDiff < 0.2:
-            if self.debuglevel == 2 and self.decidingNewInterval:
+            if self.debugLevel == 2 and self.decidingNewInterval:
                 self.log.write(f"{oldTimeStr},{newTimeStr},2,sobel iou diff too low,{sobelIouDiff}\n")
                 saveFrames()
                 saveExtra("2oldSobel", oldImageSobelBinDilate)
@@ -346,7 +346,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 print("NOO")
 
         ocrDecision = ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou
-        if self.debuglevel == 2 and self.decidingNewInterval and not ocrDecision:
+        if self.debugLevel == 2 and self.decidingNewInterval and not ocrDecision:
             self.log.write(f"{oldTimeStr},{newTimeStr},3,ocr decision false,{ocrIou}\n")
             saveFrames()
             saveExtra("2oldSobel", oldImageSobelBinDilate)
