@@ -82,7 +82,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 self.decideFeatureMerge(
                     [interval0.getFlag(self.getFeatureFlagIndex())],
                     [interval1.getFlag(self.getFeatureFlagIndex())]
-                ) and iir.ms2Timestamp(self.iirPassDenoiseMinTime) > interval0.dist(interval1)
+                ) and iir.ms2Timestamp(self.iirPassDenoiseMinTime) > interval0.dist(interval1),
+            debug=self.debugLevel > 0
         )
         self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(DiffTextDetectionStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
         self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
@@ -96,7 +97,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         
         if self.debugLevel == 2:
             self.log = open("dtdLog.csv", "w")
-            self.log.write("time0,time1,level,reason,val\n")
+            self.log.write("time0,time1,merge,level,reason,val\n")
             self.log.flush()
             if os.path.exists("./dtdDebug"):
                 # Remove whole dir and all contents
@@ -174,7 +175,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         
         if unionArea == 0:
             if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},0,empty mask,0\n")
+                self.log.write(f"{oldTimeStr},{newTimeStr},False,0,empty mask,0\n")
                 saveFrames()
             return False
         
@@ -192,7 +193,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         
         if maskIou < self.minMaskIou:
             if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},1,mask iou too low,{maskIou}\n")
+                self.log.write(f"{oldTimeStr},{newTimeStr},False,1,mask iou too low,{maskIou}\n")
                 saveFrames()
                 saveExtra("2oldMask", oldMask)
                 saveExtra("3newMask", newMask)
@@ -207,6 +208,9 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if self.debugLevel == 1:
             print("diffRate:", diffRate)
         if diffRate < 0.1:
+            if self.debugLevel == 2:
+                self.log.write(f"{oldTimeStr},{newTimeStr},True,1,diff rate too low,{diffRate}\n")
+                saveFrames()
             return True
         
         # ECC
@@ -308,10 +312,20 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             print("sobelIouDiff:", sobelIouDiff)
 
         if sobelIouDiff > 0.8:
+            if self.debugLevel == 2:
+                self.log.write(f"{oldTimeStr},{newTimeStr},True,2,sobel iou diff too high,{sobelIouDiff}\n")
+                saveFrames()
+                saveExtra("2oldSobel", oldImageSobelBinDilate)
+                saveExtra("3newSobel", warpedImageSobelBinDilate)
+                saveExtra("4intersectSobel", intersectSobelBin)
+                saveExtra("5unionSobel", unionSobelBin)
+                saveExtra("6diffMask", diffMask)
+                saveExtra("7inpaintMask", inpaintMask)
+                saveExtra("8inpaint", warpedImageInpaint)
             return True
         if sobelIouDiff < 0.2:
             if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},2,sobel iou diff too low,{sobelIouDiff}\n")
+                self.log.write(f"{oldTimeStr},{newTimeStr},False,2,sobel iou diff too low,{sobelIouDiff}\n")
                 saveFrames()
                 saveExtra("2oldSobel", oldImageSobelBinDilate)
                 saveExtra("3newSobel", warpedImageSobelBinDilate)
@@ -345,8 +359,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 print("NOO")
 
         ocrDecision = ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou
-        if self.debugLevel == 2 and not ocrDecision:
-            self.log.write(f"{oldTimeStr},{newTimeStr},3,ocr decision false,{ocrIou}\n")
+        if self.debugLevel == 2 and (not ocrDecision):
+            self.log.write(f"{oldTimeStr},{newTimeStr},{ocrDecision},3,ocr decision,{ocrIou}\n")
             saveFrames()
             saveExtra("2oldSobel", oldImageSobelBinDilate)
             saveExtra("3newSobel", warpedImageSobelBinDilate)

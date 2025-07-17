@@ -161,7 +161,7 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
             playResX = size[0],
             playResY = size[1],
             styles = "".join(strategy.getStyles()),
-            events = iir.toAss(timeBase)
+            events = iir.toAss()
         )
 
         dstAss = open(dst + ".ass", "w")

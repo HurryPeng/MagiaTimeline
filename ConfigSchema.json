@@ -807,6 +807,7 @@
         "destination",
         "assTemplate",
         "contentRect",
+        "maxResolution",
         "strategy",
         "preset",
         "engine",
