@@ -69,7 +69,7 @@ class IntervalGrower(IIR):
         return propose, prev, next
     
     def insertInterval(self, framePoint: FramePoint, image: typing.Optional[cv.Mat]) -> Interval:
-        interval = Interval(self.flagIndexType, self.mainFlagIndex, framePoint.timestamp, framePoint.timestamp, [framePoint])
+        interval = Interval(self.flagIndexType, self.mainFlagIndex, framePoint.timestamp, framePoint.timestamp, self.timeBase, [framePoint])
         if self.extraJobFrameFlagIndex is not None:
             assert image is not None
             assert self.cutExtraJobFrame is not None
@@ -78,18 +78,18 @@ class IntervalGrower(IIR):
         self.intervals.append(interval)
         self.sort()
         if self.verbose:
-            print("insertInterval       ", f"({interval.begin}, {interval.end}) {(interval.end - interval.begin)}", formatTimestamp(self.timeBase, interval.begin))
+            print("insertInterval       ", f"({interval.timeStringBegin()}, {interval.timeStringEnd()}) {(interval.end - interval.begin)}")
         return interval
 
     def extendInterval(self, interval: Interval, framePoint: FramePoint) -> None:
         if interval.begin > framePoint.timestamp:
             interval.begin = framePoint.timestamp
             if self.verbose:
-                print("extendIntervalToLeft ", f"<{interval.begin}, {interval.end}] {(interval.end - interval.begin)}", formatTimestamp(self.timeBase, interval.begin))
+                print("extendIntervalToLeft ", f"<{interval.timeStringBegin()}, {interval.timeStringEnd()}] {(interval.end - interval.begin)}")
         elif interval.end < framePoint.timestamp:
             interval.end = framePoint.timestamp
             if self.verbose:
-                print("extendIntervalToRight", f"[{interval.begin}, {interval.end}> {(interval.end - interval.begin)}", formatTimestamp(self.timeBase, interval.end))
+                print("extendIntervalToRight", f"[{interval.timeStringBegin()}, {interval.timeStringEnd()}> {(interval.end - interval.begin)}")
         interval.framePoints.append(framePoint)
         self.sort()
 
@@ -105,7 +105,7 @@ class IntervalGrower(IIR):
             framePoint.setFlag(self.featureFlagIndex, None)
         
         if self.verbose:
-            print("hookInterval         ", f"[{intervalL.begin}, {intervalL.end}}} {(intervalL.end - intervalL.begin)}", formatTimestamp(self.timeBase, intervalL.end))
+            print("hookInterval         ", f"[{intervalL.timeStringBegin()}, {intervalL.timeStringEnd()}}} {(intervalL.end - intervalL.begin)}")
 
 
 class FrameCache:
