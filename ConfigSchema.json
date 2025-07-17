@@ -104,6 +104,11 @@
             "description": "defines the rectangle that wraps the content of a frame, cutting away black bars around",
             "$ref": "#/$defs/ratioRectangle"
         },
+        "maxResolution": {
+            "description": "if the video width or height exceeds this value, both dimensions will be halved until they are below this value. Set to 0 to disable.",
+            "type": "integer",
+            "minimum": 0
+        },
         "strategy": {
             "description": "which algorithm set to use",
             "enum": [

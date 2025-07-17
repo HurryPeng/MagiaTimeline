@@ -218,10 +218,11 @@ def morphologyNear(base: cv.Mat, ref: cv.Mat, Weight: int) -> cv.Mat:
     refDialate = cv.morphologyEx(ref, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (Weight, Weight)))
     return cv.bitwise_and(base, refDialate)
 
-def avFrame2CvMat(frame: av.frame.Frame) -> cv.Mat:
-    return frame.to_ndarray(format='bgr24')
-    # return cv.resize(frame.to_ndarray(format='bgr24'), (frame.width // 2, frame.height // 2), interpolation=cv.INTER_LINEAR)
-    # return cv.resize(frame.to_ndarray(format='bgr24'), (frame.width // 4, frame.height // 4), interpolation=cv.INTER_LINEAR)
+def avFrame2CvMat(frame: av.frame.Frame, scaleDown: int) -> cv.Mat:
+    image = frame.to_ndarray(format='bgr24')
+    if scaleDown > 1:
+        image = cv.resize(image, (frame.width // scaleDown, frame.height // scaleDown), interpolation=cv.INTER_AREA)
+    return image
 
 def ms2Timestamp(ms: int, timeBase: fractions.Fraction) -> int:
     return int(ms / timeBase / 1000)

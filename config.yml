@@ -49,6 +49,11 @@ enableOpenCL: false
 # then you should set this to [0.01, 0.99, 0.09, 0.91]. 
 contentRect: [0.0, 1.0, 0.0, 1.0]
 
+# maxResolution: if the video width or height exceeds this value,
+# both dimensions will be halved until they are below this value.
+# Set to 0 to disable.
+maxResolution: 2000
+
 # Strategies and Presets
 
 # MagiaTimeline supports different types of videos by providing sets of algorithms called Strategies. 

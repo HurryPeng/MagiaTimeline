@@ -225,7 +225,8 @@ class FrameCache:
         return frameI2
 
 class SpeculativeEngine(AbstractEngine):
-    def __init__(self, config: dict) -> None:
+    def __init__(self, scaleDown: int, config: dict) -> None:
+        self.scaleDown: int = scaleDown
         self.config: dict = config
         self.emptyGapForceCheck: int = config["emptyGapForceCheck"]
         self.debug: bool = config["debug"]
@@ -283,11 +284,11 @@ class SpeculativeEngine(AbstractEngine):
                     lastSegment = True
                     frameI2 = frameCache.getFrame(frameCache.end, frameCache.begin, frameCache.nextI)
                 frameI1 = frameCache.getFrame(frameCache.begin, frameCache.begin, frameCache.nextI)
-                imageI1 = avFrame2CvMat(frameI1)
+                imageI1 = avFrame2CvMat(frameI1, self.scaleDown)
                 framePoint1 = strategy.genFramePoint(imageI1, frameI1.pts, timeBase)
                 interval1 = intervalGrower.insertInterval(framePoint1, imageI1)
                 prev = interval1
-                imageI2 = avFrame2CvMat(frameI2)
+                imageI2 = avFrame2CvMat(frameI2, self.scaleDown)
                 framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts, timeBase)
                 merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in interval1.framePoints], [framePoint2.getFlag(featureFlagIndex)])
                 if merge:
@@ -300,7 +301,7 @@ class SpeculativeEngine(AbstractEngine):
                 if frameI2 is None: # Last segment
                     lastSegment = True
                     frameI2 = frameCache.getFrame(frameCache.end, frameCache.begin, frameCache.nextI)
-                imageI2 = avFrame2CvMat(frameI2)
+                imageI2 = avFrame2CvMat(frameI2, self.scaleDown)
                 framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts, timeBase)
                 isEmptyFeature = strategy.isEmptyFeature(framePoint2.getFlag(featureFlagIndex))
                 print(framePoint2.toString())
@@ -317,7 +318,7 @@ class SpeculativeEngine(AbstractEngine):
                     # The two intervals have no more frames in between
                     intervalGrower.hookInterval(prev, next)
                     continue
-                image = avFrame2CvMat(frame)
+                image = avFrame2CvMat(frame, self.scaleDown)
                 framePoint = strategy.genFramePoint(image, frame.pts, timeBase)
                 isEmptyFeature = strategy.isEmptyFeature(framePoint.getFlag(featureFlagIndex))
 

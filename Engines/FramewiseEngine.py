@@ -12,11 +12,13 @@ import typing
 import fractions
 
 class FramewiseEngine(AbstractEngine):
-    def __init__(self, config: dict) -> None:
+    def __init__(self, scaleDown: int, config: dict) -> None:
+        self.scaleDown: int = scaleDown
         self.config: dict = config
         self.sampleInterval: int = config["sampleInterval"]
         self.debug: bool = config["debug"]
         self.debugPyrDown: int = config["debugPyrDown"]
+
     def getRequiredAbstractStrategyType(self) -> type[AbstractStrategy]:
         return AbstractFramewiseStrategy
 
@@ -39,7 +41,7 @@ class FramewiseEngine(AbstractEngine):
                 continue
 
             timestamp: int = frame.pts
-            img: cv.Mat = avFrame2CvMat(frame)
+            img: cv.Mat = avFrame2CvMat(frame, self.scaleDown)
 
             # CV and frame point building
             framePoint = FramePoint(flagIndexType, timestamp, timeBase)

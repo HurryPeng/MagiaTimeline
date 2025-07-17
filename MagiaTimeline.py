@@ -84,6 +84,12 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         srcStream: av.video.stream.VideoStream = srcContainer.streams.video[0]
         srcStream.thread_type = 'FRAME'
         size: typing.Tuple[int, int] = (srcStream.codec_context.width, srcStream.codec_context.height)
+        maxResolution: int = config["maxResolution"]
+        scaleDown: int = 1
+        if maxResolution > 0:
+            while size[0] > maxResolution or size[1] > maxResolution:
+                scaleDown *= 2
+                size = (size[0] // 2, size[1] // 2)
         timeBase: fractions.Fraction = srcStream.time_base
         fps: fractions.Fraction = srcStream.average_rate
 
@@ -92,6 +98,7 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         templateAsst.close()
 
         contentRect = RatioRectangle(SrcRectangle(*size), *config["contentRect"])
+        print("Resolution: {}x{} (scaled down by {})".format(size[0], size[1], scaleDown))
 
         strategy: AbstractStrategy | None = None
         print("Strategy:", config["strategy"])
@@ -125,9 +132,9 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         engine: AbstractEngine | None = None
         print("Engine:", config["engine"])
         if config["engine"] == "speculative":
-            engine = SpeculativeEngine(engineConfig)
+            engine = SpeculativeEngine(scaleDown, engineConfig)
         elif config["engine"] == "framewise":
-            engine = FramewiseEngine(engineConfig)
+            engine = FramewiseEngine(scaleDown, engineConfig)
         else:
             raise Exception("Unknown engine! ")
         assert engine is not None
