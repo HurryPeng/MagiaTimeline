@@ -39,7 +39,7 @@ class IntervalGrower(IIR):
         self.verbose = verbose
 
     def propose(self) -> typing.Tuple[int, typing.Optional[Interval], typing.Optional[Interval]]:
-        # returns: proposed timestampC (-1 for next I-frame), previous interval, next interval
+        # returns: proposed timestampC (-1 for no more proposals), previous interval, next interval
 
         if len(self.intervals) == 0:
             # initial proposal
@@ -116,6 +116,7 @@ class FrameCache:
         self.begin: int = 0
         self.end: int = 0
         self.nextI: int = 0
+        self.cacheNextI: av.frame.Frame = None
 
         self.fps: fractions.Fraction = self.stream.average_rate
         self.timeBase: fractions.Fraction = self.stream.time_base
@@ -214,10 +215,12 @@ class FrameCache:
 
         if frameI2 is not None:
             self.nextI = frameI2.pts
+            self.cacheNextI = frameI2
         else:
             # last segment
-            self.proceedTo(-1)
-            self.nextI = self.end + 1
+            self.proceedTo(-1) # Proceed to the end of the video
+            self.nextI = self.end
+            self.cacheNextI = self.cache[-1]
 
         endTime = time.time() - startTime
         self.statDecodeTimeElapsed += endTime
@@ -275,8 +278,6 @@ class SpeculativeEngine(AbstractEngine):
         lastSegment: bool = False
         while True:
             proposeC, prev, next = intervalGrower.propose()
-            if lastSegment and proposeC == -1:
-                break
             if proposeC == 0: # Init
                 assert prev is None and next is None
                 frameI2 = frameCache.leap()
@@ -295,24 +296,41 @@ class SpeculativeEngine(AbstractEngine):
                     intervalGrower.extendInterval(interval1, framePoint2)
                 else:
                     intervalGrower.insertInterval(framePoint2, imageI2)
-            elif proposeC == -1: # leap to the next next I-frame
+            elif proposeC == -1: # grower is complete up to its last interval
                 assert prev is not None and next is None
-                frameI2 = frameCache.leap()
+                if prev.end == frameCache.nextI:
+                    # Then end of the grower is aligned with the next I-frame
+                    # Leap to the next I-frame, and propose prev.end + maxInterval, or frameCache.nextI, whichever is smaller
+                    if lastSegment:
+                        break
+                    frameI2 = frameCache.leap()
+                    if frameI2 is not None:
+                        print(f"I-Frame {formatTimestamp(frameI2.pts, timeBase)}")
+                else:
+                    # Then end of the grower is not aligned with the next I-frame, there is no need to leap
+                    frameI2 = frameCache.cacheNextI
                 if frameI2 is None: # Last segment
                     lastSegment = True
                     frameI2 = frameCache.getFrame(frameCache.end, frameCache.begin, frameCache.nextI)
-                imageI2 = avFrame2CvMat(frameI2, self.scaleDown)
-                framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts, timeBase)
-                isEmptyFeature = strategy.isEmptyFeature(framePoint2.getFlag(featureFlagIndex))
-                print(framePoint2.toString())
-                merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint2.getFlag(featureFlagIndex)])
-                dist = prev.distFramePoint(framePoint2)
-                if merge and not (isEmptyFeature and dist > self.emptyFeatureMaxTimestamp):
-                    intervalGrower.extendInterval(prev, framePoint2)
+                if frameI2.pts - prev.end > self.emptyFeatureMaxTimestamp:
+                    proposeC = prev.end + self.emptyFeatureMaxTimestamp
+                    frame = frameCache.getFrame(proposeC, prev.end + 1, proposeC)
                 else:
-                    intervalGrower.insertInterval(framePoint2, imageI2)
+                    frame = frameI2
+                image = avFrame2CvMat(frame, self.scaleDown)
+                framePoint = strategy.genFramePoint(image, frame.pts, timeBase)
+                merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint.getFlag(featureFlagIndex)])
+                distPrev = prev.distFramePoint(framePoint)
+                assert distPrev <= self.emptyFeatureMaxTimestamp
+                if merge:
+                    intervalGrower.extendInterval(prev, framePoint)
+                else:
+                    intervalGrower.insertInterval(framePoint, image)
             else: # reasonable proposal
                 assert prev is not None and next is not None
+                distPrev = prev.distTimestamp(proposeC)
+                if distPrev > self.emptyFeatureMaxTimestamp:
+                    proposeC = prev.end + self.emptyFeatureMaxTimestamp
                 frame = frameCache.getFrame(proposeC, prev.end + 1, next.begin)
                 if frame is None:
                     # The two intervals have no more frames in between
@@ -324,12 +342,12 @@ class SpeculativeEngine(AbstractEngine):
 
                 mergeLeft = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint.getFlag(featureFlagIndex)])
                 distLeft = prev.distFramePoint(framePoint)
-                if mergeLeft and not (isEmptyFeature and distLeft > self.emptyFeatureMaxTimestamp):
+                if mergeLeft and not distLeft > self.emptyFeatureMaxTimestamp:
                     intervalGrower.extendInterval(prev, framePoint)
                 else:
                     mergeRight = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex)], [framePoint.getFlag(featureFlagIndex) for framePoint in next.framePoints])
                     distRight = next.distFramePoint(framePoint)
-                    if mergeRight and not (isEmptyFeature and distRight > self.emptyFeatureMaxTimestamp):
+                    if mergeRight and not distRight > self.emptyFeatureMaxTimestamp:
                         intervalGrower.extendInterval(next, framePoint)
                     else:
                         intervalGrower.insertInterval(framePoint, image)

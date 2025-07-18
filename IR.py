@@ -269,6 +269,13 @@ class Interval:
         if framePoint.timestamp > self.end:
             return framePoint.timestamp - self.end
         return 0
+    
+    def distTimestamp(self, timestamp: int) -> int:
+        if timestamp < self.begin:
+            return self.begin - timestamp
+        if timestamp > self.end:
+            return timestamp - self.end
+        return 0
 
     def intersects(self, other: Interval) -> bool:
         return self.dist(other) < 0

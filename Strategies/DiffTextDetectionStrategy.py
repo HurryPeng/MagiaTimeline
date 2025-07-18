@@ -40,6 +40,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
             limit_type="max",
             limit_side_len=720,
+            thresh=0.2,
+            box_thresh=0.4,
             device="cpu",
             enable_mkldnn=True
         )
@@ -59,7 +61,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
         self.colourTolerance: int = config["colourTolerance"]
         self.minMaskIou: float = 0.5
-        self.minOcrIou: float = 0.2
+        self.minOcrIou: float = 0.1
         self.iirPassDenoiseMinTime: int = config["iirPassDenoiseMinTime"]
         self.debugLevel: int = config["debugLevel"]
 
@@ -207,7 +209,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         diffRate = diffArea / unionArea
         if self.debugLevel == 1:
             print("diffRate:", diffRate)
-        if diffRate < 0.1:
+        if diffRate < 0.05:
             if self.debugLevel == 2:
                 self.log.write(f"{oldTimeStr},{newTimeStr},True,1,diff rate too low,{diffRate}\n")
                 saveFrames()
@@ -359,7 +361,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 print("NOO")
 
         ocrDecision = ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou
-        if self.debugLevel == 2 and (not ocrDecision):
+        if self.debugLevel == 2:
             self.log.write(f"{oldTimeStr},{newTimeStr},{ocrDecision},3,ocr decision,{ocrIou}\n")
             saveFrames()
             saveExtra("2oldSobel", oldImageSobelBinDilate)

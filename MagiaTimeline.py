@@ -83,7 +83,8 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         srcContainer: av.container.InputContainer = av.open(src, mode='r')
         srcStream: av.video.stream.VideoStream = srcContainer.streams.video[0]
         srcStream.thread_type = 'FRAME'
-        size: typing.Tuple[int, int] = (srcStream.codec_context.width, srcStream.codec_context.height)
+        originalSize: typing.Tuple[int, int] = (srcStream.codec_context.width, srcStream.codec_context.height)
+        size: typing.Tuple[int, int] = originalSize
         maxResolution: int = config["maxResolution"]
         scaleDown: int = 1
         if maxResolution > 0:
@@ -158,8 +159,8 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
 
         print("==== IIR to ASS ====")
         asstStr = asstStr.format(
-            playResX = size[0],
-            playResY = size[1],
+            playResX = originalSize[0],
+            playResY = originalSize[1],
             styles = "".join(strategy.getStyles()),
             events = iir.toAss()
         )

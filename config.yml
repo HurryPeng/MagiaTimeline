@@ -379,7 +379,7 @@ dtd:
     # colourTolerance: distance from the selected mean colour to be filtered for text
     colourTolerance: 70
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
-    iirPassDenoiseMinTime: 300
+    iirPassDenoiseMinTime: 100
     # debugLevel: 1 prints extra information, 2 shows debug frames
     debugLevel: 0
 
@@ -419,7 +419,7 @@ speculative:
   # the program will force check the existence of subtitles in this number of milliseconds,
   # instead of considering there are no subtitles in the gap.
   # If this is set to 0, the program will not force check. 
-  emptyGapForceCheck: 1000
+  emptyGapForceCheck: 2000
   # debug: whether to show debug information
   # Speculative Engine's debug mode will print its decision of inserting/extending intervals after each frame.
   debug: false
