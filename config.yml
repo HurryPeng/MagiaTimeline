@@ -373,9 +373,9 @@ dtd:
     # boxVerticalExpansion: vertical expansion ratio of the detected dialog box
     boxVerticalExpansion: 0.20
     # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
-    nonMajorBoxSuppressionMaxRatio: 0.2
+    nonMajorBoxSuppressionMaxRatio: 0.1
     # nonMajorBoxSuppressionMinRank: but at least this number of boxes will be kept
-    nonMajorBoxSuppressionMinRank: 2
+    nonMajorBoxSuppressionMinRank: 1
     # colourTolerance: distance from the selected mean colour to be filtered for text
     colourTolerance: 70
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
@@ -419,7 +419,7 @@ speculative:
   # the program will force check the existence of subtitles in this number of milliseconds,
   # instead of considering there are no subtitles in the gap.
   # If this is set to 0, the program will not force check. 
-  emptyGapForceCheck: 2000
+  emptyGapForceCheck: 1000
   # debug: whether to show debug information
   # Speculative Engine's debug mode will print its decision of inserting/extending intervals after each frame.
   debug: false
@@ -438,7 +438,7 @@ ocr:
   separator: ""
   doPaddle: true
   # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
-  nonMajorBoxSuppressionMaxRatio: 0.2
+  nonMajorBoxSuppressionMaxRatio: 0.1
   # nonMajorBoxSuppressionMinRank: but at least this number of boxes will be kept
   nonMajorBoxSuppressionMinRank: 1
   tesseractLang: "jpn"
