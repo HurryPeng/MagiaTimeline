@@ -437,5 +437,8 @@ ocr:
   standaloneOutputSuffix: "-ocr.txt"
   separator: ""
   doPaddle: true
-  doTesseract: false
+  # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
+  nonMajorBoxSuppressionMaxRatio: 0.2
+  # nonMajorBoxSuppressionMinRank: but at least this number of boxes will be kept
+  nonMajorBoxSuppressionMinRank: 1
   tesseractLang: "jpn"

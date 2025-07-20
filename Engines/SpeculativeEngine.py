@@ -305,7 +305,7 @@ class SpeculativeEngine(AbstractEngine):
                         break
                     frameI2 = frameCache.leap()
                     if frameI2 is not None:
-                        print(f"I-Frame {formatTimestamp(frameI2.pts, timeBase)}")
+                        print(f"frame {formatTimestamp(frameI2.pts, timeBase)}")
                 else:
                     # Then end of the grower is not aligned with the next I-frame, there is no need to leap
                     frameI2 = frameCache.cacheNextI

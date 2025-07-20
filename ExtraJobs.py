@@ -1,6 +1,7 @@
 from __future__ import annotations
 import pytesseract
 import paddleocr
+import typing
 
 from IR import IIR
 from Util import *
@@ -17,6 +18,8 @@ class IIROcrPass(IIRPass):
         self.standaloneOutputSuffix: str = config["standaloneOutputSuffix"]
         self.separator: str = config["separator"]
         self.doPaddle: bool = config["doPaddle"]
+        self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
+        self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
         self.doTeseract: bool = config["doTesseract"]
         self.tesseractLang: str = config["tesseractLang"]
 
@@ -51,10 +54,29 @@ class IIROcrPass(IIRPass):
                 paddleFrame = img
                 paddleResult = paddle.predict(paddleFrame)
                 paddleResult = paddleResult[0]
-                recTexts = paddleResult["rec_texts"]
+                recTexts: typing.List[str] = paddleResult["rec_texts"]
+                recBoxes: np.ndarray = paddleResult["rec_boxes"] # List[(xmin, ymin, xmax, ymax)]
+                recBoxSizes = [(int(box[2]) - int(box[0])) * (int(box[3]) - int(box[1])) for box in recBoxes]
+                boxSizeSum = sum(recBoxSizes)
+
+                recBoxesSortedIndices = sorted(
+                    range(len(recBoxSizes)),
+                    key=lambda i: recBoxSizes[i],
+                    reverse=True
+                )
+                recBoxesRankMapping = [0] * len(recBoxSizes)
+                for rank, origIdx in enumerate(recBoxesSortedIndices):
+                    recBoxesRankMapping[origIdx] = rank
+                recBoxesRanking = [recBoxesRankMapping[i] for i in range(len(recBoxSizes))]
+
                 paddleText: str = ""
-                for line in recTexts:
-                    paddleText += line + ' '
+                for i in range(len(recTexts)):
+                    line = recTexts[i]
+                    box = recBoxes[i]
+                    boxSize = recBoxSizes[i]
+                    rank = recBoxesRanking[i]
+                    if boxSize > self.nonMajorBoxSuppressionMaxRatio * boxSizeSum or rank < self.nonMajorBoxSuppressionMinRank:
+                        paddleText += line + ' '
                 paddleText = paddleText.strip()
                 buff += paddleText
 

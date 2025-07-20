@@ -100,6 +100,7 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
 
         contentRect = RatioRectangle(SrcRectangle(*size), *config["contentRect"])
         print("Resolution: {}x{} (scaled down by {})".format(size[0], size[1], scaleDown))
+        print("FPS:", fps)
 
         strategy: AbstractStrategy | None = None
         print("Strategy:", config["strategy"])

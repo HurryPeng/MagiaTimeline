@@ -782,6 +782,16 @@
                     "type": "boolean",
                     "description": "Whether to perform OCR using PaddleOCR."
                 },
+                "nonMajorBoxSuppressionMaxRatio": {
+                    "description": "boxes with a ratio (over all boxes) lower than this will be suppressed",
+                    "type": "number",
+                    "minimum": 0
+                },
+                "nonMajorBoxSuppressionMinRank": {
+                    "description": "but at least this number of boxes will be kept",
+                    "type": "integer",
+                    "minimum": 1
+                },
                 "doTesseract": {
                     "type": "boolean",
                     "description": "Whether to perform OCR using Tesseract."
@@ -796,6 +806,8 @@
                 "standaloneOutputSuffix",
                 "separator",
                 "doPaddle",
+                "nonMajorBoxSuppressionMaxRatio",
+                "nonMajorBoxSuppressionMinRank",
                 "doTesseract",
                 "tesseractLang"
             ],
