@@ -56,12 +56,26 @@ class IIROcrPass(IIRPass):
                 paddleResult = paddleResult[0]
                 recTexts: typing.List[str] = paddleResult["rec_texts"]
                 recBoxes: np.ndarray = paddleResult["rec_boxes"] # List[(xmin, ymin, xmax, ymax)]
+                recScores: typing.List[float] = paddleResult["rec_scores"]
+                recPolys: typing.List[np.ndarray] = paddleResult["rec_polys"] # List[np.ndarray] of shape (4, 2)
                 recBoxSizes = [(int(box[2]) - int(box[0])) * (int(box[3]) - int(box[1])) for box in recBoxes]
                 boxSizeSum = sum(recBoxSizes)
 
+                passesAngleTest: list[bool] = []
+                for poly in recPolys:
+                    x0, y0 = poly[0]
+                    x1, y1 = poly[1]
+                    x2, y2 = poly[2]
+                    x3, y3 = poly[3]
+                    angle0 = np.arctan2(y1 - y0, x1 - x0)
+                    angle3 = np.arctan2(y2 - y3, x2 - x3)
+                    angle = (angle0 + angle3) / 2
+                    passes = np.abs(angle) <= np.pi / 180 * 10
+                    passesAngleTest.append(passes)
+
                 recBoxesSortedIndices = sorted(
                     range(len(recBoxSizes)),
-                    key=lambda i: recBoxSizes[i],
+                    key=lambda j: recBoxSizes[j] if passesAngleTest[j] else 0,
                     reverse=True
                 )
                 recBoxesRankMapping = [0] * len(recBoxSizes)
@@ -70,11 +84,17 @@ class IIROcrPass(IIRPass):
                 recBoxesRanking = [recBoxesRankMapping[i] for i in range(len(recBoxSizes))]
 
                 paddleText: str = ""
-                for i in range(len(recTexts)):
-                    line = recTexts[i]
-                    box = recBoxes[i]
-                    boxSize = recBoxSizes[i]
-                    rank = recBoxesRanking[i]
+                for j in range(len(recTexts)):
+                    line = recTexts[j]
+                    box = recBoxes[j]
+                    poly = recPolys[j]
+                    score = recScores[j]
+                    boxSize = recBoxSizes[j]
+                    rank = recBoxesRanking[j]
+
+                    if not passesAngleTest[j]:
+                        continue
+
                     if boxSize > self.nonMajorBoxSuppressionMaxRatio * boxSizeSum or rank < self.nonMajorBoxSuppressionMinRank:
                         paddleText += line + ' '
                 paddleText = paddleText.strip()

@@ -441,4 +441,5 @@ ocr:
   nonMajorBoxSuppressionMaxRatio: 0.1
   # nonMajorBoxSuppressionMinRank: but at least this number of boxes will be kept
   nonMajorBoxSuppressionMinRank: 1
+  doTesseract: false
   tesseractLang: "jpn"
