@@ -42,8 +42,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             limit_side_len=720,
             thresh=0.2,
             box_thresh=0.4,
-            device="cpu",
-            enable_mkldnn=True
+            device="cpu"
         )
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:

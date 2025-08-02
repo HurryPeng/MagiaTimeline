@@ -22,18 +22,26 @@ extra_datas, extra_binaries, extra_hiddenimports = collect_all_list([
     "paddlex",
     "pypdfium2",
     "customtkinter",
-    # paxxled[ocr] hooks
+    # paddlex[ocr] hooks
+    # For the list, print out all dependencies for "ocr" from paddlex/utils/deps.py::is_extra_available()
+    # This may change with any new version of PaddleX, even for patch versions.
+    # Current version: 3.1.3
+    # Note that some dependency names may not match exactly with the actual package names.
+    "einops",
     "ftfy",
     "imagesize",
+    "jinja2", # for Jinja2
     "lxml",
-    "cv2",
+    "cv2", # for opencv-contrib-python
     "openpyxl",
     "premailer",
     "pyclipper",
     "pypdfium2",
-    "sklearn",
+    "regex",
+    "sklearn", # for scikit-learn
     "shapely",
-    "tokenizers"
+    "tiktoken",
+    "tokenizers",
 ])
 
 a1 = Analysis(
