@@ -36,12 +36,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                         category=UserWarning,
                         module="paddle.utils.cpp_extension")
         return paddleocr.TextDetection(
-            model_name="PP-OCRv4_mobile_det",
-            model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
-            limit_type="max",
-            limit_side_len=720,
+            model_name="PP-OCRv5_mobile_det",
+            model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_det",
             thresh=0.2,
-            box_thresh=0.4,
+            box_thresh=0.3,
             device="cpu"
         )
 
@@ -286,15 +284,35 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         diffMask = rgbDiffMask(oldImage, warpedImage, self.colourTolerance)
 
         inpaintMask = cv.bitwise_and(cv.bitwise_not(diffMask), unionMask)
-        inpaintMaskGradient = cv.morphologyEx(inpaintMask, cv.MORPH_GRADIENT, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
-        inpaintMaskGradientAndCommonSobel = cv.bitwise_and(inpaintMaskGradient, intersectSobelBinMasked)
-        cv.copyTo(src=inpaintMaskGradientAndCommonSobel, dst=inpaintMask, mask=inpaintMaskGradient)
 
         inpaintMaskDilate = cv.morphologyEx(inpaintMask, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         inpaintMaskDilateErode = cv.morphologyEx(inpaintMaskDilate, cv.MORPH_ERODE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
         inpaintMask = cv.bitwise_or(inpaintMask, inpaintMaskDilateErode) # Denoise small black dots
 
-        warpedImageInpaint = cv.inpaint(warpedImage, inpaintMask, 1, cv.INPAINT_TELEA)
+        inpaintMaskGradient = cv.morphologyEx(inpaintMask, cv.MORPH_GRADIENT, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
+        inpaintMaskGradientAndCommonSobel = cv.bitwise_and(inpaintMaskGradient, intersectSobelBinMasked)
+        cv.copyTo(src=inpaintMaskGradientAndCommonSobel, dst=inpaintMask, mask=inpaintMaskGradient)
+
+        # Blur the edges around the inpaint area, using pixels not in the inpaint area
+        warpedImageNoInpaintMask = cv.bitwise_and(warpedImage, warpedImage, mask=cv.bitwise_not(inpaintMask))
+        warpedImageNoInpaintMaskBlur = cv.stackBlur(warpedImageNoInpaintMask, (21, 21))
+        warpedImageNoInpaintMaskDenom = cv.stackBlur(cv.bitwise_not(inpaintMask), (21, 21))
+        # Make sure the denominator is not zero
+        warpedImageNoInpaintMaskDenom[warpedImageNoInpaintMaskDenom == 0] = 1
+        # Extend denominator to the same channel as the blurred image
+        warpedImageNoInpaintMaskDenom = cv.merge([warpedImageNoInpaintMaskDenom] * 3)
+        # Devide the blurred image by the mask to get the blurred edges
+        inpaintBase = cv.divide(warpedImageNoInpaintMaskBlur, warpedImageNoInpaintMaskDenom, scale=256, dtype=cv.CV_8U)
+
+        inpaintIntermediate = cv.inpaint(inpaintBase, inpaintMask, 1, cv.INPAINT_TELEA)
+
+        warpedImageInpaint = warpedImage.copy()
+        cv.copyTo(src=inpaintIntermediate, dst=warpedImageInpaint, mask=inpaintMask)
+
+        # Reduce sharpeness inside inpainted area
+
+        warpedImageInpaintBlur = cv.stackBlur(warpedImageInpaint, (11, 11))
+        cv.copyTo(src=warpedImageInpaintBlur, dst=warpedImageInpaint, mask=inpaintMask)
 
         # Post-inpaint Sobel Iou Filtering
 
@@ -384,6 +402,13 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     def detectTextBoxes(self, frame: cv.Mat) -> typing.List[typing.Tuple[int, int, int, int]]:
         imgH, imgW = frame.shape[:2]
 
+        scaleDown = 1
+        while imgH // scaleDown > 960 or imgW // scaleDown > 960:
+            scaleDown *= 2
+
+        if scaleDown > 1:
+            frame = cv.resize(frame, (imgW // scaleDown, imgH // scaleDown), interpolation=cv.INTER_LINEAR)
+
         result = self.ocr.predict(frame)
         result = result[0]
         dtPolys: typing.List[np.ndarray] = result["dt_polys"]
@@ -399,6 +424,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             wordInfo = dtPolys[i]
             confidence = dtScores[i]
             wordInfo = np.array(wordInfo, np.int32)
+            wordInfo *= scaleDown
             x0, y0 = wordInfo[0]
             x1, y1 = wordInfo[1]
             x2, y2 = wordInfo[2]

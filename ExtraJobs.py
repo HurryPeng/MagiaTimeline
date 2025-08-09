@@ -33,8 +33,8 @@ class IIROcrPass(IIRPass):
             print("Standalone output disabled. Writing to ass file.")
         
         paddle = paddleocr.PaddleOCR(
-            text_detection_model_name="PP-OCRv4_mobile_det",
-            text_detection_model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
+            text_detection_model_name="PP-OCRv5_mobile_det",
+            text_detection_model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_det",
             text_recognition_model_name="PP-OCRv5_mobile_rec",
             text_recognition_model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_rec",
             use_doc_orientation_classify=False,

@@ -34,8 +34,8 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
                         category=UserWarning,
                         module="paddle.utils.cpp_extension")
         return paddleocr.TextDetection(
-            model_name="PP-OCRv4_mobile_det",
-            model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
+            model_name="PP-OCRv5_mobile_det",
+            model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_det",
             limit_type="max",
             limit_side_len=720,
             device="cpu",
