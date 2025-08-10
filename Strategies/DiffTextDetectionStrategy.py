@@ -36,8 +36,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                         category=UserWarning,
                         module="paddle.utils.cpp_extension")
         return paddleocr.TextDetection(
-            model_name="PP-OCRv5_mobile_det",
-            model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_det",
+            model_name="PP-OCRv4_mobile_det",
+            model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
             thresh=0.2,
             box_thresh=0.3,
             device="cpu"
@@ -58,7 +58,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
         self.colourTolerance: int = config["colourTolerance"]
         self.minMaskIou: float = 0.5
-        self.minOcrIou: float = 0.3
+        self.minOcrIou: float = 0.4
         self.iirPassDenoiseMinTime: int = config["iirPassDenoiseMinTime"]
         self.debugLevel: int = config["debugLevel"]
 
@@ -219,7 +219,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         # ECC on Sobel
         self.statDecideFeatureMergeComputeECC += 1
 
-
         warp = np.eye(2, 3, dtype=np.float32)
         ccInit: float = cv.computeECC(
             templateImage=newImageSobel,
@@ -259,6 +258,9 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         warpDist = np.linalg.norm(warp[0:2, 2])
         if warpDist > 0.5 and warpDist < 50 and cc > ccInit:
             warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
+            warpedMask = cv.warpAffine(unionMask, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
+            intersectMask = cv.bitwise_and(oldMask, warpedMask)
+            unionMask = cv.bitwise_or(oldMask, warpedMask)
 
         if self.debugLevel == 1:
             print("cc:", cc)
@@ -271,30 +273,31 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         warpedImageSobel = rgbSobel(warpedImage, 1)
         oldImageSobelBin = cv.threshold(oldImageSobel, 32, 255, cv.THRESH_BINARY)[1]
         warpedImageSobelBin = cv.threshold(warpedImageSobel, 32, 255, cv.THRESH_BINARY)[1]
-        oldImageSobelBinDilate = cv.morphologyEx(oldImageSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
-        warpedImageSobelBinDilate = cv.morphologyEx(warpedImageSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
-        intersectSobelBin = cv.bitwise_and(oldImageSobelBinDilate, warpedImageSobelBinDilate)
-        intersectSobelBinMasked = cv.bitwise_and(intersectSobelBin, unionMask)
-        unionSobelBin = cv.bitwise_or(oldImageSobelBinDilate, warpedImageSobelBinDilate)
+        oldImageSobelBinDilate = cv.morphologyEx(oldImageSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
+        warpedImageSobelBinDilate = cv.morphologyEx(warpedImageSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
+        unionSobelBin = cv.bitwise_or(oldImageSobelBin, warpedImageSobelBin) # No dilate for union
         unionSobelBinMasked = cv.bitwise_and(unionSobelBin, unionMask)
+        intersectSobelBin = cv.bitwise_and(oldImageSobelBinDilate, warpedImageSobelBinDilate)
+        intersectSobelBinMasked = cv.bitwise_and(intersectSobelBin, unionSobelBinMasked)
         sobelIou = np.sum(intersectSobelBinMasked) / np.sum(unionSobelBinMasked)
 
         # Inpainting
 
         self.statDecideFeatureMergeInpaint += 1
 
-        diffMask = rgbDiffMask(oldImage, warpedImage, self.colourTolerance)
+        diffMask = ssimDiffMask(oldImage, warpedImage, 0.1, 11)
 
-        inpaintMask = cv.bitwise_and(cv.bitwise_not(diffMask), unionMask)
+        inpaintMask = cv.bitwise_not(diffMask)
+        inpaintMask = cv.bitwise_and(inpaintMask, unionMask)
 
         inpaintMaskDilate = cv.morphologyEx(inpaintMask, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         inpaintMaskDilateErode = cv.morphologyEx(inpaintMaskDilate, cv.MORPH_ERODE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
         inpaintMask = cv.bitwise_or(inpaintMask, inpaintMaskDilateErode) # Denoise small black dots
 
-        inpaintMaskGradient = cv.morphologyEx(inpaintMask, cv.MORPH_GRADIENT, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
+        inpaintMaskGradient = cv.morphologyEx(inpaintMask, cv.MORPH_GRADIENT, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
         inpaintMaskGradientAndCommonSobel = cv.bitwise_and(inpaintMaskGradient, intersectSobelBinMasked)
         cv.copyTo(src=inpaintMaskGradientAndCommonSobel, dst=inpaintMask, mask=inpaintMaskGradient)
-
+        
         # Blur the edges around the inpaint area, using pixels not in the inpaint area
         warpedImageNoInpaintMask = cv.bitwise_and(warpedImage, warpedImage, mask=cv.bitwise_not(inpaintMask))
         warpedImageNoInpaintMaskBlur = cv.stackBlur(warpedImageNoInpaintMask, (21, 21))
@@ -320,11 +323,12 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         warpedImageInpaintSobel = rgbSobel(warpedImageInpaint, 1)
         warpedImageInpaintSobelBin = cv.threshold(warpedImageInpaintSobel, 32, 255, cv.THRESH_BINARY)[1]
-        warpedImageInpaintSobelBinDilate = cv.morphologyEx(warpedImageInpaintSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
-        warpedImageInpaintSobelBinDilateMasked = cv.bitwise_and(warpedImageInpaintSobelBinDilate, unionMask)
-        intersectPostInpaintSobel = cv.bitwise_and(warpedImageInpaintSobelBinDilateMasked, intersectSobelBinMasked)
-        unionPostInpaintSobel = cv.bitwise_or(warpedImageInpaintSobelBinDilateMasked, unionSobelBinMasked)
-        postInpaintSobelIou = np.sum(intersectPostInpaintSobel) / np.sum(unionPostInpaintSobel)
+        warpedImageInpaintSobelBinDilate = cv.morphologyEx(warpedImageInpaintSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
+        unionPostInpaintSobel = cv.bitwise_or(oldImageSobelBin, warpedImageInpaintSobelBin) # No dilate for union
+        unionPostInpaintSobelMasked = cv.bitwise_and(unionPostInpaintSobel, unionMask)
+        intersectPostInpaintSobel = cv.bitwise_and(oldImageSobelBinDilate, warpedImageInpaintSobelBinDilate)
+        intersectPostInpaintSobelMasked = cv.bitwise_and(intersectPostInpaintSobel, unionPostInpaintSobelMasked)
+        postInpaintSobelIou = np.sum(intersectPostInpaintSobelMasked) / np.sum(unionPostInpaintSobelMasked)
 
         sobelIouDiff = sobelIou - postInpaintSobelIou
         if self.debugLevel == 1:
@@ -336,10 +340,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             if self.debugLevel == 2:
                 self.log.write(f"{oldTimeStr},{newTimeStr},True,2,sobel iou diff too high,{sobelIouDiff}\n")
                 saveFrames()
-                saveExtra("2oldSobel", oldImageSobelBinDilate)
-                saveExtra("3newSobel", warpedImageSobelBinDilate)
-                saveExtra("4intersectSobel", intersectSobelBin)
-                saveExtra("5unionSobel", unionSobelBin)
+                saveExtra("2oldSobel", oldImageSobelBin)
+                saveExtra("3newSobel", warpedImageSobelBin)
+                saveExtra("4intersectSobel", intersectSobelBinMasked)
+                saveExtra("5unionSobel", unionSobelBinMasked)
                 saveExtra("6diffMask", diffMask)
                 saveExtra("7inpaintMask", inpaintMask)
                 saveExtra("8inpaint", warpedImageInpaint)
@@ -348,10 +352,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             if self.debugLevel == 2:
                 self.log.write(f"{oldTimeStr},{newTimeStr},False,2,sobel iou diff too low,{sobelIouDiff}\n")
                 saveFrames()
-                saveExtra("2oldSobel", oldImageSobelBinDilate)
-                saveExtra("3newSobel", warpedImageSobelBinDilate)
-                saveExtra("4intersectSobel", intersectSobelBin)
-                saveExtra("5unionSobel", unionSobelBin)
+                saveExtra("2oldSobel", oldImageSobelBin)
+                saveExtra("3newSobel", warpedImageSobelBin)
+                saveExtra("4intersectSobel", intersectSobelBinMasked)
+                saveExtra("5unionSobel", unionSobelBinMasked)
                 saveExtra("6diffMask", diffMask)
                 saveExtra("7inpaintMask", inpaintMask)
                 saveExtra("8inpaint", warpedImageInpaint)
@@ -383,10 +387,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if self.debugLevel == 2:
             self.log.write(f"{oldTimeStr},{newTimeStr},{ocrDecision},3,ocr decision,{ocrIou}\n")
             saveFrames()
-            saveExtra("2oldSobel", oldImageSobelBinDilate)
-            saveExtra("3newSobel", warpedImageSobelBinDilate)
-            saveExtra("4intersectSobel", intersectSobelBin)
-            saveExtra("5unionSobel", unionSobelBin)
+            saveExtra("2oldSobel", oldImageSobelBin)
+            saveExtra("3newSobel", warpedImageSobelBin)
+            saveExtra("4intersectSobel", intersectSobelBinMasked)
+            saveExtra("5unionSobel", unionSobelBinMasked)
             saveExtra("6diffMask", diffMask)
             saveExtra("7inpaintMask", inpaintMask)
             saveExtra("8inpaint", warpedImageInpaint)

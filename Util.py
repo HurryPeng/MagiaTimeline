@@ -13,6 +13,7 @@ import pickle
 import lz4
 import concurrent.futures
 import os
+import skimage
 
 class CompressedDisk(diskcache.Disk):
     """Cache key and value using zlib compression."""
@@ -170,6 +171,12 @@ def rgbSobel(image: cv.Mat, ksize: int) -> cv.Mat:
 def rgbDiffMask(lhs: cv.Mat, rhs: cv.Mat, threshold: int) -> cv.Mat:
     diff = cv.absdiff(lhs, rhs)
     return cv.bitwise_not(cv.inRange(diff, (0, 0, 0), (threshold, threshold, threshold)))
+
+def ssimDiffMask(lhs: cv.Mat, rhs: cv.Mat, threshold: float, winSize: int) -> cv.Mat:
+    _, ssim = skimage.metrics.structural_similarity(lhs, rhs, full=True, channel_axis=2, win_size=winSize)
+    ssim = np.mean(ssim, axis=2)
+    ssimBin = cv.threshold(ssim, threshold, 1, cv.THRESH_BINARY_INV)[1].astype(np.uint8)
+    return ssimBin * 255
 
 def ensureMat(frame):
     if isinstance(frame, cv.UMat):
