@@ -58,7 +58,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
         self.colourTolerance: int = config["colourTolerance"]
         self.minMaskIou: float = 0.5
-        self.minOcrIou: float = 0.1
+        self.minOcrIou: float = 0.3
         self.iirPassDenoiseMinTime: int = config["iirPassDenoiseMinTime"]
         self.debugLevel: int = config["debugLevel"]
 
@@ -212,27 +212,29 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 saveFrames()
             return True
         
-        # ECC
+        # Pre-ECC Sobel
+        oldImageSobel = rgbSobel(oldImage, 1)
+        newImageSobel = rgbSobel(newImage, 1)
+        
+        # ECC on Sobel
         self.statDecideFeatureMergeComputeECC += 1
 
-        oldImageGrey = cv.cvtColor(oldImage, cv.COLOR_BGR2GRAY)
-        newImageGrey = cv.cvtColor(newImage, cv.COLOR_BGR2GRAY)
 
         warp = np.eye(2, 3, dtype=np.float32)
         ccInit: float = cv.computeECC(
-            templateImage=newImageGrey,
-            inputImage=oldImageGrey,
+            templateImage=newImageSobel,
+            inputImage=oldImageSobel,
             inputMask=unionMask,
         )
         cc = ccInit
 
-        oldImageGreyMasked = cv.bitwise_and(oldImageGrey, oldImageGrey, mask=oldMask)
-        newImageGreyMasked = cv.bitwise_and(newImageGrey, newImageGrey, mask=newMask)
-        oldImageGreyMaskedF32 = np.float32(oldImageGreyMasked)
-        newImageGreyMaskedF32 = np.float32(newImageGreyMasked)
+        oldImageSobelMasked = cv.bitwise_and(oldImageSobel, oldImageSobel, mask=oldMask)
+        newImageSobelMasked = cv.bitwise_and(newImageSobel, newImageSobel, mask=newMask)
+        oldImageSobelMaskedF32 = np.float32(oldImageSobelMasked)
+        newImageSobelMaskedF32 = np.float32(newImageSobelMasked)
         (shiftX, shiftY), response = phaseCorrelateMaxRes(
-            src1=newImageGreyMaskedF32,
-            src2=oldImageGreyMaskedF32,
+            src1=newImageSobelMaskedF32,
+            src2=oldImageSobelMaskedF32,
             maxResolution=1800
         )
         if response > 0.1:
@@ -242,8 +244,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             try:
                 self.statDecideFeatureMergeFindTransformECC += 1
                 cc, warp = cv.findTransformECC(
-                    templateImage=newImageGrey,
-                    inputImage=oldImageGrey,
+                    templateImage=newImageSobel,
+                    inputImage=oldImageSobel,
                     warpMatrix=warp,
                     motionType=cv.MOTION_TRANSLATION,
                     criteria=(cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 10, 0.01),
