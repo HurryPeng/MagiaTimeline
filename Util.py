@@ -13,7 +13,6 @@ import pickle
 import lz4
 import concurrent.futures
 import os
-import skimage
 
 class CompressedDisk(diskcache.Disk):
     """Cache key and value using zlib compression."""
@@ -172,11 +171,86 @@ def rgbDiffMask(lhs: cv.Mat, rhs: cv.Mat, threshold: int) -> cv.Mat:
     diff = cv.absdiff(lhs, rhs)
     return cv.bitwise_not(cv.inRange(diff, (0, 0, 0), (threshold, threshold, threshold)))
 
-def ssimDiffMask(lhs: cv.Mat, rhs: cv.Mat, threshold: float, winSize: int) -> cv.Mat:
-    _, ssim = skimage.metrics.structural_similarity(lhs, rhs, full=True, channel_axis=2, win_size=winSize)
-    ssim = np.mean(ssim, axis=2)
-    ssimBin = cv.threshold(ssim, threshold, 1, cv.THRESH_BINARY_INV)[1].astype(np.uint8)
-    return ssimBin * 255
+def sobelLineAngleDiffMask(lhs: np.ndarray, rhs: np.ndarray, threshold: float, ksize: int = 3, magnitudeThreshold: float = 20.0) -> np.ndarray:
+    """
+    Calculates a difference mask based on the angular similarity of gradient *lines*,
+    making it robust to contrast inversions (e.g., black-on-white vs. white-on-black).
+
+    This function normalizes gradient vectors but only for pixels where the gradient
+    magnitude exceeds a threshold, preventing noise amplification in flat areas.
+    It then compares the absolute dot product of the vectors, effectively measuring
+    the acute angle between the gradient lines, ignoring their polarity.
+
+    Args:
+        lhs (np.ndarray): The left image (H, W, 3).
+        rhs (np.ndarray): The right image (H, W, 3).
+        threshold (float): The threshold for the sum of angular distances. The distance
+                           is `1 - abs(cos(theta))`, ranging from 0 to 1 per channel.
+                           Start tuning with values between 0.05 and 1.0.
+        ksize (int): The kernel size for the Sobel operator (e.g., 1, 3, 5, or 7).
+        magnitudeThreshold (float): Gradients with magnitude below this value will be
+                                     treated as zero vectors (not normalized).
+
+    Returns:
+        np.ndarray: A single-channel mask (H, W). Pixels with a value of 255
+                    represent "changed", while 0 represents "unchanged".
+    """
+    def _calculate_normalized_gradients(image: np.ndarray, ksize: int, magnitudeThreshold: float):
+        """
+        Helper function to compute normalized gradients for a 3-channel image,
+        ignoring gradients with small magnitudes.
+        """
+        # Use CV_16F for Sobel to capture negative gradients
+        sobelX = cv.Sobel(image, cv.CV_32F, 1, 0, ksize=ksize)
+        sobelY = cv.Sobel(image, cv.CV_32F, 0, 1, ksize=ksize)
+
+        # Calculate gradient magnitude for each channel
+        magnitude = cv.magnitude(sobelX, sobelY)
+        
+        # Create a mask for gradients with significant magnitude.
+        # This is the key improvement to avoid normalizing noise in flat areas.
+        isSignificant = magnitude > magnitudeThreshold
+        
+        # Add a small epsilon to the magnitude to avoid division by zero.
+        magPlusEps = magnitude + 1e-6
+        
+        # Normalize the gradient vectors, but only where the magnitude is significant.
+        # Where it's not significant, the result will be zero due to multiplication by False (0).
+        normX = (sobelX / magPlusEps) * isSignificant
+        normY = (sobelY / magPlusEps) * isSignificant
+        
+        return normX, normY, isSignificant
+
+    # 1. Calculate normalized gradient vectors for both images, applying magnitude threshold.
+    lhsNormX, lhsNormY, lhsIsSignificant = _calculate_normalized_gradients(lhs, ksize, magnitudeThreshold)
+    rhsNormX, rhsNormY, rhsIsSignificant = _calculate_normalized_gradients(rhs, ksize, magnitudeThreshold)
+
+    # 2. Calculate the dot product of the normalized vectors for each channel.
+    dotProduct = lhsNormX * rhsNormX + lhsNormY * rhsNormY
+
+    # 3. Take the absolute value of the dot product.
+    # This is the key improvement to handle contrast inversion. It makes the comparison
+    # insensitive to the vector's polarity (180-degree difference).
+    absDotProduct = np.abs(dotProduct)
+
+    # 4. Convert the absolute dot product (similarity) to an angular distance.
+    angularDistance = 1.0 - absDotProduct
+
+    # 5. KEY FIX: Where BOTH gradients are insignificant, the distance should be 0.
+    # This correctly treats two flat areas as identical.
+    bothInsignificant = ~lhsIsSignificant & ~rhsIsSignificant
+    angularDistance[bothInsignificant] = 0.0
+
+    # 6. Sum the angular distances across the three color channels.
+    meanAngularDistance = np.mean(angularDistance, axis=2)
+
+    # 7. Apply the threshold to create the final mask.
+    isUnchanged = meanAngularDistance < threshold
+
+    # Invert the mask so that "changed" pixels are 255.
+    diffMask = (~isUnchanged * 255).astype(np.uint8)
+
+    return diffMask
 
 def ensureMat(frame):
     if isinstance(frame, cv.UMat):

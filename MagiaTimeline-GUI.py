@@ -359,6 +359,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         config = yaml.load(open("config.yml", "r").read(), Loader=yaml.FullLoader)
 
         config["source"] = [self.player.path]
+        config["destination"] = ["..."]
         config["dtd"]["default"]["dialogRect"] = [lw, rw, th, bh]
         if self.checkboxTextExtraction.get():
             config["extraJobs"]= ["ocr"]
