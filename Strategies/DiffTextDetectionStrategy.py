@@ -287,23 +287,22 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.statDecideFeatureMergeInpaint += 1
 
         diffMask = rgbDiffMask(oldImage, warpedImage, self.colourTolerance)
-        gradDiffMask = sobelLineAngleDiffMask(oldImage, warpedImage, 0.9, 3)
-        gradDiffMaskErode = cv.morphologyEx(gradDiffMask, cv.MORPH_ERODE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
-        gradDiffMaskErodeDilate = cv.morphologyEx(gradDiffMaskErode, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
 
         inpaintMask = cv.bitwise_not(diffMask)
+
+        # Allow edge only when it is a common sobel
+        inpaintMaskEdge = cv.morphologyEx(inpaintMask, cv.MORPH_GRADIENT, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
+        cv.copyTo(src=intersectSobelBinMaskedDilate, dst=inpaintMask, mask=inpaintMaskEdge)
+
+        # Allow union sobel area only when it is also a common sobel
+        inpaintMaskAndIntersectSobel = cv.bitwise_and(inpaintMask, intersectSobelBinMasked)
+        cv.copyTo(src=inpaintMaskAndIntersectSobel, dst=inpaintMask, mask=unionSobelBin)
 
         # Denoising
         inpaintMaskDilate = cv.morphologyEx(inpaintMask, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         inpaintMaskDilateErode = cv.morphologyEx(inpaintMaskDilate, cv.MORPH_ERODE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
         inpaintMask = cv.bitwise_or(inpaintMask, inpaintMaskDilateErode) # Denoise small black dots
 
-        # Allow edge only when it is a common sobel
-        inpaintMaskEdge = cv.morphologyEx(inpaintMask, cv.MORPH_GRADIENT, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
-        cv.copyTo(src=intersectSobelBinMaskedDilate, dst=inpaintMask, mask=inpaintMaskEdge)
-
-        # Allow inpaint only where there is no gradient difference
-        inpaintMask = cv.bitwise_and(inpaintMask, cv.bitwise_not(gradDiffMaskErodeDilate))
         inpaintMask = cv.bitwise_and(inpaintMask, unionMask)
         
         # Blur the edges around the inpaint area, using pixels not in the inpaint area
@@ -346,10 +345,11 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 saveFrames()
                 saveExtra("2oldSobel", oldImageSobelBin)
                 saveExtra("3newSobel", warpedImageSobelBin)
-                saveExtra("4diffMask", diffMask)
-                saveExtra("5gradDiffMask", gradDiffMask)
-                saveExtra("6inpaintMask", inpaintMask)
-                saveExtra("7inpaint", warpedImageInpaint)
+                saveExtra("4unionSobel", unionSobelBinMasked)
+                saveExtra("5intersectSobel", intersectSobelBinMasked)
+                saveExtra("6diffMask", diffMask)
+                saveExtra("7inpaintMask", inpaintMask)
+                saveExtra("8inpaint", warpedImageInpaint)
             return True
         if sobelIouDiff < 0.2:
             if self.debugLevel == 2:
@@ -357,10 +357,11 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 saveFrames()
                 saveExtra("2oldSobel", oldImageSobelBin)
                 saveExtra("3newSobel", warpedImageSobelBin)
-                saveExtra("4diffMask", diffMask)
-                saveExtra("5gradDiffMask", gradDiffMask)
-                saveExtra("6inpaintMask", inpaintMask)
-                saveExtra("7inpaint", warpedImageInpaint)
+                saveExtra("4unionSobel", unionSobelBinMasked)
+                saveExtra("5intersectSobel", intersectSobelBinMasked)
+                saveExtra("6diffMask", diffMask)
+                saveExtra("7inpaintMask", inpaintMask)
+                saveExtra("8inpaint", warpedImageInpaint)
             return False
         
         # OCR
@@ -391,11 +392,12 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             saveFrames()
             saveExtra("2oldSobel", oldImageSobelBin)
             saveExtra("3newSobel", warpedImageSobelBin)
-            saveExtra("4diffMask", diffMask)
-            saveExtra("5gradDiffMask", gradDiffMask)
-            saveExtra("6inpaintMask", inpaintMask)
-            saveExtra("7inpaint", warpedImageInpaint)
-            saveExtra("8ocrMask", ocrMask)
+            saveExtra("4unionSobel", unionSobelBinMasked)
+            saveExtra("5intersectSobel", intersectSobelBinMasked)
+            saveExtra("6diffMask", diffMask)
+            saveExtra("7inpaintMask", inpaintMask)
+            saveExtra("8inpaint", warpedImageInpaint)
+            saveExtra("9ocrMask", ocrMask)
 
         return ocrDecision
     
