@@ -68,10 +68,10 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
 
     cv.ocl.setUseOpenCL(config["enableOpenCL"])
 
-    initDiskCache(tempDirPath)
-
     for nTask, src in enumerate(config["source"]):
         timeStart = time.time()
+
+        initDiskCache(tempDirPath)
 
         dst = config["destination"][nTask]
         if dst == "...":

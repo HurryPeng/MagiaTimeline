@@ -70,7 +70,7 @@ class IIROcrPass(IIRPass):
                     angle0 = np.arctan2(y1 - y0, x1 - x0)
                     angle3 = np.arctan2(y2 - y3, x2 - x3)
                     angle = (angle0 + angle3) / 2
-                    passes = np.abs(angle) <= np.pi / 180 * 10
+                    passes = np.abs(angle) <= np.pi / 180 * 3
                     passesAngleTest.append(passes)
 
                 recBoxesSortedIndices = sorted(

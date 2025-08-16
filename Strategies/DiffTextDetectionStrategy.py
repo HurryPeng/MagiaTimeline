@@ -58,7 +58,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
         self.colourTolerance: int = config["colourTolerance"]
         self.minMaskIou: float = 0.5
-        self.minOcrIou: float = 0.4
+        self.minOcrIou: float = 0.1
         self.iirPassDenoiseMinTime: int = config["iirPassDenoiseMinTime"]
         self.debugLevel: int = config["debugLevel"]
 
@@ -96,7 +96,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         
         if self.debugLevel == 2:
             self.log = open("dtdLog.csv", "w")
-            self.log.write("time0,time1,merge,level,reason,val\n")
+            self.log.write("time0,time1,merge,level,reason,maskIou,diffRate,sobelIou,postInpaintSobelIou,sobelDiff,ocrIou\n")
             self.log.flush()
             if os.path.exists("./dtdDebug"):
                 # Remove whole dir and all contents
@@ -174,7 +174,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         
         if unionArea == 0:
             if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},False,0,empty mask,0\n")
+                # time0,time1,merge,level,reason,sobelIou,postInpaintSobelIou,sobelDoff,ocrIou
+                self.log.write(f"{oldTimeStr},{newTimeStr},False,0,empty mask,0,0,0,0,0,0\n")
                 saveFrames()
             return False
         
@@ -192,7 +193,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         
         if maskIou < self.minMaskIou:
             if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},False,1,mask iou too low,{maskIou}\n")
+                self.log.write(f"{oldTimeStr},{newTimeStr},False,1,mask iou too low,{maskIou},0,0,0,0,0\n")
                 saveFrames()
                 saveExtra("2oldMask", oldMask)
                 saveExtra("3newMask", newMask)
@@ -208,7 +209,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             print("diffRate:", diffRate)
         if diffRate < 0.05:
             if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},True,1,diff rate too low,{diffRate}\n")
+                self.log.write(f"{oldTimeStr},{newTimeStr},True,1,diff rate too low,{maskIou},{diffRate},0,0,0,0\n")
                 saveFrames()
             return True
         
@@ -282,6 +283,16 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         intersectSobelBinMaskedDilate = cv.morphologyEx(intersectSobelBinMasked, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         sobelIou = np.sum(intersectSobelBinMasked) / np.sum(unionSobelBinMasked)
 
+        if sobelIou > 0.9:
+            if self.debugLevel == 2:
+                self.log.write(f"{oldTimeStr},{newTimeStr},True,3,sobel iou too high,{maskIou},{diffRate},{sobelIou},0,0,0\n")
+                saveFrames()
+                saveExtra("2oldSobel", oldImageSobelBin)
+                saveExtra("3newSobel", warpedImageSobelBin)
+                saveExtra("4unionSobel", unionSobelBinMasked)
+                saveExtra("5intersectSobel", intersectSobelBinMasked)
+            return True
+
         # Inpainting
 
         self.statDecideFeatureMergeInpaint += 1
@@ -339,9 +350,9 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             print("postInpaintSobelIou:", postInpaintSobelIou)
             print("sobelIouDiff:", sobelIouDiff)
 
-        if sobelIouDiff > 0.8:
+        if sobelIouDiff > 0.7:
             if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},True,2,sobel iou diff too high,{sobelIouDiff}\n")
+                self.log.write(f"{oldTimeStr},{newTimeStr},True,3,sobel iou diff too high,{maskIou},{diffRate},{sobelIou},{postInpaintSobelIou},{sobelIouDiff},0\n")
                 saveFrames()
                 saveExtra("2oldSobel", oldImageSobelBin)
                 saveExtra("3newSobel", warpedImageSobelBin)
@@ -353,7 +364,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             return True
         if sobelIouDiff < 0.2:
             if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},False,2,sobel iou diff too low,{sobelIouDiff}\n")
+                self.log.write(f"{oldTimeStr},{newTimeStr},False,3,sobel iou diff too low,{maskIou},{diffRate},{sobelIou},{postInpaintSobelIou},{sobelIouDiff},0\n")
                 saveFrames()
                 saveExtra("2oldSobel", oldImageSobelBin)
                 saveExtra("3newSobel", warpedImageSobelBin)
@@ -388,7 +399,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         ocrDecision = ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou
         if self.debugLevel == 2:
-            self.log.write(f"{oldTimeStr},{newTimeStr},{ocrDecision},3,ocr decision,{ocrIou}\n")
+            self.log.write(f"{oldTimeStr},{newTimeStr},{ocrDecision},4,ocr decision,{maskIou},{diffRate},{sobelIou},{postInpaintSobelIou},{sobelIouDiff},{ocrIou}\n")
             saveFrames()
             saveExtra("2oldSobel", oldImageSobelBin)
             saveExtra("3newSobel", warpedImageSobelBin)
@@ -441,7 +452,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             angle0 = np.arctan2(y1 - y0, x1 - x0)
             angle3 = np.arctan2(y2 - y3, x2 - x3)
             angle = (angle0 + angle3) / 2
-            if np.abs(angle) > np.pi / 180 * 10:
+            if np.abs(angle) > np.pi / 180 * 3:
                 continue
 
             x0, y0, w0, h0 = cv.boundingRect(wordInfo)
