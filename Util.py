@@ -257,7 +257,7 @@ def autoNumberedNaming(srcPath: str) -> str:
                 break
         
         if not conflictExists:
-            return targetPrefix + "-test"
+            return targetPrefix
         
         suffix = chr(ord(suffix) + 1)
         if suffix > 'z':
