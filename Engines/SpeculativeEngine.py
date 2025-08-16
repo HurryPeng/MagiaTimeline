@@ -66,6 +66,8 @@ class IntervalGrower(IIR):
         prev = self.intervals[cur]
         next = self.intervals[cur + 1]
         propose: int = math.floor(prev.end + (next.begin - prev.end) * self.proposalStride)
+        if propose == prev.end:
+            propose += 1 # Make sure to make progress
         return propose, prev, next
     
     def insertInterval(self, framePoint: FramePoint, image: typing.Optional[cv.Mat]) -> Interval:
@@ -78,18 +80,18 @@ class IntervalGrower(IIR):
         self.intervals.append(interval)
         self.sort()
         if self.verbose:
-            print("insertInterval       ", f"({interval.timeStringBegin()}, {interval.timeStringEnd()}) {(interval.end - interval.begin)}")
+            print("insertInterval       ", f"({interval.timeStringBegin()}, {interval.timeStringEnd()}) ({interval.begin}, {interval.end}) {(interval.end - interval.begin)}")
         return interval
 
     def extendInterval(self, interval: Interval, framePoint: FramePoint) -> None:
         if interval.begin > framePoint.timestamp:
             interval.begin = framePoint.timestamp
             if self.verbose:
-                print("extendIntervalToLeft ", f"<{interval.timeStringBegin()}, {interval.timeStringEnd()}] {(interval.end - interval.begin)}")
+                print("extendIntervalToLeft ", f"<{interval.timeStringBegin()}, {interval.timeStringEnd()}] <{interval.begin}, {interval.end}] {(interval.end - interval.begin)}")
         elif interval.end < framePoint.timestamp:
             interval.end = framePoint.timestamp
             if self.verbose:
-                print("extendIntervalToRight", f"[{interval.timeStringBegin()}, {interval.timeStringEnd()}> {(interval.end - interval.begin)}")
+                print("extendIntervalToRight", f"[{interval.timeStringBegin()}, {interval.timeStringEnd()}> [{interval.begin}, {interval.end}> {(interval.end - interval.begin)}")
         interval.framePoints.append(framePoint)
         self.sort()
 
@@ -105,7 +107,7 @@ class IntervalGrower(IIR):
             framePoint.setFlag(self.featureFlagIndex, None)
         
         if self.verbose:
-            print("hookInterval         ", f"[{intervalL.timeStringBegin()}, {intervalL.timeStringEnd()}}} {(intervalL.end - intervalL.begin)}")
+            print("hookInterval         ", f"[{intervalL.timeStringBegin()}, {intervalL.timeStringEnd()}}} [{intervalL.begin}, {intervalL.end}}} {(intervalL.end - intervalL.begin)}")
 
 
 class FrameCache:
@@ -174,7 +176,6 @@ class FrameCache:
         self.end = self.cache[-1].pts
         endTime = time.time() - startTime
         self.statDecodeTimeElapsed += endTime
-
     
     def leap(self) -> typing.Optional[av.frame.Frame]:
         startTime = time.time()
@@ -193,7 +194,7 @@ class FrameCache:
             frameI2 = next(self.container.decode(self.stream))
             assert frameI2.pts > self.nextI
             self.statDecodedFrames += 1
-        except av.PermissionError:
+        except (av.PermissionError, StopIteration):
             frameI2 = None
         self.container.seek(self.nextI, stream=self.stream, any_frame=False)
         frameI1: av.frame.Frame = next(self.container.decode(self.stream))
@@ -311,7 +312,8 @@ class SpeculativeEngine(AbstractEngine):
                     frameI2 = frameCache.cacheNextI
                 if frameI2 is None: # Last segment
                     lastSegment = True
-                    frameI2 = frameCache.getFrame(frameCache.end, frameCache.begin, frameCache.nextI)
+                    frameI2 = frameCache.cacheNextI # Get the last frame
+                    assert frameI2 is not None
                 if frameI2.pts - prev.end > self.emptyFeatureMaxTimestamp:
                     proposeC = prev.end + self.emptyFeatureMaxTimestamp
                     frame = frameCache.getFrame(proposeC, prev.end + 1, proposeC)
