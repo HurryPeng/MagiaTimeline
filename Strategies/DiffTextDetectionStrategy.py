@@ -94,9 +94,9 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.statDecideFeatureMergeInpaint = 0
         self.statDecideFeatureMergeOCR = 0
         
-        if self.debugLevel == 2:
+        if self.debugLevel == 1:
             self.log = open("dtdLog.csv", "w")
-            self.log.write("time0,time1,merge,level,reason,maskIou,diffRate,sobelIou,postInpaintSobelIou,sobelDiff,ocrIou\n")
+            self.log.write("time0,time1,merge,level,reason,maskIou,diffRate,cc,pcWarpDist,warpDist,sobelIou,postInpaintSobelIou,sobelDiff,ocrIou\n")
             self.log.flush()
             if os.path.exists("./dtdDebug"):
                 # Remove whole dir and all contents
@@ -155,7 +155,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         oldImage, oldMask, oldTimeStr = oldFeature
         newImage, newMask, newTimeStr = newFeature
 
-        if self.debugLevel == 2:
+        if self.debugLevel == 1:
             # Save oldImage and newImage to "dtdDebug/<oldTimeStr>.png" and "dtdDebug/<newTimeStr>.png"
             oldTimeStrSemicolon = oldTimeStr.replace(":", ";")
             newTimeStrSemicolon = newTimeStr.replace(":", ";")
@@ -173,27 +173,17 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         unionArea = np.sum(unionMask) / 255
         
         if unionArea == 0:
-            if self.debugLevel == 2:
+            if self.debugLevel == 1:
                 # time0,time1,merge,level,reason,sobelIou,postInpaintSobelIou,sobelDoff,ocrIou
-                self.log.write(f"{oldTimeStr},{newTimeStr},False,0,empty mask,0,0,0,0,0,0\n")
+                self.log.write(f"{oldTimeStr},{newTimeStr},False,0,empty mask,0,0,0,0,0,0,0,0,0\n")
                 saveFrames()
             return False
         
         maskIou = intersectArea / unionArea
-        if self.debugLevel == 1:
-            print("intersectArea:", intersectArea)
-            print("unionArea:", unionArea)
-            print("iou:", maskIou)
-
-        if self.debugLevel == 1:
-            if maskIou < self.minMaskIou:
-                print("NO")
-            else:
-                print("WAIT")
         
         if maskIou < self.minMaskIou:
-            if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},False,1,mask iou too low,{maskIou},0,0,0,0,0\n")
+            if self.debugLevel == 1:
+                self.log.write(f"{oldTimeStr},{newTimeStr},False,1,mask iou too low,{maskIou},0,0,0,0,0,0,0,0\n")
                 saveFrames()
                 saveExtra("2oldMask", oldMask)
                 saveExtra("3newMask", newMask)
@@ -205,11 +195,9 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         # The rate of pixels that are close enough
         diffArea = np.sum(diffMask) / 255
         diffRate = diffArea / unionArea
-        if self.debugLevel == 1:
-            print("diffRate:", diffRate)
         if diffRate < 0.05:
-            if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},True,1,diff rate too low,{maskIou},{diffRate},0,0,0,0\n")
+            if self.debugLevel == 1:
+                self.log.write(f"{oldTimeStr},{newTimeStr},True,1,diff rate too low,{maskIou},{diffRate},0,0,0,0,0,0,0\n")
                 saveFrames()
             return True
         
@@ -240,7 +228,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if response > 0.1:
             warp = np.array([[1, 0, shiftX], [0, 1, shiftY]], dtype=np.float32)
         pcWarpDist = np.linalg.norm(warp[0:2, 2])
-        if pcWarpDist > 0.5 and pcWarpDist < 50:
+        if pcWarpDist > 1.5 and pcWarpDist < 50 and cc < 0.99:
             try:
                 self.statDecideFeatureMergeFindTransformECC += 1
                 cc, warp = cv.findTransformECC(
@@ -257,16 +245,11 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         warpedImage = newImage
         warpDist = np.linalg.norm(warp[0:2, 2])
-        if warpDist > 0.5 and warpDist < 50 and cc > ccInit:
+        if warpDist > 1 and warpDist < 50 and cc > ccInit:
             warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
             warpedMask = cv.warpAffine(unionMask, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
             intersectMask = cv.bitwise_and(oldMask, warpedMask)
             unionMask = cv.bitwise_or(oldMask, warpedMask)
-
-        if self.debugLevel == 1:
-            print("cc:", cc)
-            print("warp:", warp)
-            print("warpDist:", warpDist)
         
         # Sobel Iou Filtering
 
@@ -284,8 +267,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         sobelIou = np.sum(intersectSobelBinMasked) / np.sum(unionSobelBinMasked)
 
         if sobelIou > 0.9:
-            if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},True,3,sobel iou too high,{maskIou},{diffRate},{sobelIou},0,0,0\n")
+            if self.debugLevel == 1:
+                self.log.write(f"{oldTimeStr},{newTimeStr},True,3,sobel iou too high,{maskIou},{diffRate},{cc},{pcWarpDist},{warpDist},{sobelIou},0,0,0\n")
                 saveFrames()
                 saveExtra("2oldSobel", oldImageSobelBin)
                 saveExtra("3newSobel", warpedImageSobelBin)
@@ -351,8 +334,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             print("sobelIouDiff:", sobelIouDiff)
 
         if sobelIouDiff > 0.7:
-            if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},True,3,sobel iou diff too high,{maskIou},{diffRate},{sobelIou},{postInpaintSobelIou},{sobelIouDiff},0\n")
+            if self.debugLevel == 1:
+                self.log.write(f"{oldTimeStr},{newTimeStr},True,3,sobel iou diff too high,{maskIou},{diffRate},{cc},{pcWarpDist},{warpDist},{sobelIou},{postInpaintSobelIou},{sobelIouDiff},0\n")
                 saveFrames()
                 saveExtra("2oldSobel", oldImageSobelBin)
                 saveExtra("3newSobel", warpedImageSobelBin)
@@ -363,8 +346,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 saveExtra("8inpaint", warpedImageInpaint)
             return True
         if sobelIouDiff < 0.2:
-            if self.debugLevel == 2:
-                self.log.write(f"{oldTimeStr},{newTimeStr},False,3,sobel iou diff too low,{maskIou},{diffRate},{sobelIou},{postInpaintSobelIou},{sobelIouDiff},0\n")
+            if self.debugLevel == 1:
+                self.log.write(f"{oldTimeStr},{newTimeStr},False,3,sobel iou diff too low,{maskIou},{diffRate},{cc},{pcWarpDist},{warpDist},{sobelIou},{postInpaintSobelIou},{sobelIouDiff},0\n")
                 saveFrames()
                 saveExtra("2oldSobel", oldImageSobelBin)
                 saveExtra("3newSobel", warpedImageSobelBin)
@@ -385,21 +368,9 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         ocrIntersectArea = np.sum(ocrIntersectMask) / 255
         ocrIou = ocrIntersectArea / unionArea
 
-        if self.debugLevel == 1:
-            print("ocrIntersectVal:", ocrIntersectVal)
-            print("unionArea:", unionArea)
-            print("ocrIou:", ocrIou)
-
-        # After inpainting the common area, detecting no text means the original texts are the same
-        if self.debugLevel == 1:
-            if ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou:
-                print("YES")
-            else:
-                print("NOO")
-
         ocrDecision = ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou
-        if self.debugLevel == 2:
-            self.log.write(f"{oldTimeStr},{newTimeStr},{ocrDecision},4,ocr decision,{maskIou},{diffRate},{sobelIou},{postInpaintSobelIou},{sobelIouDiff},{ocrIou}\n")
+        if self.debugLevel == 1:
+            self.log.write(f"{oldTimeStr},{newTimeStr},{ocrDecision},4,ocr decision,{maskIou},{diffRate},{cc},{pcWarpDist},{warpDist},{sobelIou},{postInpaintSobelIou},{sobelIouDiff},{ocrIou}\n")
             saveFrames()
             saveExtra("2oldSobel", oldImageSobelBin)
             saveExtra("3newSobel", warpedImageSobelBin)

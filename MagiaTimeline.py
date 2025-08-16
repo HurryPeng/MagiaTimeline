@@ -68,10 +68,12 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
 
     cv.ocl.setUseOpenCL(config["enableOpenCL"])
 
+    initDiskCache(tempDirPath)
+
     for nTask, src in enumerate(config["source"]):
         timeStart = time.time()
 
-        initDiskCache(tempDirPath)
+        clearDiskCache()
 
         dst = config["destination"][nTask]
         if dst == "...":
@@ -99,7 +101,7 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         templateAsst.close()
 
         contentRect = RatioRectangle(SrcRectangle(*size), *config["contentRect"])
-        print("Resolution: {}x{} (scaled down by {})".format(size[0], size[1], scaleDown))
+        print(f"Resolution: {size[0]}x{size[1]}" + (f" (scaled down by {scaleDown})" if scaleDown > 1 else ""))
         print(f"FPS: {float(fps):.2f} ({fps})")
 
         strategy: AbstractStrategy | None = None
@@ -147,8 +149,8 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         timeTimelineEnd = time.time()
         timeTimelineElapsed = timeTimelineEnd - timeStart
         
-        print("Timeline Elapsed", timeTimelineElapsed, "s")
-        print("Timeline Speed", float(srcStream.frames / fps) / timeTimelineElapsed, "x")
+        print("Timeline Elapsed {:.2f} s".format(timeTimelineElapsed))
+        print("Timeline Speed {:.2f}x".format(float(srcStream.frames / fps) / timeTimelineElapsed))
 
         if "ocr" in config["extraJobs"]:
             print("Extra job: ocr")
@@ -175,8 +177,8 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         timeOverallEnd = time.time()
         timeOverallElapsed = timeOverallEnd - timeStart
             
-        print("Overall Elapsed", timeOverallElapsed, "s")
-        print("Overall Speed", float(srcStream.frames / fps) / timeOverallElapsed, "x")
+        print("Overall Elapsed {:.2f} s".format(timeOverallElapsed))
+        print("Overall Speed {:.2f}x".format(float(srcStream.frames / fps) / timeOverallElapsed))
 
         srcContainer.close()
 
@@ -185,8 +187,6 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         cacheDir = pathlib.Path(getDiskCacheDir)
         cacheSize = sum(f.stat().st_size for f in cacheDir.glob('**/*') if f.is_file())
         print(f"Disk cache size: {cacheSize // (1024 * 1024)} MB")
-
-    getThreadPool().shutdown(wait=True)
 
 if __name__ == "__main__":
     try:

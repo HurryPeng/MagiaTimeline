@@ -380,7 +380,7 @@ dtd:
     colourTolerance: 70
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
     iirPassDenoiseMinTime: 100
-    # debugLevel: 1 prints extra information, 2 shows debug frames
+    # debugLevel: 1 saves logs
     debugLevel: 0
 
 # Engines

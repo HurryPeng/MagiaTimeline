@@ -57,29 +57,30 @@ _diskCache: typing.Optional[diskcache.Cache] = None
 def initDiskCache(tempDirPath: typing.Optional[str] = None):
     # If tempDirPath is provided, use it and whoever provided it is responsible for cleaning it up.
     # If not, create a temporary directory that will be cleaned up automatically.
-    global _tempLock, _tempDir, _tempDirPath, _diskCache
+    global _tempLock, _tempDir, _tempDirPath, _diskCache, _threadPool
 
     @atexit.register
     def _cleanupCache():
-        global _tempDir, _diskCache
+        _threadPool.shutdown(wait=True)
         if _diskCache is not None:
             _diskCache.close()
         if _tempDir is not None:
             _tempDir.cleanup()
 
     with _tempLock:
-        # Do a manual cleanup if it is still active
-        if _diskCache is not None:
-            _cleanupCache()
-
         # Initialize the temporary directory
         if tempDirPath is not None:
             _tempDirPath = tempDirPath
         else:
-            _tempDir = tempfile.TemporaryDirectory(prefix="MagiaTimeline_")
+            _tempDir = tempfile.TemporaryDirectory(prefix="MagiaTimeline_", delete=False)
             _tempDirPath = _tempDir.name
         _diskCache = diskcache.Cache(_tempDirPath, eviction_policy='none', disk=CompressedDisk)
         print(f"Disk cache initialized at {_tempDirPath}")
+
+def clearDiskCache():
+    global _diskCache
+    assert _diskCache is not None
+    _diskCache.clear()
 
 def getDiskCache() -> diskcache.Cache:
     global _diskCache
@@ -256,7 +257,7 @@ def autoNumberedNaming(srcPath: str) -> str:
                 break
         
         if not conflictExists:
-            return targetPrefix
+            return targetPrefix + "-test"
         
         suffix = chr(ord(suffix) + 1)
         if suffix > 'z':

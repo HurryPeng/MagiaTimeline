@@ -685,10 +685,10 @@
                             "minimum": 0
                         },
                         "debugLevel": {
-                            "description": "1 prints extra information, 2 saves decisions to separate intervals",
+                            "description": "1 saves logs",
                             "type": "integer",
                             "minimum": 0,
-                            "maximum": 2
+                            "maximum": 1
                         }
                     },
                     "required": [

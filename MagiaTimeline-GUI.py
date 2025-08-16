@@ -367,7 +367,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
             config["extraJobs"] = []
 
         self.writeConsole("Starting process...\n")
-        self.writeConsole(f"dialogRect: [{lw}, {rw}, {th}, {bh}]\n")
+        self.writeConsole(f"dialogRect: [{lw:.3f}, {rw:.3f}, {th:.3f}, {bh:.3f}]\n")
         self.tempDir = tempfile.TemporaryDirectory(prefix="MagiaTimeline_")
         self.process = multiprocessing.Process(
             target=MagiaTimelineGUI.processWorker,
