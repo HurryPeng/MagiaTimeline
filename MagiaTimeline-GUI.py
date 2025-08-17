@@ -14,6 +14,7 @@ import threading
 import json
 import yaml
 import tempfile
+import traceback
 
 from Version import VERSION
 
@@ -198,7 +199,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
             if img:
                 self.currentPilImage = img
                 self.displayScaledImage()
-                self.writeConsole(f"Opened video: {filePath}\n")
+                self.writeConsole(f"[Info] Opened video: {filePath}\n")
 
     def jumpToTime(self):
         ts = self.entryTime.get()
@@ -208,20 +209,20 @@ class MagiaTimelineGUI(customtkinter.CTk):
             s = float(parts[2])
             total = h*3600 + m*60 + s
         except:
-            self.writeConsole(f"Invalid timestamp: {ts}\n")
+            self.writeConsole(f"[Error] Invalid timestamp: {ts}\n")
             return
         if self.player:
             img = self.player.getFrameAt(total)
             if img:
                 self.currentPilImage = img
                 self.displayScaledImage()
-                self.writeConsole(f"Jumped to: {ts}\n")
+                self.writeConsole(f"[Info] Jumped to: {ts}\n")
         else:
-            self.writeConsole("No video loaded.\n")
+            self.writeConsole("[Error] No video loaded.\n")
 
     def jumpRandom(self):
         if not self.player:
-            return self.writeConsole("No video loaded.\n")
+            return self.writeConsole("[Error] No video loaded.\n")
         total = random.uniform(0, self.player.duration)
         img = self.player.getFrameAt(total)
         if img:
@@ -236,7 +237,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
             # show frame
             self.currentPilImage = img
             self.displayScaledImage()
-            self.writeConsole(f"Jumped random to: {ts_str}\n")
+            self.writeConsole(f"[Info] Jumped random to: {ts_str}\n")
 
     def displayScaledImage(self):
         if not self.currentPilImage:
@@ -306,10 +307,17 @@ class MagiaTimelineGUI(customtkinter.CTk):
     @staticmethod
     def processWorker(queue, *args, **kwargs):
         sys.stdout = sys.stderr = QueueWriter(queue)
-        import MagiaTimeline
-        MagiaTimeline.main(*args, **kwargs)
-        sys.stdout = sys.__stdout__
-        sys.stderr = sys.__stderr__
+        try:
+            import MagiaTimeline
+            MagiaTimeline.main(*args, **kwargs)
+        except SystemExit as e:
+            print(f"[Info] MagiaTimeline worker process finished with exit code: {e.code}")
+        except Exception:
+            tb = traceback.format_exc()
+            print("[Error] Unhandled exception in MagiaTimeline worker process:\n" + tb)
+        finally:
+            sys.stdout = sys.__stdout__
+            sys.stderr = sys.__stderr__
 
     def consolePollOnce(self):
         try:
@@ -345,10 +353,10 @@ class MagiaTimelineGUI(customtkinter.CTk):
 
     def startProcess(self):
         if self.process and self.process.is_alive():
-            return self.writeConsole("Process already running.\n")
+            return self.writeConsole("[Error] Process already running.\n")
 
         if not self.player:
-            return self.writeConsole("No video loaded.\n")
+            return self.writeConsole("[Error] No video loaded.\n")
         
         th = 1 - self.sliderTop.get()
         bh = 1 - self.sliderBottom.get()
@@ -366,8 +374,8 @@ class MagiaTimelineGUI(customtkinter.CTk):
         else:
             config["extraJobs"] = []
 
-        self.writeConsole("Starting process...\n")
-        self.writeConsole(f"dialogRect: [{lw:.3f}, {rw:.3f}, {th:.3f}, {bh:.3f}]\n")
+        self.writeConsole("[Info] Starting process...\n")
+        self.writeConsole(f"[Trace] dialogRect: [{lw:.3f}, {rw:.3f}, {th:.3f}, {bh:.3f}]\n")
         self.tempDir = tempfile.TemporaryDirectory(prefix="MagiaTimeline_")
         self.process = multiprocessing.Process(
             target=MagiaTimelineGUI.processWorker,
@@ -379,7 +387,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         )
 
         self.disableControls()
-        self.writeConsole("Process started.\n")
+        self.writeConsole("[Info] Process started.\n")
 
     def disableControls(self):
         self.btnStart.configure(state="disabled")
@@ -398,18 +406,18 @@ class MagiaTimelineGUI(customtkinter.CTk):
 
     def abortProcess(self):
         if self.process and self.process.is_alive():
-            self.writeConsole("Aborting process...\n")
+            self.writeConsole("[Info] Aborting process...\n")
             self.process.terminate()
             self.process.join()
             self.process = None
             self.consolePollOnce()
-            self.writeConsole("Process aborted.\n")
+            self.writeConsole("[Info] Process aborted.\n")
             assert self.tempDir is not None
             self.tempDir.cleanup()
             self.tempDir = None
             self.enableControls()
         else:
-            self.writeConsole("No process running.\n")
+            self.writeConsole("[Error] No process running.\n")
 
     def enableControls(self):
         self.btnStart.configure(state="normal")
