@@ -310,8 +310,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         try:
             import MagiaTimeline
             MagiaTimeline.main(*args, **kwargs)
-        except SystemExit as e:
-            print(f"[Info] MagiaTimeline worker process finished with exit code: {e.code}")
+            print(f"[Info] MagiaTimeline worker process finished successfully.")
         except Exception:
             tb = traceback.format_exc()
             print("[Error] Unhandled exception in MagiaTimeline worker process:\n" + tb)
