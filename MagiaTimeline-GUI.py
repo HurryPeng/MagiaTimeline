@@ -362,8 +362,8 @@ class MagiaTimelineGUI(customtkinter.CTk):
         lw = self.sliderLeft.get()
         rw = self.sliderRight.get()
 
-        schema = json.load(open("ConfigSchema.json", "r"))
-        config = yaml.load(open("config.yml", "r").read(), Loader=yaml.FullLoader)
+        schema = json.load(open("ConfigSchema.json", "r", encoding="utf-8"))
+        config = yaml.load(open("config.yml", "r", encoding="utf-8").read(), Loader=yaml.FullLoader)
 
         config["source"] = [self.player.path]
         config["destination"] = ["..."]

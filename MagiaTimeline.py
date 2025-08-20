@@ -43,8 +43,8 @@ def cli():
     parser.add_argument("--version", action="version", version=VERSION)
     args = parser.parse_args()
     
-    schema = json.load(open(args.schema, "r"))
-    config = yaml.load(open(args.config, "r").read(), Loader=yaml.FullLoader)
+    schema = json.load(open(args.schema, "r", encoding="utf-8"))
+    config = yaml.load(open(args.config, "r", encoding="utf-8").read(), Loader=yaml.FullLoader)
 
     main(config, schema)
 
@@ -96,7 +96,7 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         timeBase: fractions.Fraction = srcStream.time_base
         fps: fractions.Fraction = srcStream.average_rate
 
-        templateAsst = open(config["assTemplate"], "r")
+        templateAsst = open(config["assTemplate"], "r", encoding="utf-8")
         asstStr: str = templateAsst.read()
         templateAsst.close()
 
@@ -168,7 +168,7 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
             events = iir.toAss()
         )
 
-        dstAss = open(dst + ".ass", "w")
+        dstAss = open(dst + ".ass", "w", encoding="utf-8")
         dstAss.write(asstStr)
         dstAss.close()
 

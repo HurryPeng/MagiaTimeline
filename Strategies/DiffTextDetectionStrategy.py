@@ -95,7 +95,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.statDecideFeatureMergeOCR = 0
         
         if self.debugLevel == 1:
-            self.log = open("dtdLog.csv", "w")
+            self.log = open("dtdLog.csv", "w", encoding="utf-8")
             self.log.write("time0,time1,merge,level,reason,maskIou,diffRate,cc,pcWarpDist,warpDist,sobelIou,postInpaintSobelIou,sobelDiff,ocrIou\n")
             self.log.flush()
             if os.path.exists("./dtdDebug"):
