@@ -164,8 +164,8 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         asstStr = asstStr.format(
             playResX = originalSize[0],
             playResY = originalSize[1],
-            styles = "".join(strategy.getStyles()),
-            events = iir.toAss()
+            styles = "".join(iir.stylesStr()),
+            events = iir.eventsStr()
         )
 
         dstAss = open(dst + ".ass", "w", encoding="utf-8")

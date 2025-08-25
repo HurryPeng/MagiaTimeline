@@ -18,9 +18,6 @@ class AbstractStrategy(abc.ABC):
 
     def getContentRect(self) -> AbstractRectangle:
         return self.contentRect
-    
-    def getStyles(self) -> typing.List[str]:
-        return []
 
 class AbstractFramewiseStrategy(AbstractStrategy, abc.ABC):
     @abc.abstractmethod

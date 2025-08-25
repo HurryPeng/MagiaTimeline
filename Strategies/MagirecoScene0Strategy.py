@@ -133,7 +133,8 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
         self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Blackscreen, 1200)
         self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Dialog, 500, meetPoint=1)
         self.iirPasses["iirPassFillGapBalloon"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Balloon, 500, meetPoint=1)
-        
+        self.iirPasses["iirPassSetStyles"] = IIRPassSetStyles(self.getStyles())
+
         colourSpace: typing.Dict[str, typing.Tuple[float, float]] = {
             "Shiro":  ( 0.00,  0.00),
             "Mabayu": ( 0.13,  0.55),
@@ -190,15 +191,15 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
     
     def getStyles(self) -> typing.List[str]:
         return [
-            "Style: Shiro,Microsoft YaHei,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Shiranai,Microsoft YaHei,40,&H00000000,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Mabayu,Microsoft YaHei,40,&H0038FCCC,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Homura,Microsoft YaHei,40,&H00FEC5C4,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Madoka,Microsoft YaHei,40,&H00C699F6,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Sayaka,Microsoft YaHei,40,&H00F3DD96,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Kyoko,Microsoft YaHei,40,&H00738EFC,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Mami,Microsoft YaHei,40,&H0083E1FE,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
-            "Style: Nagisa,Microsoft YaHei,40,&H00DCAFE3,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1\n",
+            "Style: Shiro,Microsoft YaHei,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1",
+            "Style: Shiranai,Microsoft YaHei,40,&H00000000,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1",
+            "Style: Mabayu,Microsoft YaHei,40,&H0038FCCC,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1",
+            "Style: Homura,Microsoft YaHei,40,&H00FEC5C4,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1",
+            "Style: Madoka,Microsoft YaHei,40,&H00C699F6,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1",
+            "Style: Sayaka,Microsoft YaHei,40,&H00F3DD96,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1",
+            "Style: Kyoko,Microsoft YaHei,40,&H00738EFC,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1",
+            "Style: Mami,Microsoft YaHei,40,&H0083E1FE,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1",
+            "Style: Nagisa,Microsoft YaHei,40,&H00DCAFE3,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1",
         ]
     
     def cvPassBlackscreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
@@ -269,8 +270,6 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
             stat = cc2ContentStats[n]
             if (stat[4] > 20 and stat[4] < 400 and stat[2] < 30 and stat[3] < 30 and (stat[2] > 3 and stat[4] > 3)):
                 cc2ContentLeagalAreaSum += stat[4]
-            # if not (stat[4] > 20 and stat[4] < 300 and stat[2] < 25 and stat[3] < 25 and (stat[2] > 3 and stat[4] > 3)):
-            #     roiDialogText3Bin[cc2ContentLabels == n] = 0
         cc2ContentLeagalAreaRatio: float = cc2ContentLeagalAreaSum / self.dialogRect.getArea() * 256
 
         hasDialog: bool = cc2NameLeagalAreaRatio > 1.0 or cc2ContentLeagalAreaRatio > 3.0

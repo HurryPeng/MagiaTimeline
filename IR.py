@@ -237,7 +237,7 @@ class Interval:
             return val.get()
         return val
 
-    def toAss(self, id: int = -1) -> str:
+    def eventStr(self, id: int = -1) -> str:
         template = "Dialogue: 0,{},{},{},,0,0,0,,{}"
         sBegin = formatTimestamp(self.timeBase, self.begin)
         sEnd = formatTimestamp(self.timeBase, self.end)
@@ -294,6 +294,7 @@ class IIR: # Interval Intermediate Representation
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
         self.fps: fractions.Fraction = fps
         self.timeBase: fractions.Fraction = timeBase
+        self.styles: typing.List[str] = []
         self.intervals: typing.List[Interval] = []
 
     def appendFromFpir(self, fpir: FPIR, fpirPassBuildIntervals: FPIRPassBuildIntervals):
@@ -303,13 +304,16 @@ class IIR: # Interval Intermediate Representation
     def sort(self):
         self.intervals.sort(key=lambda interval : interval.begin)
 
-    def toAss(self) -> str:
+    def stylesStr(self) -> str:
+        return "".join(style + "\n" for style in self.styles)
+
+    def eventsStr(self) -> str:
         lines: typing.List[str] = []
         mainFlagCounter: typing.Dict[int, int] = {}
         for _, interval in enumerate(self.intervals):
             id = mainFlagCounter.get(interval.mainFlag, 0)
             mainFlagCounter[interval.mainFlag] = id + 1
-            lines.append(interval.toAss(id) + "\n")
+            lines.append(interval.eventStr(id) + "\n")
         return "".join(lines)
     
     def getMidpoints(self) -> typing.List[typing.Tuple[str, int]]:
@@ -443,6 +447,13 @@ class IIRPassIntervalwiseFunctional(IIRPass):
     def apply(self, iir: IIR):
         for id, interval in enumerate(iir.intervals):
             self.func(interval)
+
+class IIRPassSetStyles(IIRPass):
+    def __init__(self, styles: typing.List[str]):
+        self.styles = styles
+
+    def apply(self, iir: IIR):
+        iir.styles = self.styles
 
 class IIRPassOffset(IIRPass):
     def __init__(self, offset: int):
