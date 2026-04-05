@@ -14,11 +14,10 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
         Dialog = enum.auto()
         DialogFeat = enum.auto()
         DialogFeatJump = enum.auto()
-        OcrFrame = enum.auto()
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False, np.zeros(64), False, None]
+            return [False, np.zeros(64), False]
 
     def __init__(self, config: dict, contentRect: AbstractRectangle) -> None:
         AbstractStrategy.__init__(self, contentRect)
@@ -72,40 +71,24 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(OutlineStrategy.FlagIndex.Dialog, 300, meetPoint=1.0)
-        self.iirPasses["iirPassDenoise"] = IIRPassDenoise(OutlineStrategy.FlagIndex.Dialog, 100)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(OutlineStrategy.FlagIndex.Dialog.name, 300, meetPoint=1.0)
+        self.iirPasses["iirPassDenoise"] = IIRPassDenoise(OutlineStrategy.FlagIndex.Dialog.name, 100)
 
         self.specIirPasses = collections.OrderedDict()
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
             lambda iir, interval0, interval1:
                 self.decideFeatureMerge(
-                    [interval0.getFlag(self.getFeatureFlagIndex())],
-                    [interval1.getFlag(self.getFeatureFlagIndex())]
+                    [interval0.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)],
+                    [interval1.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)]
                 )
         )
-        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(OutlineStrategy.FlagIndex.Dialog, 300)
+        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(OutlineStrategy.FlagIndex.Dialog.name, 300)
         self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
     
-    @classmethod
-    def getMainFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.Dialog
-
-    @classmethod
-    def getFeatureFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.DialogFeat
-
-    @classmethod
-    def isEmptyFeature(cls, feature: np.ndarray) -> bool:
-        return np.all(feature == 0)
-    
-    @classmethod
-    def getExtraJobFrameFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.OcrFrame
-
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
 
@@ -130,9 +113,18 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
     def aggregateFeatures(self, features: typing.List[np.ndarray]) -> np.ndarray:
         return np.mean(features, axis=0)
 
+    def isFpNonEmpty(self, fp: FramePoint) -> bool:
+        return fp.getFlag(OutlineStrategy.FlagIndex.Dialog)
+
+    def getFpFeature(self, fp: FramePoint) -> np.ndarray:
+        return fp.getFlag(OutlineStrategy.FlagIndex.DialogFeat)
+
+    def freeFpFeature(self, fp: FramePoint) -> None:
+        fp.setFlag(OutlineStrategy.FlagIndex.DialogFeat, None)
+
     def releaseFeatureOnHook(self) -> bool:
         return False
-    
+
     def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
     

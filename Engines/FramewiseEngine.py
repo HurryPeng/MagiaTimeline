@@ -90,7 +90,7 @@ class FramewiseEngine(AbstractEngine):
             fpirPass.apply(fpir)
 
         print("==== FPIR to IIR ====")
-        iir = IIR(flagIndexType, fps, timeBase)
+        iir = IIR(fps, timeBase)
         for name, fpirToIirPass in strategy.getFpirToIirPasses().items():
             print(name)
             iir.appendFromFpir(fpir, fpirToIirPass)

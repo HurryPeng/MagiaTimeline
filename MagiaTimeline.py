@@ -152,6 +152,13 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         print("Timeline Elapsed {:.2f} s".format(timeTimelineElapsed))
         print("Timeline Speed {:.2f}x".format(float(srcStream.frames / fps) / timeTimelineElapsed))
 
+        if config["extraJobs"] and isinstance(strategy, AbstractExtraJobStrategy):
+            print("==== Extra Jobs Pre-processing: Text Detection ====")
+            iirTextDetPreprocessPass = IIRTextDetectionPreprocessPass(
+                strategy.getExtraJobFrameKey(), config["ocr"]
+            )
+            iirTextDetPreprocessPass.apply(iir)
+
         if "ocr" in config["extraJobs"]:
             print("Extra job: ocr")
             if not isinstance(strategy, AbstractExtraJobStrategy):

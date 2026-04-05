@@ -4,6 +4,9 @@ from Strategies.AbstractStrategy import AbstractStrategy
 from Util import *
 from Engines.AbstractEngine import *
 
+INTERVAL_LABEL_DIALOG: str = "Dialog"
+INTERVAL_LABEL_EMPTY: str = "Empty"
+
 import av.container
 import av.container.input
 import av.video
@@ -17,21 +20,16 @@ import time
 class IntervalGrower(IIR):
     def __init__(
         self,
-        flagIndexType: typing.Type[AbstractFlagIndex],
+        strategy: AbstractSpeculativeStrategy,
         fps: fractions.Fraction,
         timeBase: fractions.Fraction,
-        mainFlagIndex: AbstractFlagIndex,
-        featureFlagIndex: AbstractFlagIndex,
-        aggregateFeatures: typing.Callable[[typing.List[typing.Any]], typing.Any],
-        extraJobFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None,
+        extraJobFrameKey: typing.Optional[type] = None,
         cutExtraJobFrame: typing.Optional[typing.Callable[[cv.Mat], cv.Mat]] = None,
         verbose: bool = False
     ) -> None:
-        super().__init__(flagIndexType, fps, timeBase)
-        self.mainFlagIndex: AbstractFlagIndex = mainFlagIndex
-        self.featureFlagIndex: AbstractFlagIndex = featureFlagIndex
-        self.aggregateFeatures: typing.Callable[[typing.List[typing.Any]], typing.Any] = aggregateFeatures
-        self.extraJobFrameFlagIndex: typing.Optional[AbstractFlagIndex] = extraJobFrameFlagIndex
+        super().__init__(fps, timeBase)
+        self.strategy: AbstractSpeculativeStrategy = strategy
+        self.extraJobFrameKey: typing.Optional[type] = extraJobFrameKey
         self.cutExtraJobFrame: typing.Optional[typing.Callable[[cv.Mat], cv.Mat]] = cutExtraJobFrame
 
         self.proposalStride: fractions.Fraction = fractions.Fraction(1, 2)
@@ -71,12 +69,13 @@ class IntervalGrower(IIR):
         return propose, prev, next
     
     def insertInterval(self, framePoint: FramePoint, image: typing.Optional[cv.Mat]) -> Interval:
-        interval = Interval(self.flagIndexType, self.mainFlagIndex, framePoint.timestamp, framePoint.timestamp, self.timeBase, [framePoint])
-        if self.extraJobFrameFlagIndex is not None:
+        label = INTERVAL_LABEL_DIALOG if self.strategy.isFpNonEmpty(framePoint) else INTERVAL_LABEL_EMPTY
+        interval = Interval(label, framePoint.timestamp, framePoint.timestamp, self.timeBase, [framePoint])
+        if self.extraJobFrameKey is not None:
             assert image is not None
             assert self.cutExtraJobFrame is not None
-            extraJobFrame = self.cutExtraJobFrame(image)
-            interval.setFlag(self.extraJobFrameFlagIndex, extraJobFrame, inDiskCache=True)
+            extraJobImage = self.cutExtraJobFrame(image)
+            interval.setAttachment(self.extraJobFrameKey, extraJobImage, inDiskCache=True)
         self.intervals.append(interval)
         self.sort()
         if self.verbose:
@@ -100,11 +99,11 @@ class IntervalGrower(IIR):
         intervalL.end = intervalR.begin
 
         # Aggregate the features and move them to the left interval
-        features = [framePoint.getFlag(self.featureFlagIndex) for framePoint in intervalL.framePoints]
-        featuresAggregated = self.aggregateFeatures(features)
-        intervalL.setFlag(self.featureFlagIndex, featuresAggregated, inDiskCache=True)
+        features = [self.strategy.getFpFeature(framePoint) for framePoint in intervalL.framePoints]
+        featuresAggregated = self.strategy.aggregateFeatures(features)
+        intervalL.setAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey, featuresAggregated, inDiskCache=True)
         for framePoint in intervalL.framePoints:
-            framePoint.setFlag(self.featureFlagIndex, None)
+            self.strategy.freeFpFeature(framePoint)
         
         if self.verbose:
             print("hookInterval         ", f"[{intervalL.timeStringBegin()}, {intervalL.timeStringEnd()}}} [{intervalL.begin}, {intervalL.end}}} {(intervalL.end - intervalL.begin)}")
@@ -243,24 +242,19 @@ class SpeculativeEngine(AbstractEngine):
         fps: fractions.Fraction = stream.average_rate
         frameCount: float = stream.frames
 
-        mainFlagIndex: AbstractFlagIndex = strategy.getMainFlagIndex()
-        featureFlagIndex: AbstractFlagIndex = strategy.getFeatureFlagIndex()
-        extraJobFrameFlagIndex: typing.Optional[AbstractFlagIndex] = None
+        extraJobFrameKey: typing.Optional[type] = None
         cutExtraJobFrame: typing.Optional[typing.Callable[[cv.Mat], cv.Mat]] = None
         if isinstance(strategy, AbstractExtraJobStrategy):
-            extraJobFrameFlagIndex = strategy.getExtraJobFrameFlagIndex()
+            extraJobFrameKey = strategy.getExtraJobFrameKey()
             cutExtraJobFrame = strategy.cutExtraJobFrame
 
         self.emptyFeatureMaxTimestamp: int = ms2Timestamp(self.emptyGapForceCheck, timeBase)
 
         intervalGrower: IntervalGrower = IntervalGrower(
-            strategy.getFlagIndexType(),
+            strategy,
             fps,
             timeBase,
-            mainFlagIndex,
-            featureFlagIndex,
-            strategy.aggregateFeatures,
-            extraJobFrameFlagIndex,
+            extraJobFrameKey,
             cutExtraJobFrame,
             self.debug)
         frameCache: FrameCache = FrameCache(container, stream)
@@ -292,7 +286,7 @@ class SpeculativeEngine(AbstractEngine):
                 prev = interval1
                 imageI2 = avFrame2CvMat(frameI2, self.scaleDown)
                 framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts, timeBase)
-                merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in interval1.framePoints], [framePoint2.getFlag(featureFlagIndex)])
+                merge = strategy.decideFeatureMerge([strategy.getFpFeature(framePoint) for framePoint in interval1.framePoints], [strategy.getFpFeature(framePoint2)])
                 if merge:
                     intervalGrower.extendInterval(interval1, framePoint2)
                 else:
@@ -321,7 +315,7 @@ class SpeculativeEngine(AbstractEngine):
                     frame = frameI2
                 image = avFrame2CvMat(frame, self.scaleDown)
                 framePoint = strategy.genFramePoint(image, frame.pts, timeBase)
-                merge = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint.getFlag(featureFlagIndex)])
+                merge = strategy.decideFeatureMerge([strategy.getFpFeature(fp) for fp in prev.framePoints], [strategy.getFpFeature(framePoint)])
                 distPrev = prev.distFramePoint(framePoint)
                 assert distPrev <= self.emptyFeatureMaxTimestamp
                 if merge:
@@ -340,14 +334,12 @@ class SpeculativeEngine(AbstractEngine):
                     continue
                 image = avFrame2CvMat(frame, self.scaleDown)
                 framePoint = strategy.genFramePoint(image, frame.pts, timeBase)
-                isEmptyFeature = strategy.isEmptyFeature(framePoint.getFlag(featureFlagIndex))
-
-                mergeLeft = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex) for framePoint in prev.framePoints], [framePoint.getFlag(featureFlagIndex)])
+                mergeLeft = strategy.decideFeatureMerge([strategy.getFpFeature(fp) for fp in prev.framePoints], [strategy.getFpFeature(framePoint)])
                 distLeft = prev.distFramePoint(framePoint)
                 if mergeLeft and not distLeft > self.emptyFeatureMaxTimestamp:
                     intervalGrower.extendInterval(prev, framePoint)
                 else:
-                    mergeRight = strategy.decideFeatureMerge([framePoint.getFlag(featureFlagIndex)], [framePoint.getFlag(featureFlagIndex) for framePoint in next.framePoints])
+                    mergeRight = strategy.decideFeatureMerge([strategy.getFpFeature(framePoint)], [strategy.getFpFeature(fp) for fp in next.framePoints])
                     distRight = next.distFramePoint(framePoint)
                     if mergeRight and not distRight > self.emptyFeatureMaxTimestamp:
                         intervalGrower.extendInterval(next, framePoint)
@@ -357,7 +349,7 @@ class SpeculativeEngine(AbstractEngine):
         print("==== IIR Passes ====")
 
         print("iirPassSuppressNonMain")
-        iirPassSuppressNonMain = IIRPassRemovePredicate(lambda interval: not interval.framePoints[0].getFlag(mainFlagIndex))
+        iirPassSuppressNonMain = IIRPassRemovePredicate(lambda interval: interval.label == INTERVAL_LABEL_EMPTY)
         iirPassSuppressNonMain.apply(intervalGrower)
         for name, iirPass in (strategy.getSpecIirPasses()).items():
             print(name)

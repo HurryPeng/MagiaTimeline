@@ -64,7 +64,7 @@ class BanGDreamStrategy(AbstractFramewiseStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BanGDreamStrategy.FlagIndex.Dialog, self.fillGapMaxGap, meetPoint=self.fillGapMeetPoint)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BanGDreamStrategy.FlagIndex.Dialog.name, self.fillGapMaxGap, meetPoint=self.fillGapMeetPoint)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:

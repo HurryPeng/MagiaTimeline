@@ -17,7 +17,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         DialogVal = enum.auto()
         DialogFeat = enum.auto() # (frame, mask, timeStr)
         DialogFeatJump = enum.auto()
-        OcrFrame = enum.auto()
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
@@ -26,7 +25,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 0.0,
                 (None, None, None),
                 False,
-                None
             ]
         
     @staticmethod
@@ -79,12 +77,12 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
             lambda iir, interval0, interval1:
                 self.decideFeatureMerge(
-                    [interval0.getFlag(self.getFeatureFlagIndex())],
-                    [interval1.getFlag(self.getFeatureFlagIndex())]
+                    [interval0.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)],
+                    [interval1.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)]
                 ) and iir.ms2Timestamp(self.iirPassDenoiseMinTime) > interval0.dist(interval1),
             debug=self.debugLevel > 0
         )
-        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(DiffTextDetectionStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
+        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(DiffTextDetectionStrategy.FlagIndex.Dialog.name, self.iirPassDenoiseMinTime)
         self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
         self.statDecideFeatureMerge = 0
@@ -106,18 +104,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
-    
-    @classmethod
-    def getMainFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.Dialog
-
-    @classmethod
-    def getFeatureFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.DialogFeat
-    
-    @classmethod
-    def getExtraJobFrameFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.OcrFrame
     
     @classmethod
     def isEmptyFeature(cls, feature: typing.Tuple[cv.Mat, cv.Mat]) -> bool:
@@ -386,6 +372,15 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     def aggregateFeatures(self, features: typing.List[typing.Any]) -> typing.Any:
         # simply return the last feature
         return features[-1]
+
+    def isFpNonEmpty(self, fp: FramePoint) -> bool:
+        return fp.getFlag(DiffTextDetectionStrategy.FlagIndex.Dialog)
+
+    def getFpFeature(self, fp: FramePoint) -> typing.Any:
+        return fp.getFlag(DiffTextDetectionStrategy.FlagIndex.DialogFeat)
+
+    def freeFpFeature(self, fp: FramePoint) -> None:
+        fp.setFlag(DiffTextDetectionStrategy.FlagIndex.DialogFeat, None)
 
     def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)

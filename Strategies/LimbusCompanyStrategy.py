@@ -39,7 +39,7 @@ class LimbusCompanyStrategy(AbstractFramewiseStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Dialog, 1000, 0.0)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(LimbusCompanyStrategy.FlagIndex.Dialog.name, 1000, 0.0)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
