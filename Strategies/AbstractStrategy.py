@@ -7,6 +7,12 @@ from Rectangle import *
 from AbstractFlagIndex import *
 from IR import *
 
+
+class ExtraJobFrameKey(AttachmentKey):
+    """Attachment key for the image frame cut by the engine for extra job passes."""
+    pass
+
+
 class AbstractStrategy(abc.ABC):
     def __init__(self, contentRect: AbstractRectangle) -> None:
         self.contentRect = contentRect
@@ -42,19 +48,8 @@ class AbstractFramewiseStrategy(AbstractStrategy, abc.ABC):
 
 class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
 
-    @classmethod
-    @abc.abstractmethod
-    def getMainFlagIndex(cls) -> AbstractFlagIndex:
-        pass
-
-    @classmethod
-    @abc.abstractmethod
-    def getFeatureFlagIndex(cls) -> AbstractFlagIndex:
-        pass
-
-    @classmethod
-    @abc.abstractmethod
-    def isEmptyFeature(cls, feature) -> bool:
+    class AggregatedFeatureKey(AttachmentKey):
+        """Attachment key for the aggregated feature stored on an Interval by the speculative engine."""
         pass
 
     def __init__(self) -> None:
@@ -76,6 +71,18 @@ class AbstractSpeculativeStrategy(AbstractStrategy, abc.ABC):
     def aggregateFeatures(self, features: typing.List[typing.Any]) -> typing.Any:
         pass
 
+    @abc.abstractmethod
+    def isFpNonEmpty(self, fp: FramePoint) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def getFpFeature(self, fp: FramePoint) -> typing.Any:
+        pass
+
+    @abc.abstractmethod
+    def freeFpFeature(self, fp: FramePoint) -> None:
+        pass
+
     def genFramePoint(self, frame: cv.Mat, timestamp: int, timeBase: fractions.Fraction) -> FramePoint:
         self.statAnalyzedFrames += 1
         framePoint = FramePoint(self.getFlagIndexType(), timestamp, timeBase)
@@ -92,6 +99,6 @@ class AbstractExtraJobStrategy(abc.ABC):
     def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         pass
 
-    @abc.abstractmethod
-    def getExtraJobFrameFlagIndex(self) -> AbstractFlagIndex:
-        pass
+    @classmethod
+    def getExtraJobFrameKey(cls) -> type:
+        return ExtraJobFrameKey

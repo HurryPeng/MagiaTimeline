@@ -1,3 +1,4 @@
+from __future__ import annotations
 import datetime
 import typing
 import cv2 as cv
@@ -13,6 +14,7 @@ import pickle
 import lz4
 import concurrent.futures
 import os
+import warnings
 
 class CompressedDisk(diskcache.Disk):
     """Cache key and value using zlib compression."""
@@ -234,6 +236,10 @@ def avFrame2CvMat(frame: av.frame.Frame, scaleDown: int) -> cv.Mat:
 def ms2Timestamp(ms: int, timeBase: fractions.Fraction) -> int:
     return int(ms / timeBase / 1000)
 
+class AttachmentKey:
+    """Base class for external attachment keys used with FramePoint/Interval.attachments."""
+    pass
+
 # Generate a unique filename based on the source path.
 # If the file already exists, try the next letter. '
 # Example: "./video.mp4" -> "./video#20250603a" (no extension).
@@ -262,3 +268,11 @@ def autoNumberedNaming(srcPath: str) -> str:
         suffix = chr(ord(suffix) + 1)
         if suffix > 'z':
             raise Exception("Too many files with the same base name, please clean up the directory.")
+
+def suppressPaddleWarnings():
+    warnings.filterwarnings(
+        "ignore",
+        message="No ccache found",
+        category=UserWarning,
+        module="paddle.utils.cpp_extension"
+    )

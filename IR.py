@@ -12,6 +12,7 @@ class FramePoint:
         self.timestamp: int = timestamp
         self.timeBase: fractions.Fraction = timeBase
         self.flags: typing.List[typing.Any] = self.flagIndexType.getDefaultFlags()
+        self.attachments: typing.Dict[type, typing.Any] = {}
         self.debugFrame: cv.Mat | None = None
 
     def setFlag(self, index: AbstractFlagIndex, val: typing.Any, inDiskCache: bool = False):
@@ -21,6 +22,17 @@ class FramePoint:
 
     def getFlag(self, index: AbstractFlagIndex) -> typing.Any:
         val = self.flags[index]
+        if isinstance(val, DiskCacheHandle):
+            return val.get()
+        return val
+
+    def setAttachment(self, key: type, val: typing.Any, inDiskCache: bool = False):
+        if inDiskCache and val is not None:
+            val = DiskCacheHandle(val)
+        self.attachments[key] = val
+
+    def getAttachment(self, key: type) -> typing.Any:
+        val = self.attachments.get(key)
         if isinstance(val, DiskCacheHandle):
             return val.get()
         return val
@@ -196,22 +208,19 @@ class FPIRPassBooleanBuildIntervals(FPIRPassBuildIntervals):
                 else: # on - > off
                     if not framePoint.getFlag(self.flags[s]):
                         state[s] = False
-                        intervals.append(Interval(fpir.flagIndexType, self.flags[s], fpir.framePoints[lastBegin[s]].timestamp, framePoint.timestamp, framePoint.timeBase, fpir.framePoints[lastBegin[s] : i]))
+                        intervals.append(Interval(self.flags[s].name, fpir.framePoints[lastBegin[s]].timestamp, framePoint.timestamp, framePoint.timeBase, fpir.framePoints[lastBegin[s] : i]))
         return intervals
 
 class Interval:
     def __init__(
             self,
-            flagIndexType: typing.Type[AbstractFlagIndex],
-            mainFlag: AbstractFlagIndex,
+            label: str,
             begin: int,
             end: int,
             timeBase: fractions.Fraction,
             framePoints: typing.List[FramePoint] = [],
-            flags: typing.List[typing.Any] = []
         ):
-        self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
-        self.mainFlag: AbstractFlagIndex = mainFlag
+        self.label: str = label
         self.framePoints: typing.List[FramePoint] = framePoints
         # begin and end are not promised to align with underlying framePoints after applying IIRPass
         self.begin: int = begin # timestamp
@@ -219,20 +228,18 @@ class Interval:
         self.timeBase: fractions.Fraction = timeBase
         self.style: str = "Default"
         self.text: str = ""
-        self.flags: typing.List[typing.Any] = flags
-        if len(self.flags) == 0:
-            self.flags = self.flagIndexType.getDefaultFlags()
+        self.attachments: typing.Dict[type, typing.Any] = {}
 
     def getName(self, id: int = -1) -> str:
-        return f"Subtitle_{self.mainFlag.name}_{id}"
-    
-    def setFlag(self, index: AbstractFlagIndex, val: typing.Any, inDiskCache: bool = False):
+        return f"Subtitle_{self.label}_{id}"
+
+    def setAttachment(self, key: type, val: typing.Any, inDiskCache: bool = False):
         if inDiskCache and val is not None:
             val = DiskCacheHandle(val)
-        self.flags[index] = val
+        self.attachments[key] = val
 
-    def getFlag(self, index: AbstractFlagIndex) -> typing.Any:
-        val = self.flags[index]
+    def getAttachment(self, key: type) -> typing.Any:
+        val = self.attachments.get(key)
         if isinstance(val, DiskCacheHandle):
             return val.get()
         return val
@@ -287,11 +294,12 @@ class Interval:
         return int((self.begin + self.end) // 2)
     
     def merge(self, other: Interval) -> Interval:
-        return Interval(self.flagIndexType, self.mainFlag, min(self.begin, other.begin), max(self.end, other.end), self.timeBase, self.framePoints + other.framePoints, self.flags)
+        merged = Interval(self.label, min(self.begin, other.begin), max(self.end, other.end), self.timeBase, self.framePoints + other.framePoints)
+        merged.attachments = dict(self.attachments)
+        return merged
 
 class IIR: # Interval Intermediate Representation
-    def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], fps: fractions.Fraction, timeBase: fractions.Fraction):
-        self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
+    def __init__(self, fps: fractions.Fraction, timeBase: fractions.Fraction):
         self.fps: fractions.Fraction = fps
         self.timeBase: fractions.Fraction = timeBase
         self.styles: typing.List[str] = []
@@ -309,24 +317,21 @@ class IIR: # Interval Intermediate Representation
 
     def eventsStr(self) -> str:
         lines: typing.List[str] = []
-        mainFlagCounter: typing.Dict[int, int] = {}
+        labelCounter: typing.Dict[str, int] = {}
         for _, interval in enumerate(self.intervals):
-            id = mainFlagCounter.get(interval.mainFlag, 0)
-            mainFlagCounter[interval.mainFlag] = id + 1
+            id = labelCounter.get(interval.label, 0)
+            labelCounter[interval.label] = id + 1
             lines.append(interval.eventStr(id) + "\n")
         return "".join(lines)
-    
+
     def getMidpoints(self) -> typing.List[typing.Tuple[str, int]]:
         midpoints: typing.List[typing.Tuple[str, int]] = []
-        mainFlagCounter: typing.Dict[int, int] = {}
+        labelCounter: typing.Dict[str, int] = {}
         for _, interval in enumerate(self.intervals):
-            id = mainFlagCounter.get(interval.mainFlag, 0)
-            mainFlagCounter[interval.mainFlag] = id + 1
+            id = labelCounter.get(interval.label, 0)
+            labelCounter[interval.label] = id + 1
             midpoints.append((interval.getName(id), interval.getMidPoint()))
         return midpoints
-    
-    def collectIfMainFlag(self, mainFlag: AbstractFlagIndex) -> typing.List[Interval]:
-        return [interval for interval in self.intervals if interval.mainFlag == mainFlag]
     
     def ms2Timestamp(self, ms: int) -> int:
         return ms2Timestamp(ms, self.timeBase)
@@ -338,19 +343,19 @@ class IIRPass(abc.ABC):
         pass
 
 class IIRPassFillGap(IIRPass):
-    def __init__(self, flag: AbstractFlagIndex, maxGap: int = 300, meetPoint: float = 0.5):
-        self.flag: AbstractFlagIndex = flag
+    def __init__(self, label: str, maxGap: int = 300, meetPoint: float = 0.5):
+        self.label: str = label
         self.maxGap: int = maxGap # in millisecs
         self.meetPoint: float = meetPoint
     
     def apply(self, iir: IIR):
         for id, interval in enumerate(iir.intervals):
-            if interval.mainFlag != self.flag:
+            if interval.label != self.label:
                 continue
             otherId = id + 1
             while otherId < len(iir.intervals):
                 otherInterval = iir.intervals[otherId]
-                if otherInterval.mainFlag != self.flag:
+                if otherInterval.label != self.label:
                     otherId += 1
                     continue
                 if interval.dist(otherInterval) > iir.ms2Timestamp(self.maxGap):
@@ -365,15 +370,15 @@ class IIRPassFillGap(IIRPass):
         iir.sort()
 
 class IIRPassExtend(IIRPass):
-    def __init__(self, flag: AbstractFlagIndex, front: int = 0, back: int = 0):
-        self.flag: AbstractFlagIndex = flag
+    def __init__(self, label: str, front: int = 0, back: int = 0):
+        self.label: str = label
         self.front: int = front # in millisecs
         self.back: int = back # in millisecs
 
     def apply(self, iir: IIR):
         # Assert sorted
         for id, interval in enumerate(iir.intervals):
-            if interval.mainFlag != self.flag:
+            if interval.label != self.label:
                 continue
             if id == 0:
                 interval.begin = max(interval.begin - iir.ms2Timestamp(self.front), 0)
@@ -385,15 +390,15 @@ class IIRPassExtend(IIRPass):
                 interval.end = min(interval.end + iir.ms2Timestamp(self.back), iir.intervals[id + 1].begin)
 
 class IIRPassAlign(IIRPass):
-    def __init__(self, tgtFlag: AbstractFlagIndex, refFlag: AbstractFlagIndex, maxGap: int = 300):
-        self.tgtFlag: AbstractFlagIndex = tgtFlag
-        self.refFlag: AbstractFlagIndex = refFlag
+    def __init__(self, tgtLabel: str, refLabel: str, maxGap: int = 300):
+        self.tgtFlag: str = tgtLabel
+        self.refFlag: str = refLabel
         self.maxGap: int = maxGap # in millisecs
     
     def apply(self, iir: IIR):
         refPoints: typing.List[int] = []
         for _, interval in enumerate(iir.intervals):
-            if interval.mainFlag != self.refFlag:
+            if interval.label != self.refFlag:
                 continue
             refPoints.append(interval.begin)
             refPoints.append(interval.end)
@@ -402,7 +407,7 @@ class IIRPassAlign(IIRPass):
             return
 
         for _, interval in enumerate(iir.intervals):
-            if interval.mainFlag != self.tgtFlag:
+            if interval.label != self.tgtFlag:
                 continue
             
             r = 0
@@ -472,12 +477,12 @@ class IIRPassRemovePredicate(IIRPass):
         iir.intervals = [interval for interval in iir.intervals if not self.pred(interval)]
 
 class IIRPassDenoise(IIRPass):
-    def __init__(self, flag: AbstractFlagIndex, minTime: int):
-        self.flag: AbstractFlagIndex = flag
+    def __init__(self, label: str, minTime: int):
+        self.label: str = label
         self.minTime: int = minTime
 
     def apply(self, iir: IIR):
-        iir.intervals = [interval for interval in iir.intervals if not (interval.mainFlag == self.flag and interval.end - interval.begin < iir.ms2Timestamp(self.minTime))]
+        iir.intervals = [interval for interval in iir.intervals if not (interval.label == self.label and interval.end - interval.begin < iir.ms2Timestamp(self.minTime))]
 
 class IIRPassMerge(IIRPass):
     def __init__(self, pred: typing.Callable[[IIR, Interval, Interval], bool], debug: bool = False):

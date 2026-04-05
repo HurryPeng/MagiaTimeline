@@ -130,9 +130,9 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Blackscreen, 1200)
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Dialog, 500, meetPoint=1)
-        self.iirPasses["iirPassFillGapBalloon"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Balloon, 500, meetPoint=1)
+        self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Blackscreen.name, 1200)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Dialog.name, 500, meetPoint=1)
+        self.iirPasses["iirPassFillGapBalloon"] = IIRPassFillGap(MagirecoScene0Strategy.FlagIndex.Balloon.name, 500, meetPoint=1)
         self.iirPasses["iirPassSetStyles"] = IIRPassSetStyles(self.getStyles())
 
         colourSpace: typing.Dict[str, typing.Tuple[float, float]] = {
@@ -146,7 +146,7 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
             # "Nagisa": ( 0.05, -0.17), # Nagisa doesn't appear a lot
         }
         def classifySpeaker(interval: Interval):
-            if not interval.mainFlag == MagirecoScene0Strategy.FlagIndex.Dialog and not interval.mainFlag == MagirecoScene0Strategy.FlagIndex.Balloon:
+            if not interval.label == MagirecoScene0Strategy.FlagIndex.Dialog and not interval.label == MagirecoScene0Strategy.FlagIndex.Balloon:
                 return
             meanTextColour = np.mean([interval.framePoints[i].flags[MagirecoScene0Strategy.FlagIndex.MeanTextColour] for i in range(len(interval.framePoints))], 0)
             meanTextColourHSV = cv.cvtColor(np.array([[meanTextColour]], dtype=np.float32), cv.COLOR_BGR2HSV)[0][0]

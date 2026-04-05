@@ -9,6 +9,79 @@ from AbstractFlagIndex import *
 from IR import *
 from Strategies.AbstractStrategy import *
 
+class TextDetectionResult(AttachmentKey):
+    """Stores text detection boxes for an image region.
+    Crops are not stored; call cropTextFromImage(image) to produce them on demand.
+    This class also serves as its own attachment key: use TextDetectionResult (the class
+    itself) as the key when calling setAttachment/getAttachment."""
+    def __init__(self, boxes: typing.Optional[typing.List[typing.Tuple[int, int, int, int]]] = None):
+        self.boxes: typing.List[typing.Tuple[int, int, int, int]] = boxes if boxes is not None else []
+
+    def cropTextFromImage(self, image: cv.Mat) -> typing.List[np.ndarray]:
+        return [image[y:y + h, x:x + w].copy() for x, y, w, h in self.boxes]
+
+class IIRTextDetectionPreprocessPass(IIRPass):
+    def __init__(self, frameKey: type, config: dict):
+        self.frameKey: type = frameKey
+        self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
+        self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
+        suppressPaddleWarnings()
+        self.detector = paddleocr.TextDetection(
+            model_name="PP-OCRv4_mobile_det",
+            model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
+            thresh=0.2,
+            box_thresh=0.3,
+            device="cpu",
+            enable_mkldnn=True
+        )
+
+    def apply(self, iir: IIR):
+        print(f"IIRTextDetectionPreprocessPass: processing {len(iir.intervals)} intervals")
+        for i, interval in enumerate(iir.intervals):
+            image: cv.Mat = interval.getAttachment(self.frameKey)
+            if image is None:
+                continue
+            imgH, imgW = image.shape[:2]
+
+            result = self.detector.predict(image)
+            result = result[0]
+            dtPolys: typing.List[np.ndarray] = result["dt_polys"]
+            n = len(dtPolys)
+
+            rawBoxes = []
+            for j in range(n):
+                poly = np.array(dtPolys[j], np.int32)
+                x0, y0 = poly[0]
+                x1, y1 = poly[1]
+                x2, y2 = poly[2]
+                x3, y3 = poly[3]
+                angle0 = np.arctan2(y1 - y0, x1 - x0)
+                angle3 = np.arctan2(y2 - y3, x2 - x3)
+                angle = (angle0 + angle3) / 2
+                if np.abs(angle) > np.pi / 180 * 3:
+                    continue
+                bx, by, bw, bh = cv.boundingRect(poly)
+                bx = max(0, bx)
+                by = max(0, by)
+                bw = min(imgW - bx, bw)
+                bh = min(imgH - by, bh)
+                rawBoxes.append((bx, by, bw, bh))
+
+            rawBoxes.sort(key=lambda b: b[2] * b[3], reverse=True)
+            boxSizeSum = sum(b[2] * b[3] for b in rawBoxes)
+            filteredBoxes = []
+            for rank, box in enumerate(rawBoxes):
+                if box[2] * box[3] <= self.nonMajorBoxSuppressionMaxRatio * boxSizeSum and rank >= self.nonMajorBoxSuppressionMinRank:
+                    break
+                filteredBoxes.append(box)
+            filteredBoxes.sort(key=lambda b: (b[1], b[0]))  # top-to-bottom, left-to-right
+
+            interval.setAttachment(TextDetectionResult, TextDetectionResult(filteredBoxes))
+
+            if i % 10 == 0:
+                print(interval.getName(i))
+
+
 class IIROcrPass(IIRPass):
     def __init__(self, config: dict, dest: str, strategy: AbstractExtraJobStrategy):
         self.config: dict = config
@@ -18,8 +91,6 @@ class IIROcrPass(IIRPass):
         self.standaloneOutputSuffix: str = config["standaloneOutputSuffix"]
         self.separator: str = config["separator"]
         self.doPaddle: bool = config["doPaddle"]
-        self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
-        self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
         self.doTeseract: bool = config["doTesseract"]
         self.tesseractLang: str = config["tesseractLang"]
 
@@ -31,83 +102,43 @@ class IIROcrPass(IIRPass):
             file = open(filename, "w", encoding="utf-8")
         else:
             print("Standalone output disabled. Writing to ass file.")
-        
-        paddle = paddleocr.PaddleOCR(
-            text_detection_model_name="PP-OCRv4_mobile_det",
-            text_detection_model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
-            text_recognition_model_name="PP-OCRv5_mobile_rec",
-            text_recognition_model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_rec",
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
-            device="cpu",
-            enable_mkldnn=True
-        )
-        extraJobFrameFlagIndex: AbstractFlagIndex = self.strategy.getExtraJobFrameFlagIndex()
+
+        recognizer = None
+        if self.doPaddle:
+            suppressPaddleWarnings()
+            recognizer = paddleocr.TextRecognition(
+                model_name="PP-OCRv5_mobile_rec",
+                model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_rec",
+                device="cpu",
+                enable_mkldnn=True
+            )
+
+        frameKey: type = self.strategy.getExtraJobFrameKey()
 
         for i, interval in enumerate(iir.intervals):
             buff: str = ""
             name: str = interval.getName(i)
-            img: cv.Mat = interval.getFlag(extraJobFrameFlagIndex)
+            image: cv.Mat = interval.getAttachment(frameKey)
+            tdf: TextDetectionResult = interval.getAttachment(TextDetectionResult)
 
-            if self.doPaddle:
-                paddleFrame = img
-                paddleResult = paddle.predict(paddleFrame)
-                paddleResult = paddleResult[0]
-                recTexts: typing.List[str] = paddleResult["rec_texts"]
-                recBoxes: np.ndarray = paddleResult["rec_boxes"] # List[(xmin, ymin, xmax, ymax)]
-                recScores: typing.List[float] = paddleResult["rec_scores"]
-                recPolys: typing.List[np.ndarray] = paddleResult["rec_polys"] # List[np.ndarray] of shape (4, 2)
-                recBoxSizes = [(int(box[2]) - int(box[0])) * (int(box[3]) - int(box[1])) for box in recBoxes]
-                boxSizeSum = sum(recBoxSizes)
-
-                passesAngleTest: list[bool] = []
-                for poly in recPolys:
-                    x0, y0 = poly[0]
-                    x1, y1 = poly[1]
-                    x2, y2 = poly[2]
-                    x3, y3 = poly[3]
-                    angle0 = np.arctan2(y1 - y0, x1 - x0)
-                    angle3 = np.arctan2(y2 - y3, x2 - x3)
-                    angle = (angle0 + angle3) / 2
-                    passes = np.abs(angle) <= np.pi / 180 * 3
-                    passesAngleTest.append(passes)
-
-                recBoxesSortedIndices = sorted(
-                    range(len(recBoxSizes)),
-                    key=lambda j: recBoxSizes[j] if passesAngleTest[j] else 0,
-                    reverse=True
-                )
-                recBoxesRankMapping = [0] * len(recBoxSizes)
-                for rank, origIdx in enumerate(recBoxesSortedIndices):
-                    recBoxesRankMapping[origIdx] = rank
-                recBoxesRanking = [recBoxesRankMapping[i] for i in range(len(recBoxSizes))]
-
-                paddleText: str = ""
-                for j in range(len(recTexts)):
-                    line = recTexts[j]
-                    box = recBoxes[j]
-                    poly = recPolys[j]
-                    score = recScores[j]
-                    boxSize = recBoxSizes[j]
-                    rank = recBoxesRanking[j]
-
-                    if not passesAngleTest[j]:
-                        continue
-
-                    if boxSize > self.nonMajorBoxSuppressionMaxRatio * boxSizeSum or rank < self.nonMajorBoxSuppressionMinRank:
-                        paddleText += line + ' '
+            if self.doPaddle and recognizer is not None:
+                paddleText = ""
+                if tdf is not None and image is not None and tdf.boxes:
+                    for crop in tdf.cropTextFromImage(image):
+                        result = recognizer.predict(crop)
+                        for item in result:
+                            paddleText += item["rec_text"] + " "
                 paddleText = paddleText.strip()
                 buff += paddleText
 
             if self.doTeseract:
                 if buff != "":
                     buff += self.separator
-                tesseractFrame = img
-                tesseractFrame = ensureMat(tesseractFrame)
-                tesseractText: str = pytesseract.image_to_string(tesseractFrame, config=f"-l {self.tesseractLang} --psm 6")
-                tesseractText = tesseractText[:-1].replace("\n", "")
-                buff += tesseractText
+                if image is not None:
+                    tesseractFrame = ensureMat(image)
+                    tesseractText: str = pytesseract.image_to_string(tesseractFrame, config=f"-l {self.tesseractLang} --psm 6")
+                    tesseractText = tesseractText[:-1].replace("\n", "")
+                    buff += tesseractText
 
             if file is not None:
                 file.write(f"{name},{buff}\n")

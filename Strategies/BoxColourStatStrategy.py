@@ -21,11 +21,10 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         DialogVal = enum.auto()
         DialogFeat = enum.auto()
         DialogFeatJump = enum.auto()
-        OcrFrame = enum.auto()
 
         @classmethod
         def getDefaultFlagsImpl(cls) -> typing.List[typing.Any]:
-            return [False, 0.0, np.zeros(64), False, None]
+            return [False, 0.0, np.zeros(64), False]
         
     @staticmethod
     def genOcrEngine() -> paddleocr.TextDetection:
@@ -101,39 +100,23 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BoxColourStatStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime, meetPoint=1.0)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(BoxColourStatStrategy.FlagIndex.Dialog.name, self.iirPassDenoiseMinTime, meetPoint=1.0)
         
         self.specIirPasses = collections.OrderedDict()
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
             lambda iir, interval0, interval1:
                 self.decideFeatureMerge(
-                    [interval0.getFlag(self.getFeatureFlagIndex())],
-                    [interval1.getFlag(self.getFeatureFlagIndex())]
+                    [interval0.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)],
+                    [interval1.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)]
                 ) and iir.ms2Timestamp(self.iirPassDenoiseMinTime) > interval0.dist(interval1)
         )
-        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(BoxColourStatStrategy.FlagIndex.Dialog, self.iirPassDenoiseMinTime)
+        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(BoxColourStatStrategy.FlagIndex.Dialog.name, self.iirPassDenoiseMinTime)
         self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
     
-    @classmethod
-    def getMainFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.Dialog
-
-    @classmethod
-    def getFeatureFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.DialogFeat
-    
-    @classmethod
-    def getExtraJobFrameFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.OcrFrame
-    
-    @classmethod
-    def isEmptyFeature(cls, feature: np.ndarray) -> bool:
-        return np.all(feature == 0)
-
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
 
@@ -157,6 +140,15 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
 
     def aggregateFeatures(self, features: typing.List[np.ndarray]) -> np.ndarray:
         return np.mean(features, axis=0)
+
+    def isFpNonEmpty(self, fp: FramePoint) -> bool:
+        return fp.getFlag(BoxColourStatStrategy.FlagIndex.Dialog)
+
+    def getFpFeature(self, fp: FramePoint) -> np.ndarray:
+        return fp.getFlag(BoxColourStatStrategy.FlagIndex.DialogFeat)
+
+    def freeFpFeature(self, fp: FramePoint) -> None:
+        fp.setFlag(BoxColourStatStrategy.FlagIndex.DialogFeat, None)
 
     def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)

@@ -58,35 +58,23 @@ class ParakoStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(ParakoStrategy.FlagIndex.Dialog, 300, meetPoint=1.0)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(ParakoStrategy.FlagIndex.Dialog.name, 300, meetPoint=1.0)
 
         self.specIirPasses = collections.OrderedDict()
         self.specIirPasses["iirPassMerge"] = IIRPassMerge(
             lambda iir, interval0, interval1:
                 self.decideFeatureMerge(
-                    [interval0.getFlag(self.getFeatureFlagIndex())],
-                    [interval1.getFlag(self.getFeatureFlagIndex())]
+                    [interval0.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)],
+                    [interval1.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)]
                 )
         )
-        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(ParakoStrategy.FlagIndex.Dialog, 100)
+        self.specIirPasses["iirPassDenoise"] = IIRPassDenoise(ParakoStrategy.FlagIndex.Dialog.name, 100)
         self.specIirPasses["iirPassMerge2"] = self.specIirPasses["iirPassMerge"]
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
     
-    @classmethod
-    def getMainFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.Dialog
-    
-    @classmethod
-    def getFeatureFlagIndex(cls) -> AbstractFlagIndex:
-        return cls.FlagIndex.DialogFeat
-    
-    @classmethod
-    def isEmptyFeature(cls, feature) -> bool:
-        return np.all(feature == 0)
-
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
 
@@ -110,7 +98,16 @@ class ParakoStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy):
     
     def aggregateFeatures(self, features: typing.List[np.ndarray]) -> np.ndarray:
         return np.mean(features, axis=0)
-    
+
+    def isFpNonEmpty(self, fp: FramePoint) -> bool:
+        return fp.getFlag(ParakoStrategy.FlagIndex.Dialog)
+
+    def getFpFeature(self, fp: FramePoint) -> np.ndarray:
+        return fp.getFlag(ParakoStrategy.FlagIndex.DialogFeat)
+
+    def freeFpFeature(self, fp: FramePoint) -> None:
+        fp.setFlag(ParakoStrategy.FlagIndex.DialogFeat, None)
+
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialog = self.dialogRect.cutRoi(frame)
         roiDialogHSV = cv.cvtColor(roiDialog, cv.COLOR_BGR2HSV)

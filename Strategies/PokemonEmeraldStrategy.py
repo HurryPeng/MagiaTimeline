@@ -38,7 +38,7 @@ class PokemonEmeraldStrategy(AbstractFramewiseStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(PokemonEmeraldStrategy.FlagIndex.Dialog, 300)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(PokemonEmeraldStrategy.FlagIndex.Dialog.name, 300)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:

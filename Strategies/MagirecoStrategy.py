@@ -68,10 +68,10 @@ class MagirecoStrategy(AbstractFramewiseStrategy):
         )
 
         self.iirPasses = collections.OrderedDict()
-        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.Dialog, 300)
-        self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.Blackscreen, 1200)
-        self.iirPasses["iirPassFillGapWhitescreen"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.Whitescreen, 1200)
-        self.iirPasses["iirPassFillGapCgSub"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.CgSub, 1200)
+        self.iirPasses["iirPassFillGapDialog"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.Dialog.name, 300)
+        self.iirPasses["iirPassFillGapBlackscreen"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.Blackscreen.name, 1200)
+        self.iirPasses["iirPassFillGapWhitescreen"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.Whitescreen.name, 1200)
+        self.iirPasses["iirPassFillGapCgSub"] = IIRPassFillGap(MagirecoStrategy.FlagIndex.CgSub.name, 1200)
 
     @classmethod
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
