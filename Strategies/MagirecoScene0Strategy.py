@@ -146,7 +146,7 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
             # "Nagisa": ( 0.05, -0.17), # Nagisa doesn't appear a lot
         }
         def classifySpeaker(interval: Interval):
-            if not interval.label == MagirecoScene0Strategy.FlagIndex.Dialog and not interval.label == MagirecoScene0Strategy.FlagIndex.Balloon:
+            if interval.label != MagirecoScene0Strategy.FlagIndex.Dialog.name and interval.label != MagirecoScene0Strategy.FlagIndex.Balloon.name:
                 return
             meanTextColour = np.mean([interval.framePoints[i].flags[MagirecoScene0Strategy.FlagIndex.MeanTextColour] for i in range(len(interval.framePoints))], 0)
             meanTextColourHSV = cv.cvtColor(np.array([[meanTextColour]], dtype=np.float32), cv.COLOR_BGR2HSV)[0][0]
