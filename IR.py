@@ -218,10 +218,10 @@ class Interval:
             begin: int,
             end: int,
             timeBase: fractions.Fraction,
-            framePoints: typing.List[FramePoint] = [],
+            framePoints: typing.Optional[typing.List[FramePoint]] = None,
         ):
         self.label: str = label
-        self.framePoints: typing.List[FramePoint] = framePoints
+        self.framePoints: typing.List[FramePoint] = framePoints if framePoints is not None else []
         # begin and end are not promised to align with underlying framePoints after applying IIRPass
         self.begin: int = begin # timestamp
         self.end: int = end # timestamp
