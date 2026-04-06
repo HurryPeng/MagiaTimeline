@@ -71,6 +71,7 @@ class IntervalGrower(IIR):
     def insertInterval(self, framePoint: FramePoint, image: typing.Optional[cv.Mat]) -> Interval:
         label = INTERVAL_LABEL_DIALOG if self.strategy.isFpNonEmpty(framePoint) else INTERVAL_LABEL_EMPTY
         interval = Interval(label, framePoint.timestamp, framePoint.timestamp, self.timeBase, [framePoint])
+        interval.setAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey, self.strategy.getFpFeature(framePoint), inDiskCache=True)
         if self.extraJobFrameKey is not None:
             assert image is not None
             assert self.cutExtraJobFrame is not None
