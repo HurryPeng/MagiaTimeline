@@ -3,6 +3,10 @@ import pytesseract
 import paddleocr
 import typing
 
+import scipy.cluster.hierarchy
+import scipy.spatial.distance
+import sklearn.preprocessing
+
 from IR import IIR
 from Util import *
 from AbstractFlagIndex import *
@@ -151,3 +155,303 @@ class IIROcrPass(IIRPass):
         if file is not None:
             file.close()
             print(f"Output written to {file.name}")
+
+def extractColourClusters(
+    roi: cv.Mat,
+    sobelThreshold: int,
+    minCcAreaRatio: float,
+    maxCcAreaRatio: float,
+    maxCcStddev: float,
+    clusterThreshold: float,
+    minColourAreaRatio: float,
+) -> typing.List[typing.Tuple[np.ndarray, float]]:
+    """Extract colour clusters from a text box ROI.
+    Returns [(avgColourBGR, areaRatio), ...] sorted descending by area ratio.
+    avgColourBGR is a shape (3,) float array;
+    areaRatio is the cluster's share of total accepted CC area (0.0~1.0).
+    Returns empty list if no valid regions are found."""
+
+    imageSobel = rgbSobel(roi, 1)
+    imageSobelBin = cv.threshold(imageSobel, sobelThreshold, 255, cv.THRESH_BINARY_INV)[1]
+
+    area = roi.shape[0] * roi.shape[1]
+    minCcArea = max(minCcAreaRatio * area, 10)
+    maxCcArea = maxCcAreaRatio * area
+
+    nLabels, labels, stats, centroids = cv.connectedComponentsWithStats(imageSobelBin, connectivity=4, ltype=cv.CV_32S)
+
+    acceptedIds = []
+    ccMeans = []
+    acceptedArea = 0
+
+    for i in range(nLabels):
+        ccArea = stats[i][cv.CC_STAT_AREA]
+        if ccArea >= minCcArea and ccArea <= maxCcArea:
+            mask = np.where(labels == i, 255, 0).astype(np.uint8)
+            mean, std = cv.meanStdDev(roi, mask=mask)
+            std = np.mean(std)
+            if std < maxCcStddev:
+                acceptedIds.append(i)
+                ccMeans.append(mean)
+                acceptedArea += ccArea
+
+    if len(acceptedIds) == 0:
+        return []
+
+    if len(acceptedIds) == 1:
+        return [(ccMeans[0].flatten(), 1.0)]
+
+    ccMeans = np.array(ccMeans).reshape(len(ccMeans), -1)
+    ccAreas = np.array([stats[i][cv.CC_STAT_AREA] for i in acceptedIds]).reshape(-1, 1)
+
+    scaler = sklearn.preprocessing.StandardScaler()
+    ccMeansScaled = scaler.fit_transform(ccMeans)
+
+    distMat = scipy.spatial.distance.pdist(ccMeansScaled, metric='euclidean')
+    Z = scipy.cluster.hierarchy.linkage(distMat, method='weighted')
+    clusters = scipy.cluster.hierarchy.fcluster(Z, clusterThreshold, criterion='distance')
+
+    clusterColours: typing.Dict[int, typing.List[typing.Tuple[np.ndarray, float]]] = {}
+    clusterAreas: typing.Dict[int, float] = {}
+
+    for i, clusterId in enumerate(clusters):
+        if clusterId not in clusterColours:
+            clusterColours[clusterId] = []
+            clusterAreas[clusterId] = 0
+        clusterColours[clusterId].append((ccMeans[i], ccAreas[i][0]))
+        clusterAreas[clusterId] += ccAreas[i][0]
+
+    result: typing.List[typing.Tuple[np.ndarray, float]] = []
+    for clusterId, colours in clusterColours.items():
+        totalArea = clusterAreas[clusterId]
+        weightedColourSum = np.sum([mean * a for mean, a in colours], axis=0)
+        avgColour = weightedColourSum / totalArea
+        areaRatio = totalArea / acceptedArea
+        if areaRatio >= minColourAreaRatio:
+            result.append((avgColour.flatten(), areaRatio))
+
+    result.sort(key=lambda x: x[1], reverse=True)
+    return result
+
+class IIRStyleClassifyPass(IIRPass):
+    def __init__(self, config: dict):
+        # Soft histogram parameters
+        self.histBins: int = config["histBins"]
+
+        # extractColourClusters parameters
+        self.sobelThreshold: int = config["sobelThreshold"]
+        self.minCcAreaRatio: float = config["minCcAreaRatio"]
+        self.maxCcAreaRatio: float = config["maxCcAreaRatio"]
+        self.maxCcStddev: float = config["maxCcStddev"]
+        self.clusterThreshold: float = config["clusterThreshold"]
+        self.minColourAreaRatio: float = config["minColourAreaRatio"]
+
+        # Inter-interval clustering parameters
+        self.clusterDistThreshold: float = config["clusterDistThreshold"]
+        self.minIntervalCount: int = config["minIntervalCount"]
+
+        # Output parameters
+        self.styleNames: typing.List[str] = config.get("styleNames", [])
+        self.baseStyleTemplate: str = config.get(
+            "baseStyleTemplate",
+            "Style: {name},Microsoft YaHei,80,{primaryColour},&H000000FF,"
+            "&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,200,1"
+        )
+
+    def _bgrToHsvCone(self, bgr: np.ndarray) -> typing.Tuple[float, float]:
+        """Convert a BGR colour to HSV cone Cartesian coordinates (x, y) in [-1, 1]."""
+        pixel = np.array([[bgr]], dtype=np.uint8)
+        hsv = cv.cvtColor(pixel, cv.COLOR_BGR2HSV)[0][0]
+        h, s, _ = hsv
+        h_rad = np.deg2rad(float(h)) * 2  # OpenCV H is [0, 180), actual [0, 360)
+        s_01 = float(s) / 255.0
+        x = s_01 * np.cos(h_rad)
+        y = s_01 * np.sin(h_rad)
+        return x, y
+
+    def _buildSoftHistogram(self, colourClusters: typing.List[typing.Tuple[np.ndarray, float]]) -> np.ndarray:
+        """Build a soft histogram from colour clusters via bilinear interpolation.
+        Returns a flattened histBins*histBins vector."""
+        G = self.histBins
+        hist = np.zeros((G, G), dtype=np.float64)
+
+        for avgColour, areaRatio in colourClusters:
+            x, y = self._bgrToHsvCone(avgColour)
+
+            # Map from [-1, 1] to [0, G-1]
+            gx = (x + 1.0) / 2.0 * (G - 1)
+            gy = (y + 1.0) / 2.0 * (G - 1)
+
+            # Bilinear soft assignment
+            gx0 = int(np.floor(gx))
+            gy0 = int(np.floor(gy))
+            gx1 = gx0 + 1
+            gy1 = gy0 + 1
+
+            fx = gx - gx0
+            fy = gy - gy0
+
+            gx0 = max(0, min(gx0, G - 1))
+            gx1 = max(0, min(gx1, G - 1))
+            gy0 = max(0, min(gy0, G - 1))
+            gy1 = max(0, min(gy1, G - 1))
+
+            hist[gy0, gx0] += areaRatio * (1 - fx) * (1 - fy)
+            hist[gy0, gx1] += areaRatio * fx * (1 - fy)
+            hist[gy1, gx0] += areaRatio * (1 - fx) * fy
+            hist[gy1, gx1] += areaRatio * fx * fy
+
+        return hist.flatten()
+
+    def _computeAllFeatures(self, iir: IIR) -> typing.Tuple[
+        typing.List[typing.Optional[np.ndarray]],
+        typing.List[typing.Optional[np.ndarray]]
+    ]:
+        """Compute soft histogram features and representative colours for all intervals.
+        Returns (features, repColours) where each is a list parallel to iir.intervals.
+        None entries indicate intervals with no valid colour data."""
+        features: typing.List[typing.Optional[np.ndarray]] = []
+        repColours: typing.List[typing.Optional[np.ndarray]] = []
+
+        for i, interval in enumerate(iir.intervals):
+            image: cv.Mat = interval.getAttachment(ExtraJobFrameKey)
+            tdf: TextDetectionResult = interval.getAttachment(TextDetectionResult)
+
+            if image is None or tdf is None or not tdf.boxes:
+                features.append(None)
+                repColours.append(None)
+                continue
+
+            # Accumulate histograms across all boxes, weighted by box area
+            aggregatedHist = np.zeros(self.histBins * self.histBins, dtype=np.float64)
+            totalBoxArea = 0
+            bestRepColour: typing.Optional[np.ndarray] = None
+            bestRepArea = 0.0  # absolute area of the best representative colour
+
+            for bx, by, bw, bh in tdf.boxes:
+                boxRoi = image[by:by + bh, bx:bx + bw]
+                if boxRoi.size == 0:
+                    continue
+
+                clusters = extractColourClusters(
+                    boxRoi,
+                    self.sobelThreshold,
+                    self.minCcAreaRatio,
+                    self.maxCcAreaRatio,
+                    self.maxCcStddev,
+                    self.clusterThreshold,
+                    self.minColourAreaRatio,
+                )
+
+                if not clusters:
+                    continue
+
+                boxArea = bw * bh
+                boxHist = self._buildSoftHistogram(clusters)
+                aggregatedHist += boxHist * boxArea
+                totalBoxArea += boxArea
+
+                # Track representative colour: top-1 colour from the box with largest absolute area contribution
+                topColour, topAreaRatio = clusters[0]
+                absArea = topAreaRatio * boxArea
+                if absArea > bestRepArea:
+                    bestRepArea = absArea
+                    bestRepColour = topColour
+
+            if totalBoxArea == 0:
+                features.append(None)
+                repColours.append(None)
+                continue
+
+            # L2 normalize
+            norm = np.linalg.norm(aggregatedHist)
+            if norm > 0:
+                aggregatedHist /= norm
+
+            features.append(aggregatedHist)
+            repColours.append(bestRepColour)
+
+            if i % 10 == 0:
+                print(interval.getName(i))
+
+        return features, repColours
+
+    def _cluster(self, features: typing.List[typing.Optional[np.ndarray]], validIndices: typing.List[int]) -> typing.List[int]:
+        """Cluster valid intervals by their histogram features.
+        Returns cluster assignments parallel to validIndices."""
+        if len(validIndices) == 1:
+            return [0]
+
+        featureMat = np.array([features[i] for i in validIndices])
+        distMat = scipy.spatial.distance.pdist(featureMat, metric='cosine')
+        # Replace NaN distances (from zero vectors) with max distance
+        distMat = np.nan_to_num(distMat, nan=1.0)
+        Z = scipy.cluster.hierarchy.linkage(distMat, method='average')
+        rawLabels = scipy.cluster.hierarchy.fcluster(Z, self.clusterDistThreshold, criterion='distance')
+        return rawLabels.tolist()
+
+    def _computeClusterColour(self, repColours: typing.List[typing.Optional[np.ndarray]], memberIndices: typing.List[int]) -> np.ndarray:
+        """Average the representative colours of cluster members."""
+        validColours = [repColours[i] for i in memberIndices if repColours[i] is not None]
+        if len(validColours) > 0:
+            return np.mean(np.array(validColours), axis=0).astype(np.uint8)
+        return np.array([255, 255, 255], dtype=np.uint8)  # fallback: white
+
+    def apply(self, iir: IIR):
+        print(f"IIRStyleClassifyPass: processing {len(iir.intervals)} intervals")
+
+        # 1. Compute features and representative colours
+        features, repColours = self._computeAllFeatures(iir)
+
+        # 2. Filter intervals with valid features
+        validIndices = [i for i, f in enumerate(features) if f is not None]
+        print(f"IIRStyleClassifyPass: {len(validIndices)} intervals have valid colour features")
+
+        if len(validIndices) < 2:
+            print("IIRStyleClassifyPass: not enough valid intervals for clustering, skipping")
+            return
+
+        # 3. Agglomerative clustering
+        clusterAssignments = self._cluster(features, validIndices)
+
+        # 4. Reorder clusters by member count (largest first) for stable naming
+        from collections import Counter
+        clusterCounts = Counter(clusterAssignments)
+        sizeOrder = [cid for cid, _ in clusterCounts.most_common()]
+        remapping = {old: new for new, old in enumerate(sizeOrder)}
+        clusterAssignments = [remapping[c] for c in clusterAssignments]
+
+        nClusters = len(set(clusterAssignments))
+        print(f"IIRStyleClassifyPass: {nClusters} clusters found")
+
+        # 5. Generate style declarations and assign styles to intervals
+        clusterStyleNames: typing.Dict[int, str] = {}
+        newStyleLines: typing.List[str] = []
+
+        for clusterId in sorted(set(clusterAssignments)):
+            memberIndices = [validIndices[i] for i, c in enumerate(clusterAssignments) if c == clusterId]
+            if len(memberIndices) < self.minIntervalCount:
+                continue
+
+            repColour = self._computeClusterColour(repColours, memberIndices)
+
+            if self.styleNames and clusterId < len(self.styleNames):
+                styleName = self.styleNames[clusterId]
+            else:
+                styleName = f"StyleClass_{clusterId}"
+
+            b, g, r = repColour
+            assColour = f"&H00{b:02X}{g:02X}{r:02X}"
+            styleLine = self.baseStyleTemplate.format(name=styleName, primaryColour=assColour)
+            newStyleLines.append(styleLine)
+            clusterStyleNames[clusterId] = styleName
+
+        # Atomically: append style declarations AND assign interval styles
+        iir.styles.extend(newStyleLines)
+
+        for i, clusterId in zip(validIndices, clusterAssignments):
+            if clusterId in clusterStyleNames:
+                iir.intervals[i].style = clusterStyleNames[clusterId]
+
+        print(f"IIRStyleClassifyPass: assigned {len(clusterStyleNames)} styles, "
+              f"declared {len(newStyleLines)} style lines")

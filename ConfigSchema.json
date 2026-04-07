@@ -812,6 +812,88 @@
                 "tesseractLang"
             ],
             "additionalProperties": false
+        },
+        "sty": {
+            "description": "Automatic subtitle style classification by colour clustering",
+            "type": "object",
+            "properties": {
+                "histBins": {
+                    "type": "integer",
+                    "minimum": 2,
+                    "description": "Number of bins per axis in the HSV-cone soft histogram. Total dims = histBins^2."
+                },
+                "clusterDistThreshold": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Cosine distance threshold for agglomerative clustering cutoff."
+                },
+                "minIntervalCount": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Minimum number of intervals a cluster must have to be assigned a named style."
+                },
+                "styleNames": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Optional list of style names. Clusters are ordered by size (largest first) and matched to this list."
+                },
+                "baseStyleTemplate": {
+                    "type": "string",
+                    "description": "ASS Style line template with {name} and {primaryColour} placeholders."
+                },
+                "sobelThreshold": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 255
+                },
+                "minCcAreaRatio": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "maxCcAreaRatio": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "maxCcStddev": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "clusterThreshold": {
+                    "type": "number",
+                    "minimum": 0
+                },
+                "minColourAreaRatio": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "nonMajorBoxSuppressionMaxRatio": {
+                    "description": "boxes with a ratio (over all boxes) lower than this will be suppressed (for text detection preprocessing)",
+                    "type": "number",
+                    "minimum": 0
+                },
+                "nonMajorBoxSuppressionMinRank": {
+                    "description": "but at least this number of boxes will be kept (for text detection preprocessing)",
+                    "type": "integer",
+                    "minimum": 1
+                }
+            },
+            "required": [
+                "histBins",
+                "clusterDistThreshold",
+                "minIntervalCount",
+                "sobelThreshold",
+                "minCcAreaRatio",
+                "maxCcAreaRatio",
+                "maxCcStddev",
+                "clusterThreshold",
+                "minColourAreaRatio",
+                "nonMajorBoxSuppressionMaxRatio",
+                "nonMajorBoxSuppressionMinRank"
+            ],
+            "additionalProperties": false
         }
     },
     "required": [

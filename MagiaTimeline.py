@@ -153,11 +153,13 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         print("Timeline Speed {:.2f}x".format(float(srcStream.frames / fps) / timeTimelineElapsed))
 
         if config["extraJobs"] and isinstance(strategy, AbstractExtraJobStrategy):
-            print("==== Extra Jobs Pre-processing: Text Detection ====")
-            iirTextDetPreprocessPass = IIRTextDetectionPreprocessPass(
-                strategy.getExtraJobFrameKey(), config["ocr"]
-            )
-            iirTextDetPreprocessPass.apply(iir)
+            textDetConfig = config.get("ocr", config.get("sty", None))
+            if textDetConfig is not None:
+                print("==== Extra Jobs Pre-processing: Text Detection ====")
+                iirTextDetPreprocessPass = IIRTextDetectionPreprocessPass(
+                    strategy.getExtraJobFrameKey(), textDetConfig
+                )
+                iirTextDetPreprocessPass.apply(iir)
 
         if "ocr" in config["extraJobs"]:
             print("Extra job: ocr")
@@ -166,6 +168,14 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
                 continue
             iirOcrPass = IIROcrPass(config["ocr"], dst, strategy)
             iirOcrPass.apply(iir)
+
+        if "sty" in config["extraJobs"]:
+            print("Extra job: styleClassify")
+            if not isinstance(strategy, AbstractExtraJobStrategy):
+                print("Error: Strategy does not support style classification. Skipping. ")
+            else:
+                iirStyleClassifyPass = IIRStyleClassifyPass(config["sty"])
+                iirStyleClassifyPass.apply(iir)
 
         print("==== IIR to ASS ====")
         asstStr = asstStr.format(

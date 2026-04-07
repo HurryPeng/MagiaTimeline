@@ -443,3 +443,26 @@ ocr:
   nonMajorBoxSuppressionMinRank: 1
   doTesseract: false
   tesseractLang: "jpn"
+
+sty:
+  # histBins: number of bins per axis in the HSV-cone soft histogram (total dims = histBins^2)
+  histBins: 8
+  # clusterDistThreshold: cosine distance threshold for agglomerative clustering cutoff
+  clusterDistThreshold: 0.3
+  # minIntervalCount: minimum number of intervals a cluster must have to be assigned a named style
+  minIntervalCount: 2
+  # styleNames: optional list of style names; clusters are ordered by size (largest first)
+  styleNames: []
+  # baseStyleTemplate: ASS Style line template with {name} and {primaryColour} placeholders
+  # (leave commented to use the built-in default matching template.asst)
+  # baseStyleTemplate: "Style: {name},Microsoft YaHei,80,{primaryColour},&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,200,1"
+  # Parameters for extractColourClusters (per-box colour extraction)
+  sobelThreshold: 32
+  minCcAreaRatio: 0.0
+  maxCcAreaRatio: 0.3
+  maxCcStddev: 10.0
+  clusterThreshold: 1.0
+  minColourAreaRatio: 0.01
+  # Text detection preprocessing parameters (shared with ocr if both are enabled)
+  nonMajorBoxSuppressionMaxRatio: 0.1
+  nonMajorBoxSuppressionMinRank: 1
