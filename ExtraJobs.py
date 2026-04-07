@@ -78,7 +78,30 @@ class IIRTextDetectionPreprocessPass(IIRPass):
                 if box[2] * box[3] <= self.nonMajorBoxSuppressionMaxRatio * boxSizeSum and rank >= self.nonMajorBoxSuppressionMinRank:
                     break
                 filteredBoxes.append(box)
-            filteredBoxes.sort(key=lambda b: (b[1], b[0]))  # top-to-bottom, left-to-right
+            # Sort boxes in reading order: group into rows by center-y proximity
+            # (threshold = half the average box height), then sort each row by left-x.
+            # Using center-y instead of top-y avoids mis-ordering boxes on the same row
+            # whose detected heights differ slightly.
+            if filteredBoxes:
+                avgH = sum(b[3] for b in filteredBoxes) / len(filteredBoxes)
+                rowThreshold = avgH * 0.5
+                filteredBoxes.sort(key=lambda b: b[1] + b[3] / 2)
+                rows: typing.List[typing.List[typing.Tuple[int, int, int, int]]] = []
+                currentRow: typing.List[typing.Tuple[int, int, int, int]] = [filteredBoxes[0]]
+                currentRowBaseY: float = filteredBoxes[0][1] + filteredBoxes[0][3] / 2
+                for box in filteredBoxes[1:]:
+                    centerY = box[1] + box[3] / 2
+                    if abs(centerY - currentRowBaseY) < rowThreshold:
+                        currentRow.append(box)
+                    else:
+                        rows.append(currentRow)
+                        currentRow = [box]
+                        currentRowBaseY = centerY
+                rows.append(currentRow)
+                filteredBoxes = []
+                for row in rows:
+                    row.sort(key=lambda b: b[0])
+                    filteredBoxes.extend(row)
 
             interval.setAttachment(TextDetectionResult, TextDetectionResult(filteredBoxes))
 
