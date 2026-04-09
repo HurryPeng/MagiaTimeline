@@ -817,15 +817,20 @@
             "description": "Automatic subtitle style classification by colour clustering",
             "type": "object",
             "properties": {
+                "featureType": {
+                    "type": "string",
+                    "enum": ["hsvCone2d", "softHistogram"],
+                    "description": "Feature representation for inter-interval clustering. hsvCone2d: 2D area-weighted mean in HSV cone space (default, easy to visualise). softHistogram: archived 8x8 HSV-cone soft histogram."
+                },
                 "histBins": {
                     "type": "integer",
                     "minimum": 2,
-                    "description": "Number of bins per axis in the HSV-cone soft histogram. Total dims = histBins^2."
+                    "description": "Number of bins per axis in the HSV-cone soft histogram. Only used when featureType is softHistogram."
                 },
                 "clusterDistThreshold": {
                     "type": "number",
                     "minimum": 0,
-                    "description": "Cosine distance threshold for agglomerative clustering cutoff."
+                    "description": "Distance threshold for agglomerative clustering cutoff. Euclidean for hsvCone2d, cosine for softHistogram."
                 },
                 "minIntervalCount": {
                     "type": "integer",
@@ -881,7 +886,6 @@
                 }
             },
             "required": [
-                "histBins",
                 "clusterDistThreshold",
                 "minIntervalCount",
                 "sobelThreshold",

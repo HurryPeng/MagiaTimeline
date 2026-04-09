@@ -80,8 +80,6 @@ class IIRTextDetectionPreprocessPass(IIRPass):
                 filteredBoxes.append(box)
             # Sort boxes in reading order: group into rows by center-y proximity
             # (threshold = half the average box height), then sort each row by left-x.
-            # Using center-y instead of top-y avoids mis-ordering boxes on the same row
-            # whose detected heights differ slightly.
             if filteredBoxes:
                 avgH = sum(b[3] for b in filteredBoxes) / len(filteredBoxes)
                 rowThreshold = avgH * 0.5
@@ -118,6 +116,8 @@ class IIROcrPass(IIRPass):
         self.standaloneOutputSuffix: str = config["standaloneOutputSuffix"]
         self.separator: str = config["separator"]
         self.doPaddle: bool = config["doPaddle"]
+        self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
+        self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
         self.doTeseract: bool = config["doTesseract"]
         self.tesseractLang: str = config["tesseractLang"]
 
@@ -130,12 +130,17 @@ class IIROcrPass(IIRPass):
         else:
             print("Standalone output disabled. Writing to ass file.")
 
-        recognizer = None
+        paddle = None
         if self.doPaddle:
             suppressPaddleWarnings()
-            recognizer = paddleocr.TextRecognition(
-                model_name="PP-OCRv5_mobile_rec",
-                model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_rec",
+            paddle = paddleocr.PaddleOCR(
+                text_detection_model_name="PP-OCRv4_mobile_det",
+                text_detection_model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
+                text_recognition_model_name="PP-OCRv5_mobile_rec",
+                text_recognition_model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_rec",
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=False,
                 device="cpu",
                 enable_mkldnn=True
             )
@@ -146,26 +151,52 @@ class IIROcrPass(IIRPass):
             buff: str = ""
             name: str = interval.getName(i)
             image: cv.Mat = interval.getAttachment(frameKey)
-            tdf: TextDetectionResult = interval.getAttachment(TextDetectionResult)
 
-            if self.doPaddle and recognizer is not None:
+            if self.doPaddle and paddle is not None and image is not None:
+                result = paddle.predict(image)
+                result = result[0]
+                recTexts: typing.List[str] = result["rec_texts"]
+                recBoxes: np.ndarray = result["rec_boxes"]
+                recPolys: typing.List[np.ndarray] = result["rec_polys"]
+                recBoxSizes = [
+                    (int(b[2]) - int(b[0])) * (int(b[3]) - int(b[1]))
+                    for b in recBoxes
+                ]
+                boxSizeSum = sum(recBoxSizes)
+
+                passesAngle: typing.List[bool] = []
+                for poly in recPolys:
+                    x0, y0 = poly[0]; x1, y1 = poly[1]
+                    x2, y2 = poly[2]; x3, y3 = poly[3]
+                    angle = (np.arctan2(y1 - y0, x1 - x0) + np.arctan2(y2 - y3, x2 - x3)) / 2
+                    passesAngle.append(bool(np.abs(angle) <= np.pi / 180 * 3))
+
+                sortedIdx = sorted(
+                    range(len(recBoxSizes)),
+                    key=lambda j: recBoxSizes[j] if passesAngle[j] else 0,
+                    reverse=True
+                )
+                rankMap = [0] * len(recBoxSizes)
+                for rank, origIdx in enumerate(sortedIdx):
+                    rankMap[origIdx] = rank
+
                 paddleText = ""
-                if tdf is not None and image is not None and tdf.boxes:
-                    for crop in tdf.cropTextFromImage(image):
-                        result = recognizer.predict(crop)
-                        for item in result:
-                            paddleText += item["rec_text"] + " "
-                paddleText = paddleText.strip()
-                buff += paddleText
+                for j, (line, boxSize) in enumerate(zip(recTexts, recBoxSizes)):
+                    if not passesAngle[j]:
+                        continue
+                    if boxSize > self.nonMajorBoxSuppressionMaxRatio * boxSizeSum \
+                            or rankMap[j] < self.nonMajorBoxSuppressionMinRank:
+                        paddleText += line + " "
+                buff += paddleText.strip()
 
             if self.doTeseract:
                 if buff != "":
                     buff += self.separator
                 if image is not None:
-                    tesseractFrame = ensureMat(image)
-                    tesseractText: str = pytesseract.image_to_string(tesseractFrame, config=f"-l {self.tesseractLang} --psm 6")
-                    tesseractText = tesseractText[:-1].replace("\n", "")
-                    buff += tesseractText
+                    tesseractText: str = pytesseract.image_to_string(
+                        ensureMat(image), config=f"-l {self.tesseractLang} --psm 6"
+                    )
+                    buff += tesseractText[:-1].replace("\n", "")
 
             if file is not None:
                 file.write(f"{name},{buff}\n")
@@ -273,6 +304,9 @@ class IIRStyleClassifyPass(IIRPass):
         self.clusterDistThreshold: float = config["clusterDistThreshold"]
         self.minIntervalCount: int = config["minIntervalCount"]
 
+        # Feature type: "hsvCone2d" (default, 2D, easy to visualise) or "softHistogram" (8x8 grid, archived)
+        self.featureType: str = config.get("featureType", "hsvCone2d")
+
         # Output parameters
         self.styleNames: typing.List[str] = config.get("styleNames", [])
         self.baseStyleTemplate: str = config.get(
@@ -281,7 +315,7 @@ class IIRStyleClassifyPass(IIRPass):
             "&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,200,1"
         )
 
-    def _bgrToHsvCone(self, bgr: np.ndarray) -> typing.Tuple[float, float]:
+    def bgrToHsvCone(self, bgr: np.ndarray) -> typing.Tuple[float, float]:
         """Convert a BGR colour to HSV cone Cartesian coordinates (x, y) in [-1, 1]."""
         pixel = np.array([[bgr]], dtype=np.uint8)
         hsv = cv.cvtColor(pixel, cv.COLOR_BGR2HSV)[0][0]
@@ -292,14 +326,14 @@ class IIRStyleClassifyPass(IIRPass):
         y = s_01 * np.sin(h_rad)
         return x, y
 
-    def _buildSoftHistogram(self, colourClusters: typing.List[typing.Tuple[np.ndarray, float]]) -> np.ndarray:
-        """Build a soft histogram from colour clusters via bilinear interpolation.
+    def buildFeatureSoftHistogram(self, colourClusters: typing.List[typing.Tuple[np.ndarray, float]]) -> np.ndarray:
+        """[Archived] Build an 8x8 HSV-cone soft histogram from colour clusters via bilinear interpolation.
         Returns a flattened histBins*histBins vector."""
         G = self.histBins
         hist = np.zeros((G, G), dtype=np.float64)
 
         for avgColour, areaRatio in colourClusters:
-            x, y = self._bgrToHsvCone(avgColour)
+            x, y = self.bgrToHsvCone(avgColour)
 
             # Map from [-1, 1] to [0, G-1]
             gx = (x + 1.0) / 2.0 * (G - 1)
@@ -326,15 +360,44 @@ class IIRStyleClassifyPass(IIRPass):
 
         return hist.flatten()
 
-    def _computeAllFeatures(self, iir: IIR) -> typing.Tuple[
+    def buildFeatureMeanHsvCone(self, colourClusters: typing.List[typing.Tuple[np.ndarray, float]]) -> np.ndarray:
+        """Build a 2D HSV-cone feature from colour clusters by area-weighted mean.
+        Maps each colour to (s·cos(2h), s·sin(2h)), then computes a weighted average.
+        Achromatic colours (black / white / grey) have s≈0 and naturally converge to the
+        origin, so they contribute little to the mean without any explicit penalty.
+        Returns a shape (2,) float64 vector."""
+        x_acc, y_acc = 0.0, 0.0
+        w_acc = 0.0
+        for avgColour, areaRatio in colourClusters:
+            x, y = self.bgrToHsvCone(avgColour)
+            x_acc += x * areaRatio
+            y_acc += y * areaRatio
+            w_acc += areaRatio
+        if w_acc > 0:
+            return np.array([x_acc / w_acc, y_acc / w_acc], dtype=np.float64)
+        return np.zeros(2, dtype=np.float64)
+
+    def buildFeature(self, colourClusters: typing.List[typing.Tuple[np.ndarray, float]]) -> np.ndarray:
+        """Dispatch to the configured feature builder.
+        Currently supported featureType values:
+          "hsvCone2d"     -- 2D area-weighted mean in HSV cone space (default, easy to visualise)
+          "softHistogram" -- 8x8 HSV-cone soft histogram (archived, higher-dimensional)
+        """
+        if self.featureType == "softHistogram":
+            return self.buildFeatureSoftHistogram(colourClusters)
+        return self.buildFeatureMeanHsvCone(colourClusters)
+
+    def computeAllFeatures(self, iir: IIR) -> typing.Tuple[
         typing.List[typing.Optional[np.ndarray]],
         typing.List[typing.Optional[np.ndarray]]
     ]:
-        """Compute soft histogram features and representative colours for all intervals.
+        """Compute per-interval features and representative colours for all intervals.
         Returns (features, repColours) where each is a list parallel to iir.intervals.
         None entries indicate intervals with no valid colour data."""
         features: typing.List[typing.Optional[np.ndarray]] = []
         repColours: typing.List[typing.Optional[np.ndarray]] = []
+
+        featureDim: typing.Optional[int] = None  # inferred from first valid feature
 
         for i, interval in enumerate(iir.intervals):
             image: cv.Mat = interval.getAttachment(ExtraJobFrameKey)
@@ -345,19 +408,19 @@ class IIRStyleClassifyPass(IIRPass):
                 repColours.append(None)
                 continue
 
-            # Accumulate histograms across all boxes, weighted by box area
-            aggregatedHist = np.zeros(self.histBins * self.histBins, dtype=np.float64)
+            # Accumulate per-box features weighted by crop area
+            crops = tdf.cropTextFromImage(image)
+            aggregatedFeature: typing.Optional[np.ndarray] = None
             totalBoxArea = 0
             bestRepColour: typing.Optional[np.ndarray] = None
             bestRepArea = 0.0  # absolute area of the best representative colour
 
-            for bx, by, bw, bh in tdf.boxes:
-                boxRoi = image[by:by + bh, bx:bx + bw]
-                if boxRoi.size == 0:
+            for crop in crops:
+                if crop.size == 0:
                     continue
 
                 clusters = extractColourClusters(
-                    boxRoi,
+                    np.asarray(crop),
                     self.sobelThreshold,
                     self.minCcAreaRatio,
                     self.maxCcAreaRatio,
@@ -369,9 +432,13 @@ class IIRStyleClassifyPass(IIRPass):
                 if not clusters:
                     continue
 
-                boxArea = bw * bh
-                boxHist = self._buildSoftHistogram(clusters)
-                aggregatedHist += boxHist * boxArea
+                boxArea = crop.shape[1] * crop.shape[0]
+                boxFeature = self.buildFeature(clusters)
+                if featureDim is None:
+                    featureDim = len(boxFeature)
+                if aggregatedFeature is None:
+                    aggregatedFeature = np.zeros(featureDim, dtype=np.float64)
+                aggregatedFeature += boxFeature * boxArea
                 totalBoxArea += boxArea
 
                 # Track representative colour: top-1 colour from the box with largest absolute area contribution
@@ -381,17 +448,20 @@ class IIRStyleClassifyPass(IIRPass):
                     bestRepArea = absArea
                     bestRepColour = topColour
 
-            if totalBoxArea == 0:
+            if totalBoxArea == 0 or aggregatedFeature is None:
                 features.append(None)
                 repColours.append(None)
                 continue
 
-            # L2 normalize
-            norm = np.linalg.norm(aggregatedHist)
-            if norm > 0:
-                aggregatedHist /= norm
+            aggregatedFeature /= totalBoxArea  # weighted mean (not sum) across boxes
 
-            features.append(aggregatedHist)
+            # L2 normalise only for softHistogram; hsvCone2d is already a bounded 2D point
+            if self.featureType == "softHistogram":
+                norm = np.linalg.norm(aggregatedFeature)
+                if norm > 0:
+                    aggregatedFeature /= norm
+
+            features.append(aggregatedFeature)
             repColours.append(bestRepColour)
 
             if i % 10 == 0:
@@ -399,21 +469,25 @@ class IIRStyleClassifyPass(IIRPass):
 
         return features, repColours
 
-    def _cluster(self, features: typing.List[typing.Optional[np.ndarray]], validIndices: typing.List[int]) -> typing.List[int]:
-        """Cluster valid intervals by their histogram features.
+    def cluster(self, features: typing.List[typing.Optional[np.ndarray]], validIndices: typing.List[int]) -> typing.List[int]:
+        """Cluster valid intervals by their features.
+        Uses euclidean distance for hsvCone2d (2D point cloud) and cosine for softHistogram.
         Returns cluster assignments parallel to validIndices."""
         if len(validIndices) == 1:
             return [0]
 
         featureMat = np.array([features[i] for i in validIndices])
-        distMat = scipy.spatial.distance.pdist(featureMat, metric='cosine')
+        # hsvCone2d features are 2D Euclidean points; softHistogram features are
+        # L2-normalised high-dim vectors where cosine distance is more appropriate.
+        metric = 'euclidean' if self.featureType == 'hsvCone2d' else 'cosine'
+        distMat = scipy.spatial.distance.pdist(featureMat, metric=metric)
         # Replace NaN distances (from zero vectors) with max distance
         distMat = np.nan_to_num(distMat, nan=1.0)
         Z = scipy.cluster.hierarchy.linkage(distMat, method='average')
         rawLabels = scipy.cluster.hierarchy.fcluster(Z, self.clusterDistThreshold, criterion='distance')
         return rawLabels.tolist()
 
-    def _computeClusterColour(self, repColours: typing.List[typing.Optional[np.ndarray]], memberIndices: typing.List[int]) -> np.ndarray:
+    def computeClusterColour(self, repColours: typing.List[typing.Optional[np.ndarray]], memberIndices: typing.List[int]) -> np.ndarray:
         """Average the representative colours of cluster members."""
         validColours = [repColours[i] for i in memberIndices if repColours[i] is not None]
         if len(validColours) > 0:
@@ -424,7 +498,7 @@ class IIRStyleClassifyPass(IIRPass):
         print(f"IIRStyleClassifyPass: processing {len(iir.intervals)} intervals")
 
         # 1. Compute features and representative colours
-        features, repColours = self._computeAllFeatures(iir)
+        features, repColours = self.computeAllFeatures(iir)
 
         # 2. Filter intervals with valid features
         validIndices = [i for i, f in enumerate(features) if f is not None]
@@ -435,7 +509,7 @@ class IIRStyleClassifyPass(IIRPass):
             return
 
         # 3. Agglomerative clustering
-        clusterAssignments = self._cluster(features, validIndices)
+        clusterAssignments = self.cluster(features, validIndices)
 
         # 4. Reorder clusters by member count (largest first) for stable naming
         from collections import Counter
@@ -456,7 +530,7 @@ class IIRStyleClassifyPass(IIRPass):
             if len(memberIndices) < self.minIntervalCount:
                 continue
 
-            repColour = self._computeClusterColour(repColours, memberIndices)
+            repColour = self.computeClusterColour(repColours, memberIndices)
 
             if self.styleNames and clusterId < len(self.styleNames):
                 styleName = self.styleNames[clusterId]

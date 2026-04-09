@@ -445,9 +445,15 @@ ocr:
   tesseractLang: "jpn"
 
 sty:
-  # histBins: number of bins per axis in the HSV-cone soft histogram (total dims = histBins^2)
+  # featureType: feature representation for inter-interval clustering
+  # - hsvCone2d: 2D area-weighted mean in HSV cone space (default, easy to visualise)
+  # - softHistogram: archived 8x8 HSV-cone soft histogram (higher-dimensional)
+  featureType: hsvCone2d
+  # histBins: bins per axis for softHistogram mode only (ignored for hsvCone2d)
   histBins: 8
-  # clusterDistThreshold: cosine distance threshold for agglomerative clustering cutoff
+  # clusterDistThreshold: distance threshold for agglomerative clustering cutoff
+  # For hsvCone2d (euclidean, range ~0-1.4): try 0.15-0.3
+  # For softHistogram (cosine, range 0-1): try 0.2-0.4
   clusterDistThreshold: 0.3
   # minIntervalCount: minimum number of intervals a cluster must have to be assigned a named style
   minIntervalCount: 2

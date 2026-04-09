@@ -152,30 +152,28 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         print("Timeline Elapsed {:.2f} s".format(timeTimelineElapsed))
         print("Timeline Speed {:.2f}x".format(float(srcStream.frames / fps) / timeTimelineElapsed))
 
-        if config["extraJobs"] and isinstance(strategy, AbstractExtraJobStrategy):
-            textDetConfig = config.get("ocr", config.get("sty", None))
-            if textDetConfig is not None:
-                print("==== Extra Jobs Pre-processing: Text Detection ====")
-                iirTextDetPreprocessPass = IIRTextDetectionPreprocessPass(
-                    strategy.getExtraJobFrameKey(), textDetConfig
-                )
-                iirTextDetPreprocessPass.apply(iir)
-
-        if "ocr" in config["extraJobs"]:
-            print("Extra job: ocr")
+        if config["extraJobs"]:
             if not isinstance(strategy, AbstractExtraJobStrategy):
-                print("Error: Strategy does not support OCR. Skipping. ")
-                continue
-            iirOcrPass = IIROcrPass(config["ocr"], dst, strategy)
-            iirOcrPass.apply(iir)
-
-        if "sty" in config["extraJobs"]:
-            print("Extra job: styleClassify")
-            if not isinstance(strategy, AbstractExtraJobStrategy):
-                print("Error: Strategy does not support style classification. Skipping. ")
+                print("Error: Strategy does not support extra jobs. Skipping all extra jobs.")
             else:
-                iirStyleClassifyPass = IIRStyleClassifyPass(config["sty"])
-                iirStyleClassifyPass.apply(iir)
+                if "ocr" in config["extraJobs"]:
+                    if "ocr" not in config:
+                        raise KeyError("extraJobs includes 'ocr' but no 'ocr' section found in config.")
+                    print("==== Extra Job: ocr ====")
+                    iirOcrPass = IIROcrPass(config["ocr"], dst, strategy)
+                    iirOcrPass.apply(iir)
+
+                if "sty" in config["extraJobs"]:
+                    if "sty" not in config:
+                        raise KeyError("extraJobs includes 'sty' but no 'sty' section found in config.")
+                    print("==== Extra Job Pre-processing: Text Detection ====")
+                    iirTextDetPreprocessPass = IIRTextDetectionPreprocessPass(
+                        strategy.getExtraJobFrameKey(), config["sty"]
+                    )
+                    iirTextDetPreprocessPass.apply(iir)
+                    print("==== Extra Job: sty ====")
+                    iirStyleClassifyPass = IIRStyleClassifyPass(config["sty"])
+                    iirStyleClassifyPass.apply(iir)
 
         print("==== IIR to ASS ====")
         asstStr = asstStr.format(
