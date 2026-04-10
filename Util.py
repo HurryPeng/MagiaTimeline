@@ -174,7 +174,7 @@ def rgbSobel(image: cv.Mat, ksize: int) -> cv.Mat:
     imageSobelG = cv.convertScaleAbs(cv.addWeighted(cv.convertScaleAbs(imageSobelGX), 1, cv.convertScaleAbs(imageSobelGY), 1, 0))
     imageSobelB = cv.convertScaleAbs(cv.addWeighted(cv.convertScaleAbs(imageSobelBX), 1, cv.convertScaleAbs(imageSobelBY), 1, 0))
     imageSobel = cv.convertScaleAbs(cv.addWeighted(cv.addWeighted(imageSobelR, 1/3, imageSobelG, 1/3, 0), 1, imageSobelB, 1/3, 0))
-    return imageSobel
+    return typing.cast(cv.Mat, imageSobel)
 
 def rgbDiffMask(lhs: cv.Mat, rhs: cv.Mat, threshold: int) -> cv.Mat:
     diff = cv.absdiff(lhs, rhs)
@@ -268,6 +268,16 @@ def autoNumberedNaming(srcPath: str) -> str:
         suffix = chr(ord(suffix) + 1)
         if suffix > 'z':
             raise Exception("Too many files with the same base name, please clean up the directory.")
+
+def checkerboardBackground(width: int, height: int, squareSize: int = 8) -> cv.Mat:
+    """Generate a BGR checkerboard image resembling Photoshop's transparency background.
+    Light squares are (192, 192, 192) and dark squares are (128, 128, 128)."""
+    rows = np.arange(height) // squareSize
+    cols = np.arange(width) // squareSize
+    checker = (rows[:, None] + cols[None, :]) % 2  # 0 = light, 1 = dark
+    channel = np.where(checker, 128, 192).astype(np.uint8)
+    img = np.stack([channel, channel, channel], axis=2)
+    return typing.cast(cv.Mat, img)
 
 def suppressPaddleWarnings():
     warnings.filterwarnings(

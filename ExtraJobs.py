@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import pytesseract
 import paddleocr
 import typing
@@ -214,8 +215,7 @@ class IIRStyleClassifyPass(IIRPass):
         self.minIntervalCount: int = config["minIntervalCount"]
 
         # Feature type: "hsvCone2d" (default, 2D, easy to visualise) or "softHistogram" (8x8 grid, archived)
-        self.featureType: str = config.get("featureType", "hsvCone2d")
-
+        self.featureType: str = config["featureType"] if "featureType" in config else "hsvCone2d"
         # Output parameters
         self.styleNames: typing.List[str] = config.get("styleNames", [])
         self.baseStyleTemplate: str = config.get(
@@ -341,6 +341,8 @@ class IIRStyleClassifyPass(IIRPass):
         """Compute per-interval features and representative colours for all intervals.
         Returns (features, repColours) where each is a list parallel to iir.intervals.
         None entries indicate intervals with no valid colour data."""
+        debug: bool = False
+
         features: typing.List[typing.Optional[np.ndarray]] = []
         repColours: typing.List[typing.Optional[np.ndarray]] = []
 
@@ -355,6 +357,33 @@ class IIRStyleClassifyPass(IIRPass):
                 continue
 
             boxes = self.detectBoxes(image)
+
+            if debug:
+                debugOutputDir: str = "sty_debug"
+                debugCcImg: cv.Mat = checkerboardBackground(image.shape[1], image.shape[0])
+                for bx, by, bw, bh in boxes:
+                    if bw <= 0 or bh <= 0:
+                        continue
+                    roi: cv.Mat = typing.cast(cv.Mat, image[by:by + bh, bx:bx + bw])
+                    imageSobel: cv.Mat = rgbSobel(roi, 1)
+                    imageSobelBin = cv.threshold(imageSobel, self.sobelThreshold, 255, cv.THRESH_BINARY_INV)[1]
+                    boxArea = bw * bh
+                    minCcArea = max(self.minCcAreaRatio * boxArea, 10)
+                    maxCcArea = self.maxCcAreaRatio * boxArea
+                    nLabels, labels, stats, _ = cv.connectedComponentsWithStats(imageSobelBin, connectivity=4, ltype=cv.CV_32S)
+                    for ccId in range(nLabels):
+                        ccArea = stats[ccId][cv.CC_STAT_AREA]
+                        if ccArea >= minCcArea and ccArea <= maxCcArea:
+                            mask = np.where(labels == ccId, 255, 0).astype(np.uint8)
+                            _, std = cv.meanStdDev(roi, mask=mask)
+                            if float(np.mean(std)) < self.maxCcStddev:
+                                pixelMask = labels == ccId
+                                debugCcImg[by:by + bh, bx:bx + bw][pixelMask] = roi[pixelMask]
+                timeStr = interval.timeStringBegin().replace(":", "-")
+                os.makedirs(debugOutputDir, exist_ok=True)
+                cv.imwrite(os.path.join(debugOutputDir, f"{timeStr}_full.png"), image)
+                cv.imwrite(os.path.join(debugOutputDir, f"{timeStr}_cc.png"), debugCcImg)
+
             if not boxes:
                 features.append(None)
                 repColours.append(None)
@@ -405,16 +434,16 @@ class IIRStyleClassifyPass(IIRPass):
                 repColours.append(None)
                 continue
 
-            assert aggregatedFeature is not None
-            aggregatedFeature /= totalBoxArea  # weighted mean (not sum) across boxes
+            assert isinstance(aggregatedFeature, np.ndarray)
+            finalFeature: np.ndarray = aggregatedFeature / totalBoxArea  # weighted mean across boxes
 
             # L2 normalise only for softHistogram; hsvCone2d is already a bounded 2D point
             if self.featureType == "softHistogram":
-                norm = np.linalg.norm(aggregatedFeature)
+                norm = np.linalg.norm(finalFeature)
                 if norm > 0:
-                    aggregatedFeature /= norm
+                    finalFeature = finalFeature / norm
 
-            features.append(aggregatedFeature)
+            features.append(finalFeature)
             repColours.append(bestRepColour)
 
             if i % 10 == 0:
