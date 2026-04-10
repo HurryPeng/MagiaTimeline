@@ -124,17 +124,21 @@ def extractColourClusters(
     maxCcStddev: float,
     clusterThreshold: float,
     minColourAreaRatio: float,
+    debugRoiOut: typing.Optional[cv.Mat] = None,
 ) -> typing.List[typing.Tuple[np.ndarray, float]]:
     """Extract colour clusters from a text box ROI.
     Returns [(avgColourBGR, areaRatio), ...] sorted descending by area ratio.
     avgColourBGR is a shape (3,) float array;
     areaRatio is the cluster's share of total accepted CC area (0.0~1.0).
-    Returns empty list if no valid regions are found."""
+    Returns empty list if no valid regions are found.
+    If debugRoiOut is provided (a writable view into a debug canvas), accepted CC
+    pixels are painted onto it with their original colours from roi."""
 
     imageSobel = rgbSobel(roi, 1)
     imageSobelBin = cv.threshold(imageSobel, sobelThreshold, 255, cv.THRESH_BINARY_INV)[1]
 
-    area = roi.shape[0] * roi.shape[1]
+    roiH, roiW = roi.shape[:2]
+    area = roiH * roiW
     minCcArea = max(minCcAreaRatio * area, 10)
     maxCcArea = maxCcAreaRatio * area
 
@@ -151,9 +155,19 @@ def extractColourClusters(
             mean, std = cv.meanStdDev(roi, mask=mask)
             std = np.mean(std)
             if std < maxCcStddev:
+                # Border contact filter: reject CCs whose bounding box touches the ROI edge
+                ccLeft   = stats[i][cv.CC_STAT_LEFT]
+                ccTop    = stats[i][cv.CC_STAT_TOP]
+                ccRight  = ccLeft + stats[i][cv.CC_STAT_WIDTH]
+                ccBottom = ccTop  + stats[i][cv.CC_STAT_HEIGHT]
+                if ccLeft == 0 or ccTop == 0 or ccRight >= roiW or ccBottom >= roiH:
+                    continue
                 acceptedIds.append(i)
                 ccMeans.append(mean)
                 acceptedArea += ccArea
+                if debugRoiOut is not None:
+                    pixelMask = labels == i
+                    debugRoiOut[pixelMask] = roi[pixelMask]
 
     if len(acceptedIds) == 0:
         return []
@@ -248,9 +262,10 @@ class IIRStyleClassifyPass(IIRPass):
             if np.abs(angle) > np.pi / 180 * 3:
                 continue
             bx, by, bw, bh = cv.boundingRect(poly)
-            bx = max(0, bx); by = max(0, by)
-            bw = min(imgW - bx, bw); bh = min(imgH - by, bh)
-            rawBoxes.append((bx, by, bw, bh))
+            pad = round(0.1 * min(bw, bh))
+            x1 = max(0, bx - pad);      y1 = max(0, by - pad)
+            x2 = min(imgW, bx + bw + pad); y2 = min(imgH, by + bh + pad)
+            rawBoxes.append((x1, y1, x2 - x1, y2 - y1))
 
         rawBoxes.sort(key=lambda b: b[2] * b[3], reverse=True)
         boxSizeSum = sum(b[2] * b[3] for b in rawBoxes)
@@ -341,7 +356,7 @@ class IIRStyleClassifyPass(IIRPass):
         """Compute per-interval features and representative colours for all intervals.
         Returns (features, repColours) where each is a list parallel to iir.intervals.
         None entries indicate intervals with no valid colour data."""
-        debug: bool = False
+        debug: bool = True
 
         features: typing.List[typing.Optional[np.ndarray]] = []
         repColours: typing.List[typing.Optional[np.ndarray]] = []
@@ -358,56 +373,31 @@ class IIRStyleClassifyPass(IIRPass):
 
             boxes = self.detectBoxes(image)
 
-            if debug:
-                debugOutputDir: str = "sty_debug"
-                debugCcImg: cv.Mat = checkerboardBackground(image.shape[1], image.shape[0])
-                for bx, by, bw, bh in boxes:
-                    if bw <= 0 or bh <= 0:
-                        continue
-                    roi: cv.Mat = typing.cast(cv.Mat, image[by:by + bh, bx:bx + bw])
-                    imageSobel: cv.Mat = rgbSobel(roi, 1)
-                    imageSobelBin = cv.threshold(imageSobel, self.sobelThreshold, 255, cv.THRESH_BINARY_INV)[1]
-                    boxArea = bw * bh
-                    minCcArea = max(self.minCcAreaRatio * boxArea, 10)
-                    maxCcArea = self.maxCcAreaRatio * boxArea
-                    nLabels, labels, stats, _ = cv.connectedComponentsWithStats(imageSobelBin, connectivity=4, ltype=cv.CV_32S)
-                    for ccId in range(nLabels):
-                        ccArea = stats[ccId][cv.CC_STAT_AREA]
-                        if ccArea >= minCcArea and ccArea <= maxCcArea:
-                            mask = np.where(labels == ccId, 255, 0).astype(np.uint8)
-                            _, std = cv.meanStdDev(roi, mask=mask)
-                            if float(np.mean(std)) < self.maxCcStddev:
-                                pixelMask = labels == ccId
-                                debugCcImg[by:by + bh, bx:bx + bw][pixelMask] = roi[pixelMask]
-                timeStr = interval.timeStringBegin().replace(":", "-")
-                os.makedirs(debugOutputDir, exist_ok=True)
-                cv.imwrite(os.path.join(debugOutputDir, f"{timeStr}_full.png"), image)
-                cv.imwrite(os.path.join(debugOutputDir, f"{timeStr}_cc.png"), debugCcImg)
-
-            if not boxes:
-                features.append(None)
-                repColours.append(None)
-                continue
+            debugCcImg: typing.Optional[cv.Mat] = \
+                checkerboardBackground(image.shape[1], image.shape[0]) if debug else None
 
             # Accumulate per-box features weighted by crop area
-            crops = [image[y:y + h, x:x + w].copy() for x, y, w, h in boxes]
             aggregatedFeature: typing.Optional[np.ndarray] = None
             totalBoxArea = 0
             bestRepColour: typing.Optional[np.ndarray] = None
             bestRepArea = 0.0  # absolute area of the best representative colour
 
-            for crop in crops:
+            for bx, by, bw, bh in boxes:
+                crop: cv.Mat = typing.cast(cv.Mat, image[by:by + bh, bx:bx + bw].copy())
                 if crop.size == 0:
                     continue
+                debugRoiOut: typing.Optional[cv.Mat] = \
+                    typing.cast(cv.Mat, debugCcImg[by:by + bh, bx:bx + bw]) if debugCcImg is not None else None
 
                 clusters = extractColourClusters(
-                    np.asarray(crop),
+                    crop,
                     self.sobelThreshold,
                     self.minCcAreaRatio,
                     self.maxCcAreaRatio,
                     self.maxCcStddev,
                     self.clusterThreshold,
                     self.minColourAreaRatio,
+                    debugRoiOut=debugRoiOut,
                 )
 
                 if not clusters:
@@ -428,6 +418,12 @@ class IIRStyleClassifyPass(IIRPass):
                 if absArea > bestRepArea:
                     bestRepArea = absArea
                     bestRepColour = topColour
+
+            if debugCcImg is not None:
+                timeStr = interval.timeStringBegin().replace(":", "-")
+                os.makedirs("STY_debug", exist_ok=True)
+                cv.imwrite(os.path.join("STY_debug", f"{timeStr}_full.png"), image)
+                cv.imwrite(os.path.join("STY_debug", f"{timeStr}_cc.png"), debugCcImg)
 
             if totalBoxArea == 0 or aggregatedFeature is None:
                 features.append(None)
