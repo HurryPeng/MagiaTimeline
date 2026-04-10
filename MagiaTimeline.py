@@ -160,19 +160,14 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
                     if "ocr" not in config:
                         raise KeyError("extraJobs includes 'ocr' but no 'ocr' section found in config.")
                     print("==== Extra Job: ocr ====")
-                    iirOcrPass = IIROcrPass(config["ocr"], dst, strategy)
+                    iirOcrPass = IIROcrPass(config["ocr"], strategy.getExtraJobFrameKey(), dst)
                     iirOcrPass.apply(iir)
 
                 if "sty" in config["extraJobs"]:
                     if "sty" not in config:
                         raise KeyError("extraJobs includes 'sty' but no 'sty' section found in config.")
-                    print("==== Extra Job Pre-processing: Text Detection ====")
-                    iirTextDetPreprocessPass = IIRTextDetectionPreprocessPass(
-                        strategy.getExtraJobFrameKey(), config["sty"]
-                    )
-                    iirTextDetPreprocessPass.apply(iir)
                     print("==== Extra Job: sty ====")
-                    iirStyleClassifyPass = IIRStyleClassifyPass(config["sty"])
+                    iirStyleClassifyPass = IIRStyleClassifyPass(config["sty"], strategy.getExtraJobFrameKey())
                     iirStyleClassifyPass.apply(iir)
 
         print("==== IIR to ASS ====")

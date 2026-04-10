@@ -469,6 +469,6 @@ sty:
   maxCcStddev: 10.0
   clusterThreshold: 1.0
   minColourAreaRatio: 0.01
-  # Text detection preprocessing parameters (shared with ocr if both are enabled)
+  # Text detection parameters
   nonMajorBoxSuppressionMaxRatio: 0.1
   nonMajorBoxSuppressionMinRank: 1
