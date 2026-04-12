@@ -819,8 +819,8 @@
             "properties": {
                 "featureType": {
                     "type": "string",
-                    "enum": ["hsvCone2d", "softHistogram"],
-                    "description": "Feature representation for inter-interval clustering. hsvCone2d: 2D area-weighted mean in HSV cone space (default, easy to visualise). softHistogram: archived 8x8 HSV-cone soft histogram."
+                    "enum": ["radialSoft", "hsvCone2d", "softHistogram"],
+                    "description": "Feature representation for inter-interval clustering. radialSoft: 32-dim radial soft-layer profile capturing fill/outline/shadow colours (default). hsvCone2d: 2D area-weighted mean in HSV cone space (simple). softHistogram: archived 8x8 HSV-cone soft histogram."
                 },
                 "histBins": {
                     "type": "integer",
@@ -883,6 +883,43 @@
                     "description": "but at least this number of boxes will be kept (for text detection preprocessing)",
                     "type": "integer",
                     "minimum": 1
+                },
+                "radialDecayRatio": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decay radius as a fraction of min(cropWidth, cropHeight). Only used when featureType is radialSoft."
+                },
+                "cohesionSigma": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Lab stddev at which a bin's cohesion drops to ~37%. Only used when featureType is radialSoft."
+                },
+                "peerSigma": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Lab colour distance at which a peer's similarity drops to ~61%. Only used when featureType is radialSoft."
+                },
+                "rareStyleFloor": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Minimum weight fraction a bin receives even with zero peer support. Only used when featureType is radialSoft."
+                },
+                "weightFeatureScale": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Scale factor for the explicit weight channel in the feature vector. Only used when featureType is radialSoft."
+                },
+                "minBinWeight": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Bins with finalWeight below this are ignored when recovering representative colours. Only used when featureType is radialSoft."
+                },
+                "repMergeLabDist": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Lab distance below which adjacent bins are merged into one representative colour. Only used when featureType is radialSoft."
                 }
             },
             "required": [

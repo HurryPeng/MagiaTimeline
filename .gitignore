@@ -11,5 +11,5 @@ debug*
 /PaddleOCRModels*
 /build/
 /dist/
-/*debug/
+/*debug*/
 /note

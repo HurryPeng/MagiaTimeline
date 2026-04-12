@@ -446,15 +446,42 @@ ocr:
 
 sty:
   # featureType: feature representation for inter-interval clustering
-  # - hsvCone2d: 2D area-weighted mean in HSV cone space (default, easy to visualise)
+  # - radialSoft:    32-dim radial soft-layer profile (new default); captures fill/outline/shadow colours
+  # - hsvCone2d:     2D area-weighted mean in HSV cone space (simple, easy to visualise)
   # - softHistogram: archived 8x8 HSV-cone soft histogram (higher-dimensional)
-  featureType: hsvCone2d
-  # histBins: bins per axis for softHistogram mode only (ignored for hsvCone2d)
+  featureType: radialSoft
+  # histBins: bins per axis for softHistogram mode only (ignored for other featureTypes)
   histBins: 8
-  # clusterDistThreshold: distance threshold for agglomerative clustering cutoff
-  # For hsvCone2d (euclidean, range ~0-1.4): try 0.15-0.3
-  # For softHistogram (cosine, range 0-1): try 0.2-0.4
-  clusterDistThreshold: 0.3
+  # clusterDistThreshold: distance threshold for agglomerative clustering cutoff.
+  # Set to 0 (or any negative value) to use the inconsistency criterion (auto mode):
+  #   each merge is cut if its height is >2 std-devs above the mean of the two levels
+  #   below it.  Works well with many clusters; no manual tuning needed.
+  # If auto gives wrong results, override with a manual distance value:
+  #   For radialSoft    (euclidean, 32-dim normalised): try 0.3-1.0
+  #   For hsvCone2d     (euclidean, range ~0-1.4):      try 0.15-0.3
+  #   For softHistogram (cosine, range 0-1):            try 0.2-0.4
+  clusterDistThreshold: 0.2
+  # --- radialSoft parameters (only used when featureType == "radialSoft") ---
+  # radialDecayRatio: decay radius as a fraction of min(cropWidth, cropHeight).
+  #   Pixels beyond this distance from the core fill area receive weight 0. Default 0.25.
+  radialDecayRatio: 0.1
+  # cohesionSigma: Lab stddev at which a bin's cohesion drops to ~37%.
+  #   Lower = stricter colour consistency required. Default 12.0.
+  cohesionSigma: 50
+  # peerSigma: Lab colour distance at which a peer's similarity drops to ~61%.
+  #   Lower = only near-identical colours count as peers. Default 14.0.
+  peerSigma: 50
+  # rareStyleFloor: minimum weight fraction a bin receives even with zero peer support.
+  #   Prevents rare-but-real styles from being completely suppressed. Range [0,1]. Default 0.25.
+  rareStyleFloor: 0.25
+  # weightFeatureScale: scale factor for the explicit weight channel in the feature vector. Default 0.5.
+  weightFeatureScale: 0.5
+  # minBinWeight: bins with finalWeight below this threshold are ignored when recovering
+  #   representative colours. Default 0.01.
+  minBinWeight: 0.01
+  # repMergeLabDist: Lab distance below which adjacent bins are merged into one representative colour.
+  #   Default 10.0.
+  repMergeLabDist: 10.0
   # minIntervalCount: minimum number of intervals a cluster must have to be assigned a named style
   minIntervalCount: 2
   # styleNames: optional list of style names; clusters are ordered by size (largest first)

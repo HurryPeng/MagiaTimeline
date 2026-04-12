@@ -1,4 +1,5 @@
 from __future__ import annotations
+import dataclasses
 import os
 import pytesseract
 import paddleocr
@@ -116,98 +117,18 @@ class IIROcrPass(IIRPass):
             file.close()
             print(f"Output written to {file.name}")
 
-def extractColourClusters(
-    roi: cv.Mat,
-    sobelThreshold: int,
-    minCcAreaRatio: float,
-    maxCcAreaRatio: float,
-    maxCcStddev: float,
-    clusterThreshold: float,
-    minColourAreaRatio: float,
-    debugRoiOut: typing.Optional[cv.Mat] = None,
-) -> typing.List[typing.Tuple[np.ndarray, float]]:
-    """Extract colour clusters from a text box ROI.
-    Returns [(avgColourBGR, areaRatio), ...] sorted descending by area ratio.
-    avgColourBGR is a shape (3,) float array;
-    areaRatio is the cluster's share of total accepted CC area (0.0~1.0).
-    Returns empty list if no valid regions are found.
-    If debugRoiOut is provided (a writable view into a debug canvas), accepted CC
-    pixels are painted onto it with their original colours from roi."""
-
-    imageSobel = rgbSobel(roi, 1)
-    imageSobelBin = cv.threshold(imageSobel, sobelThreshold, 255, cv.THRESH_BINARY_INV)[1]
-
-    roiH, roiW = roi.shape[:2]
-    area = roiH * roiW
-    minCcArea = max(minCcAreaRatio * area, 10)
-    maxCcArea = maxCcAreaRatio * area
-
-    nLabels, labels, stats, centroids = cv.connectedComponentsWithStats(imageSobelBin, connectivity=4, ltype=cv.CV_32S)
-
-    acceptedIds = []
-    ccMeans = []
-    acceptedArea = 0
-
-    for i in range(nLabels):
-        ccArea = stats[i][cv.CC_STAT_AREA]
-        if ccArea >= minCcArea and ccArea <= maxCcArea:
-            mask = np.where(labels == i, 255, 0).astype(np.uint8)
-            mean, std = cv.meanStdDev(roi, mask=mask)
-            std = np.mean(std)
-            if std < maxCcStddev:
-                # Border contact filter: reject CCs whose bounding box touches the ROI edge
-                ccLeft   = stats[i][cv.CC_STAT_LEFT]
-                ccTop    = stats[i][cv.CC_STAT_TOP]
-                ccRight  = ccLeft + stats[i][cv.CC_STAT_WIDTH]
-                ccBottom = ccTop  + stats[i][cv.CC_STAT_HEIGHT]
-                if ccLeft == 0 or ccTop == 0 or ccRight >= roiW or ccBottom >= roiH:
-                    continue
-                acceptedIds.append(i)
-                ccMeans.append(mean)
-                acceptedArea += ccArea
-                if debugRoiOut is not None:
-                    pixelMask = labels == i
-                    debugRoiOut[pixelMask] = roi[pixelMask]
-
-    if len(acceptedIds) == 0:
-        return []
-
-    if len(acceptedIds) == 1:
-        return [(ccMeans[0].flatten(), 1.0)]
-
-    ccMeans = np.array(ccMeans).reshape(len(ccMeans), -1)
-    ccAreas = np.array([stats[i][cv.CC_STAT_AREA] for i in acceptedIds]).reshape(-1, 1)
-
-    scaler = sklearn.preprocessing.StandardScaler()
-    ccMeansScaled = scaler.fit_transform(ccMeans)
-
-    distMat = scipy.spatial.distance.pdist(ccMeansScaled, metric='euclidean')
-    Z = scipy.cluster.hierarchy.linkage(distMat, method='weighted')
-    clusters = scipy.cluster.hierarchy.fcluster(Z, clusterThreshold, criterion='distance')
-
-    clusterColours: typing.Dict[int, typing.List[typing.Tuple[np.ndarray, float]]] = {}
-    clusterAreas: typing.Dict[int, float] = {}
-
-    for i, clusterId in enumerate(clusters):
-        if clusterId not in clusterColours:
-            clusterColours[clusterId] = []
-            clusterAreas[clusterId] = 0
-        clusterColours[clusterId].append((ccMeans[i], ccAreas[i][0]))
-        clusterAreas[clusterId] += ccAreas[i][0]
-
-    result: typing.List[typing.Tuple[np.ndarray, float]] = []
-    for clusterId, colours in clusterColours.items():
-        totalArea = clusterAreas[clusterId]
-        weightedColourSum = np.sum([mean * a for mean, a in colours], axis=0)
-        avgColour = weightedColourSum / totalArea
-        areaRatio = totalArea / acceptedArea
-        if areaRatio >= minColourAreaRatio:
-            result.append((avgColour.flatten(), areaRatio))
-
-    result.sort(key=lambda x: x[1], reverse=True)
-    return result
 
 class IIRStyleClassifyPass(IIRPass):
+    @dataclasses.dataclass
+    class RadialProfile:
+        """Per-interval colour profile produced by the radial soft-layer pipeline."""
+        labMeans:       np.ndarray                       # (8, 3) float32 — weighted LAB mean per radial bin
+        cohesions:      np.ndarray                       # (8,)   float32 — colour uniformity per bin
+        supports:       np.ndarray                       # (8,)   float32 — relative pixel mass per bin
+        localQualities: np.ndarray                       # (8,)   float32 — support × cohesion
+        peerSupports:   typing.Optional[np.ndarray] = None   # (8,) float32 — set by applyPeerReinforcement
+        finalWeights:   typing.Optional[np.ndarray] = None   # (8,) float32 — set by applyPeerReinforcement
+
     def __init__(self, config: dict, frameKey: type):
         self.frameKey: type = frameKey
         self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
@@ -216,13 +137,22 @@ class IIRStyleClassifyPass(IIRPass):
         # Soft histogram parameters
         self.histBins: int = config["histBins"]
 
-        # extractColourClusters parameters
+        # extractColourClusters / runSobelCcFilter parameters (shared by all featureType paths)
         self.sobelThreshold: int = config["sobelThreshold"]
         self.minCcAreaRatio: float = config["minCcAreaRatio"]
         self.maxCcAreaRatio: float = config["maxCcAreaRatio"]
         self.maxCcStddev: float = config["maxCcStddev"]
         self.clusterThreshold: float = config["clusterThreshold"]
         self.minColourAreaRatio: float = config["minColourAreaRatio"]
+
+        # radialSoft feature parameters (used when featureType == "radialSoft")
+        self.radialDecayRatio: float = config["radialDecayRatio"]
+        self.cohesionSigma: float = config["cohesionSigma"]
+        self.peerSigma: float = config["peerSigma"]
+        self.rareStyleFloor: float = config["rareStyleFloor"]
+        self.weightFeatureScale: float = config["weightFeatureScale"]
+        self.minBinWeight: float = config["minBinWeight"]
+        self.repMergeLabDist: float = config["repMergeLabDist"]
 
         # Inter-interval clustering parameters
         self.clusterDistThreshold: float = config["clusterDistThreshold"]
@@ -247,6 +177,489 @@ class IIRStyleClassifyPass(IIRPass):
             device="cpu",
             enable_mkldnn=True
         )
+
+    # ------------------------------------------------------------------
+    # Private static helpers (style-classification only)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def runSobelCcFilter(
+        roi: cv.Mat,
+        sobelThreshold: int,
+        minCcAreaRatio: float,
+        maxCcAreaRatio: float,
+        maxCcStddev: float,
+    ) -> typing.Tuple[typing.List[int], np.ndarray, np.ndarray, typing.List[np.ndarray], int]:
+        """Shared Sobel/CC filter pipeline: find flat-colour regions that don't touch the ROI border.
+
+        Runs Sobel edge detection, inverts to get flat-colour (low-gradient) regions as connected
+        components, then filters by area, colour consistency (stddev), and border non-contact.
+        These accepted CCs correspond to uniform text fill pixels.
+
+        Returns (acceptedIds, labels, stats, ccMeans, acceptedArea).
+        acceptedIds is empty when no valid regions are found."""
+        imageSobel = rgbSobel(roi, 1)
+        imageSobelBin = cv.threshold(imageSobel, sobelThreshold, 255, cv.THRESH_BINARY_INV)[1]
+
+        roiH, roiW = roi.shape[:2]
+        area = roiH * roiW
+        minCcArea = max(minCcAreaRatio * area, 10)
+        maxCcArea = maxCcAreaRatio * area
+
+        nLabels, labels, stats, _ = cv.connectedComponentsWithStats(imageSobelBin, connectivity=4, ltype=cv.CV_32S)
+
+        acceptedIds: typing.List[int] = []
+        ccMeans: typing.List[np.ndarray] = []
+        acceptedArea = 0
+
+        for i in range(nLabels):
+            ccArea = stats[i][cv.CC_STAT_AREA]
+            if minCcArea <= ccArea <= maxCcArea:
+                mask = np.where(labels == i, 255, 0).astype(np.uint8)
+                mean, std = cv.meanStdDev(roi, mask=mask)
+                if float(np.mean(std)) < maxCcStddev:
+                    ccLeft   = stats[i][cv.CC_STAT_LEFT]
+                    ccTop    = stats[i][cv.CC_STAT_TOP]
+                    ccRight  = ccLeft + stats[i][cv.CC_STAT_WIDTH]
+                    ccBottom = ccTop  + stats[i][cv.CC_STAT_HEIGHT]
+                    if ccLeft == 0 or ccTop == 0 or ccRight >= roiW or ccBottom >= roiH:
+                        continue
+                    acceptedIds.append(i)
+                    ccMeans.append(mean)
+                    acceptedArea += ccArea
+
+        return acceptedIds, labels, stats, ccMeans, acceptedArea
+
+    @staticmethod
+    def extractColourClusters(
+        roi: cv.Mat,
+        sobelThreshold: int,
+        minCcAreaRatio: float,
+        maxCcAreaRatio: float,
+        maxCcStddev: float,
+        clusterThreshold: float,
+        minColourAreaRatio: float,
+        debugRoiOut: typing.Optional[cv.Mat] = None,
+    ) -> typing.List[typing.Tuple[np.ndarray, float]]:
+        """Extract colour clusters from a text box ROI.
+        Returns [(avgColourBGR, areaRatio), ...] sorted descending by area ratio.
+        avgColourBGR is a shape (3,) float array;
+        areaRatio is the cluster's share of total accepted CC area (0.0-1.0).
+        Returns empty list if no valid regions are found.
+        If debugRoiOut is provided (a writable view into a debug canvas), accepted CC
+        pixels are painted onto it with their original colours from roi."""
+        acceptedIds, labels, stats, ccMeans, acceptedArea = IIRStyleClassifyPass.runSobelCcFilter(
+            roi, sobelThreshold, minCcAreaRatio, maxCcAreaRatio, maxCcStddev
+        )
+
+        if debugRoiOut is not None:
+            for i in acceptedIds:
+                pixelMask = labels == i
+                debugRoiOut[pixelMask] = roi[pixelMask]
+
+        if len(acceptedIds) == 0:
+            return []
+
+        if len(acceptedIds) == 1:
+            return [(ccMeans[0].flatten(), 1.0)]
+
+        ccMeans = np.array(ccMeans).reshape(len(ccMeans), -1)
+        ccAreas = np.array([stats[i][cv.CC_STAT_AREA] for i in acceptedIds]).reshape(-1, 1)
+
+        scaler = sklearn.preprocessing.StandardScaler()
+        ccMeansScaled = scaler.fit_transform(ccMeans)
+
+        distMat = scipy.spatial.distance.pdist(ccMeansScaled, metric='euclidean')
+        Z = scipy.cluster.hierarchy.linkage(distMat, method='weighted')
+        clusters = scipy.cluster.hierarchy.fcluster(Z, clusterThreshold, criterion='distance')
+
+        clusterColours: typing.Dict[int, typing.List[typing.Tuple[np.ndarray, float]]] = {}
+        clusterAreas: typing.Dict[int, float] = {}
+
+        for i, clusterId in enumerate(clusters):
+            if clusterId not in clusterColours:
+                clusterColours[clusterId] = []
+                clusterAreas[clusterId] = 0
+            clusterColours[clusterId].append((ccMeans[i], ccAreas[i][0]))
+            clusterAreas[clusterId] += ccAreas[i][0]
+
+        result: typing.List[typing.Tuple[np.ndarray, float]] = []
+        for clusterId, colours in clusterColours.items():
+            totalArea = clusterAreas[clusterId]
+            weightedColourSum = np.sum([mean * a for mean, a in colours], axis=0)
+            avgColour = weightedColourSum / totalArea
+            areaRatio = totalArea / acceptedArea
+            if areaRatio >= minColourAreaRatio:
+                result.append((avgColour.flatten(), areaRatio))
+
+        result.sort(key=lambda x: x[1], reverse=True)
+        return result
+
+    @staticmethod
+    def extractLocalProfile(
+        roi: cv.Mat,
+        sobelThreshold: int,
+        minCcAreaRatio: float,
+        maxCcAreaRatio: float,
+        maxCcStddev: float,
+        radialDecayRatio: float,
+        cohesionSigma: float,
+        debugRoiOut: typing.Optional[cv.Mat] = None,
+    ) -> typing.Optional[IIRStyleClassifyPass.RadialProfile]:
+        """Extract radial soft-layer profile from a text box ROI (Stage A of radialSoft algorithm).
+
+        Uses the Sobel/CC filter pipeline to identify core text fill pixels (coreMask),
+        then bins all ROI pixels into 8 overlapping soft radial layers by distance from coreMask.
+        Pixels closer to the core are weighted more heavily; the outermost bin captures shadow/outline.
+
+        If debugRoiOut is provided (writable view into a debug canvas), core pixels are painted onto it.
+
+        Returns None if the Sobel/CC pipeline finds no core area."""
+        acceptedIds, labels, _, _, _ = IIRStyleClassifyPass.runSobelCcFilter(
+            roi, sobelThreshold, minCcAreaRatio, maxCcAreaRatio, maxCcStddev
+        )
+
+        if not acceptedIds:
+            return None
+
+        roiH, roiW = roi.shape[:2]
+
+        # Build coreMask: union of accepted CC pixels (= text fill layer)
+        coreMask = np.zeros((roiH, roiW), dtype=np.uint8)
+        for i in acceptedIds:
+            coreMask[labels == i] = 255
+
+        if debugRoiOut is not None:
+            coreMaskBool = coreMask.astype(bool)
+            debugRoiOut[coreMaskBool] = roi[coreMaskBool]
+
+        # Distance from every pixel to the nearest core pixel.
+        # outsideMask is 1 (non-zero) outside the core; distanceTransform measures distance
+        # of each non-zero pixel to the nearest zero pixel (= nearest core pixel).
+        # Core pixels themselves are zero in outsideMask, so their output distance is 0.
+        outsideMask = (coreMask == 0).astype(np.uint8)
+        distMap = cv.distanceTransform(outsideMask, cv.DIST_L2, 3).astype(np.float32)
+
+        baseUnit = float(min(roiW, roiH))
+        decayRadius = max(1.0, radialDecayRatio * baseUnit)
+        normDist = np.minimum(distMap / decayRadius, 1.0).astype(np.float32)
+        decayWeight = (1.0 - normDist).astype(np.float32)
+        totalDecayMass = float(decayWeight.sum())
+
+        cropLab = cv.cvtColor(roi, cv.COLOR_BGR2LAB).astype(np.float32)
+
+        binCount = 8
+        binCenters = np.linspace(0.0, 1.0, binCount, dtype=np.float32)
+        binHalfWidth = float(1.0 / (binCount - 1))
+        eps = 1e-6
+
+        labMeans = np.zeros((binCount, 3), dtype=np.float32)
+        cohesions = np.zeros(binCount, dtype=np.float32)
+        supports = np.zeros(binCount, dtype=np.float32)
+        localQualities = np.zeros(binCount, dtype=np.float32)
+
+        for k in range(binCount):
+            center = float(binCenters[k])
+            kernel = np.maximum(0.0, 1.0 - np.abs(normDist - center) / binHalfWidth).astype(np.float32)
+            pixelWeight = decayWeight * kernel  # (H, W)
+            weightSum = float(pixelWeight.sum())
+            if weightSum < eps:
+                continue  # leave bin as zeros
+
+            labMean = (cropLab * pixelWeight[..., None]).sum(axis=(0, 1)) / weightSum  # (3,)
+            labDiff = cropLab - labMean[None, None, :]  # (H, W, 3)
+            labSqDist = (labDiff * labDiff).sum(axis=2)  # (H, W)
+            labVar = float((labSqDist * pixelWeight).sum() / weightSum)
+
+            support = weightSum / (totalDecayMass + eps)
+            # Gate cohesion: low-support bins have too few samples for a reliable variance
+            # estimate and can spuriously show near-1 cohesion.  Only compute it when the
+            # bin has meaningful mass; otherwise leave cohesion at 0.
+            if support >= 0.05:
+                cohesion = float(np.exp(-labVar / (cohesionSigma * cohesionSigma)))
+            else:
+                cohesion = 0.0
+
+            labMeans[k] = labMean
+            cohesions[k] = cohesion
+            supports[k] = support
+            # localQuality uses sqrt(support) to compress the steep radial drop-off: outer
+            # bins (outline/shadow) have far fewer pixels than the core but carry the most
+            # style-distinguishing colour.  sqrt brings their peer-reinforcement vote weight
+            # into a comparable range with the core bin.
+            # Cohesion is applied later in buildStyleOutputs as a quality gate on rep colours.
+            localQualities[k] = float(np.sqrt(support))
+
+        # B0 (core fill) cohesion is forced to 1.0: the core mask captures the dominant fill
+        # colour, so any variance at B0 comes from legitimate fill-colour diversity (e.g. when
+        # coreMask still includes some outline pixels), not from noise.  Penalising it with a
+        # low cohesion would unjustly block fill colours from rep-colour candidacy.
+        cohesions[0] = 1.0
+
+        return IIRStyleClassifyPass.RadialProfile(
+            labMeans=labMeans,
+            cohesions=cohesions,
+            supports=supports,
+            localQualities=localQualities,
+        )
+
+    @staticmethod
+    def mergeBoxProfiles(
+        boxProfiles: typing.List[typing.Tuple[IIRStyleClassifyPass.RadialProfile, float]]
+    ) -> IIRStyleClassifyPass.RadialProfile:
+        """Merge multiple per-box local profiles into a single interval profile by area-weighted averaging."""
+        totalArea = sum(a for _, a in boxProfiles)
+        def wavg(attr: str) -> np.ndarray:
+            acc = np.zeros_like(getattr(boxProfiles[0][0], attr))
+            for profile, area in boxProfiles:
+                acc = acc + getattr(profile, attr) * (area / totalArea)
+            return acc
+        return IIRStyleClassifyPass.RadialProfile(
+            labMeans=wavg("labMeans"),
+            cohesions=wavg("cohesions"),
+            supports=wavg("supports"),
+            localQualities=wavg("localQualities"),
+        )
+
+    @staticmethod
+    def applyPeerReinforcement(
+        allProfiles: typing.List[typing.Optional[IIRStyleClassifyPass.RadialProfile]],
+        peerSigma: float,
+        rareStyleFloor: float,
+    ) -> None:
+        """Compute peer support and final weights for all profiles in-place (Stage B).
+
+        For each sample i and radial bin k, peerSupport measures how many other samples
+        in the same bin share a similar colour with high local quality. This amplifies
+        colours that recur consistently across the video (style signals) and suppresses
+        one-off colours that are likely background contamination.
+
+        Mutates each non-None profile by adding 'peerSupports' and 'finalWeights' keys."""
+        eps = 1e-6
+        validIndices = [i for i, p in enumerate(allProfiles) if p is not None]
+        N = len(validIndices)
+
+        if N == 0:
+            return
+
+        binCount = 8
+        validProfiles: typing.List[IIRStyleClassifyPass.RadialProfile] = [
+            typing.cast(IIRStyleClassifyPass.RadialProfile, allProfiles[i]) for i in validIndices
+        ]
+        allLabMeans = np.stack([p.labMeans for p in validProfiles]).astype(np.float32)      # (N, 8, 3)
+        allLocalQuality = np.stack([p.localQualities for p in validProfiles]).astype(np.float32)  # (N, 8)
+
+        allLabMeansT = allLabMeans.transpose(1, 0, 2)  # (8, N, 3)
+        allQualityT = allLocalQuality.T                  # (8, N)
+        qualityRowSums = allQualityT.sum(axis=1)         # (8,) - denominator base, same for all ni
+
+        twoSigmaSq = float(2.0 * peerSigma * peerSigma)
+        peerSupportsAll = np.zeros((N, binCount), dtype=np.float32)
+
+        for ni in range(N):
+            diff = allLabMeansT - allLabMeans[ni][:, None, :]  # (8, N, 3)
+            distSq = (diff * diff).sum(axis=2)                  # (8, N)
+            colorSim = np.exp(-distSq / twoSigmaSq)             # (8, N)
+            selfQuality = allQualityT[:, ni]                                          # (8,)
+            numerator = (allQualityT * colorSim).sum(axis=1) - selfQuality           # (8,)
+            denom = qualityRowSums - selfQuality + eps                                # (8,)
+            peerSupportsAll[ni] = numerator / denom
+
+        for n, p in enumerate(validProfiles):
+            peerSupports = peerSupportsAll[n]
+            finalWeights = p.localQualities * (rareStyleFloor + (1.0 - rareStyleFloor) * peerSupports)
+            p.peerSupports = peerSupports.astype(np.float32)
+            p.finalWeights = finalWeights.astype(np.float32)
+
+    @staticmethod
+    def buildStyleOutputs(
+        profile: IIRStyleClassifyPass.RadialProfile,
+        weightFeatureScale: float,
+        minBinWeight: float,
+        repMergeLabDist: float,
+        globalBaseline: typing.Optional[np.ndarray] = None,
+    ) -> typing.Tuple[np.ndarray, typing.List[np.ndarray], typing.List[float]]:
+        """Build 32-dim style feature vector and representative BGR colours from a profile (Stages C + D).
+
+        Args:
+            globalBaseline: (8,) float32 mean normFW across all valid profiles in this pass.
+                            When provided, rep-colour candidates are scored with a TF-IDF-style
+                            discriminative weight so colours that are common across ALL styles
+                            (e.g. white fill) are deprioritised in favour of colours that are
+                            distinctive to this specific style (e.g. its unique outline colour).
+
+        Returns:
+            styleFeatureVector: np.ndarray shape (32,), float32 — for agglomerative clustering
+            repColoursBgr:      list of float32 shape-(3,) BGR arrays — for ASS style generation
+            repWeights:         list of floats normalised to sum 1.0"""
+        assert profile.finalWeights is not None, "buildStyleOutputs requires peer reinforcement to have run"
+        finalWeights = profile.finalWeights  # (8,)
+        labMeans = profile.labMeans          # (8, 3)
+
+        # Normalise weights to relative proportions so the feature vector captures the
+        # colour *distribution* rather than absolute mass.  Two intervals with the same
+        # style but different text density will then have similar feature vectors.
+        totalFW = float(finalWeights.sum())
+        normFW = finalWeights / (totalFW + 1e-6)
+
+        binFeatures = np.empty((8, 4), dtype=np.float32)
+        for k in range(8):
+            w = float(normFW[k])
+            lm = labMeans[k]
+            lNorm = lm[0] / 255.0
+            aNorm = (lm[1] - 128.0) / 128.0
+            bNorm = (lm[2] - 128.0) / 128.0
+            wSqrt = float(np.sqrt(max(w, 0.0)))
+            binFeatures[k] = [wSqrt * lNorm, wSqrt * aNorm, wSqrt * bNorm, weightFeatureScale * w]
+        styleFeatureVector = binFeatures.flatten()
+
+        cohesions = profile.cohesions
+
+        # TF-IDF discriminative score: bins whose normFW is high relative to the global
+        # average across all styles get a boost; bins that are uniformly high in every
+        # style (e.g. white fill) are suppressed.  The filter still uses the raw weight
+        # so we don't exclude a bin just because its colour is globally common.
+        if globalBaseline is not None:
+            discScore = normFW / (globalBaseline + 1e-6)
+        else:
+            discScore = np.ones(8, dtype=np.float32)
+
+        candidates = [(k, float(finalWeights[k] * cohesions[k] * discScore[k]), labMeans[k])
+                      for k in range(8) if float(finalWeights[k] * cohesions[k]) >= minBinWeight]
+        candidates.sort(key=lambda x: x[1], reverse=True)
+
+        if not candidates:
+            return styleFeatureVector, [], []
+
+        mergedClusters: typing.List[typing.Tuple[np.ndarray, float]] = []
+        for _, w, lm in candidates:
+            merged = False
+            for mi in range(len(mergedClusters)):
+                prevLm, prevW = mergedClusters[mi]
+                dist = float(np.sqrt(float(((lm - prevLm) ** 2).sum())))
+                if dist < repMergeLabDist:
+                    newW = prevW + w
+                    if newW > 0:
+                        mergedClusters[mi] = (prevLm * (prevW / newW) + lm * (w / newW), newW)
+                    merged = True
+                    break
+            if not merged:
+                mergedClusters.append((lm.copy(), w))
+
+        mergedClusters.sort(key=lambda x: x[1], reverse=True)
+        mergedClusters = mergedClusters[:3]
+        totalW = sum(w for _, w in mergedClusters)
+
+        repColoursBgr: typing.List[np.ndarray] = []
+        repWeights: typing.List[float] = []
+        for lm, w in mergedClusters:
+            labPixel = np.clip(lm, 0, 255).reshape(1, 1, 3).astype(np.uint8)
+            bgrPixel = cv.cvtColor(labPixel, cv.COLOR_LAB2BGR)
+            repColoursBgr.append(bgrPixel.flatten().astype(np.float32))
+            repWeights.append(w / totalW if totalW > 0 else 0.0)
+
+        return styleFeatureVector, repColoursBgr, repWeights
+
+    @staticmethod
+    def makeRadialSoftDebugImage(
+        profile: IIRStyleClassifyPass.RadialProfile,
+        repColoursBgr: typing.List[np.ndarray],
+        repWeights: typing.List[float],
+    ) -> np.ndarray:
+        """Build a compact per-interval debug strip showing radialSoft bin statistics.
+
+        Layout (left-label column + 8 bin columns):
+          Row 0 - column headers  (B0 … B7)
+          Row 1 - LAB mean colour swatches
+          Row 2 - support    (greyscale brightness + numeric overlay)
+          Row 3 - cohesion   (greyscale brightness + numeric overlay)
+          Row 4 - peerSpt    (greyscale brightness + numeric overlay)
+          Row 5 - finalWt    (greyscale brightness + numeric overlay)
+          Row 6 - representative colours proportional to weight
+        """
+        LABEL_W  = 72
+        CELL_W   = 52
+        H_HDR    = 18
+        H_COLOUR = 48
+        H_SCALAR = 28
+        H_REP    = 40
+        N_BINS   = 8
+
+        SCALAR_ROWS = [
+            ("support",  "supports"),
+            ("cohesion", "cohesions"),
+            ("peerSpt",  "peerSupports"),
+            ("finalWt",  "finalWeights"),
+        ]
+
+        total_w = LABEL_W + N_BINS * CELL_W
+        total_h = H_HDR + H_COLOUR + len(SCALAR_ROWS) * H_SCALAR + 2 + H_REP
+        img = np.full((total_h, total_w, 3), 40, dtype=np.uint8)
+
+        font = cv.FONT_HERSHEY_SIMPLEX
+        fs   = 0.38
+        th   = 1
+
+        # Row 0: column headers
+        y0 = 0
+        cv.putText(img, "bin", (4, y0 + H_HDR - 4), font, fs, (160, 160, 160), th, cv.LINE_AA)
+        for k in range(N_BINS):
+            x = LABEL_W + k * CELL_W
+            cv.rectangle(img, (x, y0), (x + CELL_W - 1, y0 + H_HDR - 1), (55, 55, 55), -1)
+            cv.putText(img, f"B{k}", (x + 4, y0 + H_HDR - 4), font, fs, (200, 200, 200), th, cv.LINE_AA)
+
+        # Row 1: LAB mean colour swatches
+        y0 += H_HDR
+        cv.putText(img, "colour", (4, y0 + H_COLOUR // 2 + 5), font, fs, (160, 160, 160), th, cv.LINE_AA)
+        for k in range(N_BINS):
+            x = LABEL_W + k * CELL_W
+            labPx = np.clip(profile.labMeans[k], 0, 255).reshape(1, 1, 3).astype(np.uint8)
+            bgr = cv.cvtColor(labPx, cv.COLOR_LAB2BGR)[0, 0]
+            cv.rectangle(img, (x, y0), (x + CELL_W - 1, y0 + H_COLOUR - 1),
+                         (int(bgr[0]), int(bgr[1]), int(bgr[2])), -1)
+
+        # Rows 2-5: scalar rows (greyscale brightness = value; auto-contrast text)
+        y0 += H_COLOUR
+        for row_label, arr_key in SCALAR_ROWS:
+            raw = getattr(profile, arr_key)
+            arr: np.ndarray = raw if raw is not None else np.zeros(N_BINS, dtype=np.float32)
+            cv.putText(img, row_label, (4, y0 + H_SCALAR - 6), font, fs, (160, 160, 160), th, cv.LINE_AA)
+            for k in range(N_BINS):
+                x = LABEL_W + k * CELL_W
+                val = float(np.clip(arr[k], 0.0, 1.0))
+                grey = int(val * 255)
+                cv.rectangle(img, (x, y0), (x + CELL_W - 1, y0 + H_SCALAR - 1),
+                             (grey, grey, grey), -1)
+                txt_col = (0, 0, 0) if grey >= 128 else (255, 255, 255)
+                cv.putText(img, f"{val:.2f}", (x + 4, y0 + H_SCALAR - 7),
+                           font, fs, txt_col, th, cv.LINE_AA)
+            y0 += H_SCALAR
+
+        # Divider
+        cv.rectangle(img, (0, y0), (total_w - 1, y0 + 1), (80, 80, 80), -1)
+        y0 += 2
+
+        # Row 6: representative colours proportional to weight
+        cv.putText(img, "repClr", (4, y0 + H_REP - 6), font, fs, (160, 160, 160), th, cv.LINE_AA)
+        bar_w = N_BINS * CELL_W
+        if repColoursBgr and repWeights:
+            x_cursor = LABEL_W
+            total_rw = sum(repWeights) or 1.0
+            for colour, weight in zip(repColoursBgr, repWeights):
+                seg_w = max(1, round((weight / total_rw) * bar_w))
+                seg_w = min(seg_w, LABEL_W + bar_w - x_cursor)
+                c = np.clip(colour, 0, 255).astype(np.uint8)
+                cv.rectangle(img, (x_cursor, y0), (x_cursor + seg_w - 1, y0 + H_REP - 1),
+                             (int(c[0]), int(c[1]), int(c[2])), -1)
+                x_cursor += seg_w
+        else:
+            cv.rectangle(img, (LABEL_W, y0), (LABEL_W + bar_w - 1, y0 + H_REP - 1), (50, 50, 50), -1)
+            cv.putText(img, "none", (LABEL_W + 4, y0 + H_REP - 6),
+                       font, fs, (120, 120, 120), th, cv.LINE_AA)
+
+        return img
+
+    # ------------------------------------------------------------------
 
     def detectBoxes(self, image: np.ndarray) -> typing.List[typing.Tuple[int, int, int, int]]:
         """Run text detection on image and return non-major-box-suppressed axis-aligned boxes."""
@@ -349,6 +762,120 @@ class IIRStyleClassifyPass(IIRPass):
             return self.buildFeatureSoftHistogram(colourClusters)
         return self.buildFeatureMeanHsvCone(colourClusters)
 
+    def computeAllFeaturesRadialSoft(self, iir: IIR) -> typing.Tuple[
+        typing.List[typing.Optional[np.ndarray]],
+        typing.List[typing.Optional[np.ndarray]]
+    ]:
+        """Two-pass feature extraction using the radial soft-layer algorithm.
+
+        Pass 1: for each interval, run extractLocalProfile on each detected text box crop.
+                The Sobel/CC pipeline identifies core fill pixels (coreMask); radial bins
+                then describe colour from core outward, capturing outline and shadow layers.
+                Per-box profiles are area-weighted and merged into one profile per interval.
+        Global: applyPeerReinforcement cross-correlates all interval profiles — bins that
+                show a consistent colour across many intervals are boosted; one-off bins
+                (likely background) are attenuated.
+        Pass 2: buildStyleOutputs converts each profile into a 32-dim feature vector and
+                a list of representative BGR colours."""
+        debug: bool = True
+
+        # --- Phase 1: extract local profiles ---
+        allProfiles: typing.List[typing.Optional[IIRStyleClassifyPass.RadialProfile]] = []
+
+        for i, interval in enumerate(iir.intervals):
+            image: cv.Mat = interval.getAttachment(self.frameKey)
+
+            if image is None:
+                allProfiles.append(None)
+                continue
+
+            boxes = self.detectBoxes(image)
+            debugCcImg: typing.Optional[cv.Mat] = \
+                checkerboardBackground(image.shape[1], image.shape[0]) if debug else None
+
+            boxProfiles: typing.List[typing.Tuple[IIRStyleClassifyPass.RadialProfile, float]] = []
+
+            for bx, by, bw, bh in boxes:
+                crop: cv.Mat = typing.cast(cv.Mat, image[by:by + bh, bx:bx + bw].copy())
+                if crop.size == 0:
+                    continue
+                debugRoiOut: typing.Optional[cv.Mat] = \
+                    typing.cast(cv.Mat, debugCcImg[by:by + bh, bx:bx + bw]) if debugCcImg is not None else None
+
+                profile = self.extractLocalProfile(
+                    crop,
+                    self.sobelThreshold,
+                    self.minCcAreaRatio,
+                    self.maxCcAreaRatio,
+                    self.maxCcStddev,
+                    self.radialDecayRatio,
+                    self.cohesionSigma,
+                    debugRoiOut=debugRoiOut,
+                )
+                if profile is not None:
+                    boxProfiles.append((profile, float(bw * bh)))
+
+            if debugCcImg is not None:
+                timeStr = interval.timeStringBegin().replace(":", "-")
+                os.makedirs("STY_debug", exist_ok=True)
+                cv.imwrite(os.path.join("STY_debug", f"{timeStr}_full.png"), image)
+                cv.imwrite(os.path.join("STY_debug", f"{timeStr}_cc.png"), debugCcImg)
+
+            allProfiles.append(self.mergeBoxProfiles(boxProfiles) if boxProfiles else None)
+
+            if i % 10 == 0:
+                print(interval.getName(i))
+
+        # --- Global: peer reinforcement ---
+        self.applyPeerReinforcement(allProfiles, self.peerSigma, self.rareStyleFloor)
+
+        # --- Phase 2: build feature vectors and representative colours ---
+
+        # Compute global per-bin baseline (mean normFW across all valid profiles) for
+        # TF-IDF discriminative rep-colour scoring.  Colours that appear with similar
+        # weight in every style (e.g. white fill) will be deprioritised; colours that
+        # are distinctive to one style (e.g. a red outline) will be boosted.
+        validProfilesForBaseline = [
+            p for p in allProfiles if p is not None and p.finalWeights is not None
+        ]
+        if len(validProfilesForBaseline) > 1:
+            normFWStack = np.stack([
+                p.finalWeights / (p.finalWeights.sum() + 1e-6)  # type: ignore[union-attr]
+                for p in validProfilesForBaseline
+            ])  # (N, 8)
+            globalBaseline: typing.Optional[np.ndarray] = normFWStack.mean(axis=0).astype(np.float32)
+        else:
+            globalBaseline = None  # single style: no cross-style comparison possible
+
+        features: typing.List[typing.Optional[np.ndarray]] = []
+        repColours: typing.List[typing.Optional[np.ndarray]] = []
+
+        for interval, profile in zip(iir.intervals, allProfiles):
+            if profile is None:
+                features.append(None)
+                repColours.append(None)
+                continue
+
+            styleVec, repColoursBgr, repWeights = self.buildStyleOutputs(
+                profile,
+                self.weightFeatureScale,
+                self.minBinWeight,
+                self.repMergeLabDist,
+                globalBaseline,
+            )
+            features.append(styleVec)
+            repColours.append(repColoursBgr[0] if repColoursBgr else None)
+
+            if debug:
+                debugFeatImg = IIRStyleClassifyPass.makeRadialSoftDebugImage(
+                    profile, repColoursBgr, repWeights
+                )
+                timeStr = interval.timeStringBegin().replace(":", "-")
+                os.makedirs("STY_debug", exist_ok=True)
+                cv.imwrite(os.path.join("STY_debug", f"{timeStr}_feat.png"), debugFeatImg)
+
+        return features, repColours
+
     def computeAllFeatures(self, iir: IIR) -> typing.Tuple[
         typing.List[typing.Optional[np.ndarray]],
         typing.List[typing.Optional[np.ndarray]]
@@ -356,6 +883,9 @@ class IIRStyleClassifyPass(IIRPass):
         """Compute per-interval features and representative colours for all intervals.
         Returns (features, repColours) where each is a list parallel to iir.intervals.
         None entries indicate intervals with no valid colour data."""
+        if self.featureType == "radialSoft":
+            return self.computeAllFeaturesRadialSoft(iir)
+
         debug: bool = True
 
         features: typing.List[typing.Optional[np.ndarray]] = []
@@ -389,7 +919,7 @@ class IIRStyleClassifyPass(IIRPass):
                 debugRoiOut: typing.Optional[cv.Mat] = \
                     typing.cast(cv.Mat, debugCcImg[by:by + bh, bx:bx + bw]) if debugCcImg is not None else None
 
-                clusters = extractColourClusters(
+                clusters = self.extractColourClusters(
                     crop,
                     self.sobelThreshold,
                     self.minCcAreaRatio,
@@ -449,20 +979,30 @@ class IIRStyleClassifyPass(IIRPass):
 
     def cluster(self, features: typing.List[typing.Optional[np.ndarray]], validIndices: typing.List[int]) -> typing.List[int]:
         """Cluster valid intervals by their features.
-        Uses euclidean distance for hsvCone2d (2D point cloud) and cosine for softHistogram.
-        Returns cluster assignments parallel to validIndices."""
+        Uses euclidean distance for radialSoft/hsvCone2d and cosine for softHistogram.
+        Returns cluster assignments parallel to validIndices.
+
+        When clusterDistThreshold <= 0, uses scipy's inconsistency criterion with
+        depth=2 and t=2.0: each merge node is cut if its height is more than 2 standard
+        deviations above the mean height of the two levels below it.  This detects all
+        class boundaries independently and works well with many clusters.
+        When clusterDistThreshold > 0, falls back to a fixed distance threshold."""
         if len(validIndices) == 1:
             return [0]
 
         featureMat = np.array([features[i] for i in validIndices])
-        # hsvCone2d features are 2D Euclidean points; softHistogram features are
-        # L2-normalised high-dim vectors where cosine distance is more appropriate.
-        metric = 'euclidean' if self.featureType == 'hsvCone2d' else 'cosine'
+        metric = 'cosine' if self.featureType == 'softHistogram' else 'euclidean'
         distMat = scipy.spatial.distance.pdist(featureMat, metric=metric)
-        # Replace NaN distances (from zero vectors) with max distance
         distMat = np.nan_to_num(distMat, nan=1.0)
         Z = scipy.cluster.hierarchy.linkage(distMat, method='average')
-        rawLabels = scipy.cluster.hierarchy.fcluster(Z, self.clusterDistThreshold, criterion='distance')
+
+        if self.clusterDistThreshold > 0:
+            print(f"  [sty] clustering: fixed distance threshold = {self.clusterDistThreshold:.4f}")
+            rawLabels = scipy.cluster.hierarchy.fcluster(Z, self.clusterDistThreshold, criterion='distance')
+        else:
+            print(f"  [sty] clustering: inconsistency criterion (depth=2, t=2.0)")
+            rawLabels = scipy.cluster.hierarchy.fcluster(Z, 1.5, depth=2, criterion='inconsistent')
+
         return rawLabels.tolist()
 
     def computeClusterColour(self, repColours: typing.List[typing.Optional[np.ndarray]], memberIndices: typing.List[int]) -> np.ndarray:
