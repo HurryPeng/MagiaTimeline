@@ -134,10 +134,7 @@ class IIRStyleClassifyPass(IIRPass):
         self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
         self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
 
-        # Soft histogram parameters
-        self.histBins: int = config["histBins"]
-
-        # extractColourClusters / runSobelCcFilter parameters (shared by all featureType paths)
+        # extractColourClusters / runSobelCcFilter parameters
         self.sobelThreshold: int = config["sobelThreshold"]
         self.minCcAreaRatio: float = config["minCcAreaRatio"]
         self.maxCcAreaRatio: float = config["maxCcAreaRatio"]
@@ -145,7 +142,7 @@ class IIRStyleClassifyPass(IIRPass):
         self.clusterThreshold: float = config["clusterThreshold"]
         self.minColourAreaRatio: float = config["minColourAreaRatio"]
 
-        # radialSoft feature parameters (used when featureType == "radialSoft")
+        # radialSoft feature parameters
         self.radialDecayRatio: float = config["radialDecayRatio"]
         self.cohesionSigma: float = config["cohesionSigma"]
         self.peerSigma: float = config["peerSigma"]
@@ -158,8 +155,6 @@ class IIRStyleClassifyPass(IIRPass):
         self.clusterDistThreshold: float = config["clusterDistThreshold"]
         self.minIntervalCount: int = config["minIntervalCount"]
 
-        # Feature type: "hsvCone2d" (default, 2D, easy to visualise) or "softHistogram" (8x8 grid, archived)
-        self.featureType: str = config["featureType"] if "featureType" in config else "hsvCone2d"
         # Output parameters
         self.styleNames: typing.List[str] = config.get("styleNames", [])
         self.baseStyleTemplate: str = config.get(
@@ -761,78 +756,6 @@ class IIRStyleClassifyPass(IIRPass):
 
         return filteredBoxes
 
-    def bgrToHsvCone(self, bgr: np.ndarray) -> typing.Tuple[float, float]:
-        """Convert a BGR colour to HSV cone Cartesian coordinates (x, y) in [-1, 1]."""
-        pixel = np.array([[bgr]], dtype=np.uint8)
-        hsv = cv.cvtColor(pixel, cv.COLOR_BGR2HSV)[0][0]
-        h, s, _ = hsv
-        h_rad = np.deg2rad(float(h)) * 2  # OpenCV H is [0, 180), actual [0, 360)
-        s_01 = float(s) / 255.0
-        x = s_01 * np.cos(h_rad)
-        y = s_01 * np.sin(h_rad)
-        return x, y
-
-    def buildFeatureSoftHistogram(self, colourClusters: typing.List[typing.Tuple[np.ndarray, float]]) -> np.ndarray:
-        """[Archived] Build an 8x8 HSV-cone soft histogram from colour clusters via bilinear interpolation.
-        Returns a flattened histBins*histBins vector."""
-        G = self.histBins
-        hist = np.zeros((G, G), dtype=np.float64)
-
-        for avgColour, areaRatio in colourClusters:
-            x, y = self.bgrToHsvCone(avgColour)
-
-            # Map from [-1, 1] to [0, G-1]
-            gx = (x + 1.0) / 2.0 * (G - 1)
-            gy = (y + 1.0) / 2.0 * (G - 1)
-
-            # Bilinear soft assignment
-            gx0 = int(np.floor(gx))
-            gy0 = int(np.floor(gy))
-            gx1 = gx0 + 1
-            gy1 = gy0 + 1
-
-            fx = gx - gx0
-            fy = gy - gy0
-
-            gx0 = max(0, min(gx0, G - 1))
-            gx1 = max(0, min(gx1, G - 1))
-            gy0 = max(0, min(gy0, G - 1))
-            gy1 = max(0, min(gy1, G - 1))
-
-            hist[gy0, gx0] += areaRatio * (1 - fx) * (1 - fy)
-            hist[gy0, gx1] += areaRatio * fx * (1 - fy)
-            hist[gy1, gx0] += areaRatio * (1 - fx) * fy
-            hist[gy1, gx1] += areaRatio * fx * fy
-
-        return hist.flatten()
-
-    def buildFeatureMeanHsvCone(self, colourClusters: typing.List[typing.Tuple[np.ndarray, float]]) -> np.ndarray:
-        """Build a 2D HSV-cone feature from colour clusters by area-weighted mean.
-        Maps each colour to (s·cos(2h), s·sin(2h)), then computes a weighted average.
-        Achromatic colours (black / white / grey) have s≈0 and naturally converge to the
-        origin, so they contribute little to the mean without any explicit penalty.
-        Returns a shape (2,) float64 vector."""
-        x_acc, y_acc = 0.0, 0.0
-        w_acc = 0.0
-        for avgColour, areaRatio in colourClusters:
-            x, y = self.bgrToHsvCone(avgColour)
-            x_acc += x * areaRatio
-            y_acc += y * areaRatio
-            w_acc += areaRatio
-        if w_acc > 0:
-            return np.array([x_acc / w_acc, y_acc / w_acc], dtype=np.float64)
-        return np.zeros(2, dtype=np.float64)
-
-    def buildFeature(self, colourClusters: typing.List[typing.Tuple[np.ndarray, float]]) -> np.ndarray:
-        """Dispatch to the configured feature builder.
-        Currently supported featureType values:
-          "hsvCone2d"     -- 2D area-weighted mean in HSV cone space (default, easy to visualise)
-          "softHistogram" -- 8x8 HSV-cone soft histogram (archived, higher-dimensional)
-        """
-        if self.featureType == "softHistogram":
-            return self.buildFeatureSoftHistogram(colourClusters)
-        return self.buildFeatureMeanHsvCone(colourClusters)
-
     def computeAllFeaturesRadialSoft(self, iir: IIR) -> typing.Tuple[
         typing.List[typing.Optional[np.ndarray]],
         typing.List[typing.Optional[np.ndarray]]
@@ -955,103 +878,10 @@ class IIRStyleClassifyPass(IIRPass):
         """Compute per-interval features and representative colours for all intervals.
         Returns (features, repColours) where each is a list parallel to iir.intervals.
         None entries indicate intervals with no valid colour data."""
-        if self.featureType == "radialSoft":
-            return self.computeAllFeaturesRadialSoft(iir)
-
-        debug: bool = True
-
-        features: typing.List[typing.Optional[np.ndarray]] = []
-        repColours: typing.List[typing.Optional[np.ndarray]] = []
-
-        featureDim: typing.Optional[int] = None  # inferred from first valid feature
-
-        for i, interval in enumerate(iir.intervals):
-            image: cv.Mat = interval.getAttachment(self.frameKey)
-
-            if image is None:
-                features.append(None)
-                repColours.append(None)
-                continue
-
-            boxes = self.detectBoxes(image)
-
-            debugCcImg: typing.Optional[cv.Mat] = \
-                checkerboardBackground(image.shape[1], image.shape[0]) if debug else None
-
-            # Accumulate per-box features weighted by crop area
-            aggregatedFeature: typing.Optional[np.ndarray] = None
-            totalBoxArea = 0
-            bestRepColour: typing.Optional[np.ndarray] = None
-            bestRepArea = 0.0  # absolute area of the best representative colour
-
-            for bx, by, bw, bh in boxes:
-                crop: cv.Mat = typing.cast(cv.Mat, image[by:by + bh, bx:bx + bw].copy())
-                if crop.size == 0:
-                    continue
-                debugRoiOut: typing.Optional[cv.Mat] = \
-                    typing.cast(cv.Mat, debugCcImg[by:by + bh, bx:bx + bw]) if debugCcImg is not None else None
-
-                clusters = self.extractColourClusters(
-                    crop,
-                    self.sobelThreshold,
-                    self.minCcAreaRatio,
-                    self.maxCcAreaRatio,
-                    self.maxCcStddev,
-                    self.clusterThreshold,
-                    self.minColourAreaRatio,
-                    debugRoiOut=debugRoiOut,
-                )
-
-                if not clusters:
-                    continue
-
-                boxArea = crop.shape[1] * crop.shape[0]
-                boxFeature = self.buildFeature(clusters)
-                if featureDim is None:
-                    featureDim = len(boxFeature)
-                if aggregatedFeature is None:
-                    aggregatedFeature = np.zeros(featureDim, dtype=np.float64)
-                aggregatedFeature += boxFeature * boxArea
-                totalBoxArea += boxArea
-
-                # Track representative colour: top-1 colour from the box with largest absolute area contribution
-                topColour, topAreaRatio = clusters[0]
-                absArea = topAreaRatio * boxArea
-                if absArea > bestRepArea:
-                    bestRepArea = absArea
-                    bestRepColour = topColour
-
-            if debugCcImg is not None:
-                timeStr = interval.timeStringBegin().replace(":", "-")
-                os.makedirs("STY_debug", exist_ok=True)
-                cv.imwrite(os.path.join("STY_debug", f"{timeStr}_full.png"), image)
-                cv.imwrite(os.path.join("STY_debug", f"{timeStr}_cc.png"), debugCcImg)
-
-            if totalBoxArea == 0 or aggregatedFeature is None:
-                features.append(None)
-                repColours.append(None)
-                continue
-
-            assert isinstance(aggregatedFeature, np.ndarray)
-            finalFeature: np.ndarray = aggregatedFeature / totalBoxArea  # weighted mean across boxes
-
-            # L2 normalise only for softHistogram; hsvCone2d is already a bounded 2D point
-            if self.featureType == "softHistogram":
-                norm = np.linalg.norm(finalFeature)
-                if norm > 0:
-                    finalFeature = finalFeature / norm
-
-            features.append(finalFeature)
-            repColours.append(bestRepColour)
-
-            if i % 10 == 0:
-                print(interval.getName(i))
-
-        return features, repColours
+        return self.computeAllFeaturesRadialSoft(iir)
 
     def cluster(self, features: typing.List[typing.Optional[np.ndarray]], validIndices: typing.List[int]) -> typing.List[int]:
-        """Cluster valid intervals by their features.
-        Uses euclidean distance for radialSoft/hsvCone2d and cosine for softHistogram.
+        """Cluster valid intervals by their features using euclidean distance.
         Returns cluster assignments parallel to validIndices.
 
         When clusterDistThreshold <= 0, uses scipy's inconsistency criterion with
@@ -1063,8 +893,7 @@ class IIRStyleClassifyPass(IIRPass):
             return [0]
 
         featureMat = np.array([features[i] for i in validIndices])
-        metric = 'cosine' if self.featureType == 'softHistogram' else 'euclidean'
-        distMat = scipy.spatial.distance.pdist(featureMat, metric=metric)
+        distMat = scipy.spatial.distance.pdist(featureMat, metric='euclidean')
         distMat = np.nan_to_num(distMat, nan=1.0)
         Z = scipy.cluster.hierarchy.linkage(distMat, method='average')
 

@@ -817,20 +817,9 @@
             "description": "Automatic subtitle style classification by colour clustering",
             "type": "object",
             "properties": {
-                "featureType": {
-                    "type": "string",
-                    "enum": ["radialSoft", "hsvCone2d", "softHistogram"],
-                    "description": "Feature representation for inter-interval clustering. radialSoft: 32-dim radial soft-layer profile capturing fill/outline/shadow colours (default). hsvCone2d: 2D area-weighted mean in HSV cone space (simple). softHistogram: archived 8x8 HSV-cone soft histogram."
-                },
-                "histBins": {
-                    "type": "integer",
-                    "minimum": 2,
-                    "description": "Number of bins per axis in the HSV-cone soft histogram. Only used when featureType is softHistogram."
-                },
                 "clusterDistThreshold": {
                     "type": "number",
-                    "minimum": 0,
-                    "description": "Distance threshold for agglomerative clustering cutoff. Euclidean for hsvCone2d, cosine for softHistogram."
+                    "description": "Distance threshold for agglomerative clustering cutoff (euclidean, 32-dim normalised feature space). Set to 0 or negative to use the inconsistency criterion (auto mode)."
                 },
                 "minIntervalCount": {
                     "type": "integer",

@@ -445,21 +445,11 @@ ocr:
   tesseractLang: "jpn"
 
 sty:
-  # featureType: feature representation for inter-interval clustering
-  # - radialSoft:    32-dim radial soft-layer profile (new default); captures fill/outline/shadow colours
-  # - hsvCone2d:     2D area-weighted mean in HSV cone space (simple, easy to visualise)
-  # - softHistogram: archived 8x8 HSV-cone soft histogram (higher-dimensional)
-  featureType: radialSoft
-  # histBins: bins per axis for softHistogram mode only (ignored for other featureTypes)
-  histBins: 8
   # clusterDistThreshold: distance threshold for agglomerative clustering cutoff.
   # Set to 0 (or any negative value) to use the inconsistency criterion (auto mode):
   #   each merge is cut if its height is >2 std-devs above the mean of the two levels
   #   below it.  Works well with many clusters; no manual tuning needed.
-  # If auto gives wrong results, override with a manual distance value:
-  #   For radialSoft    (euclidean, 32-dim normalised): try 0.3-1.0
-  #   For hsvCone2d     (euclidean, range ~0-1.4):      try 0.15-0.3
-  #   For softHistogram (cosine, range 0-1):            try 0.2-0.4
+  # If auto gives wrong results, override with a manual distance value (euclidean, 32-dim normalised): try 0.3-1.0
   clusterDistThreshold: 0.2
   # --- radialSoft parameters (only used when featureType == "radialSoft") ---
   # radialDecayRatio: decay radius as a fraction of min(cropWidth, cropHeight).
