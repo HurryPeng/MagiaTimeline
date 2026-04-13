@@ -228,6 +228,53 @@ class IIRStyleClassifyPass(IIRPass):
                     ccMeans.append(mean)
                     acceptedArea += ccArea
 
+        # Post-dilation: expand each accepted CC by 1 pixel (3×3 star/cross kernel) to compensate
+        # for the Sobel edge detection eating into thin letter strokes.  Expansion is blocked by
+        # pixels already owned by other accepted CCs; largest-area CCs get priority in contested
+        # pixels so that large fill letters are not shrunk by smaller outline rings claiming first.
+        if acceptedIds:
+            starKernel = cv.getStructuringElement(cv.MORPH_CROSS, (3, 3))
+
+            # Process in descending area order so larger (fill) CCs claim contested pixels first.
+            byArea = sorted(range(len(acceptedIds)), key=lambda k: -stats[acceptedIds[k]][cv.CC_STAT_AREA])
+
+            # Initial claimed mask: all accepted CC pixels before any dilation.
+            claimedMask = np.zeros((roiH, roiW), dtype=np.uint8)
+            for cc_id in acceptedIds:
+                claimedMask[labels == cc_id] = 255
+
+            newCcMeans: typing.List[np.ndarray] = list(ccMeans)  # filled in-order below
+            newAcceptedArea = 0
+
+            for k in byArea:
+                cc_id = acceptedIds[k]
+                origMask = (labels == cc_id).astype(np.uint8) * 255
+                dilated  = cv.dilate(origMask, starKernel)
+
+                # Expansion is allowed into pixels not claimed by OTHER accepted CCs.
+                claimedByOthers = claimedMask & ~origMask
+                expand = ((dilated > 0) & (claimedByOthers == 0)).astype(np.uint8) * 255
+
+                # Claim the expanded pixels.
+                labels[expand > 0] = cc_id
+                claimedMask[expand > 0] = 255
+
+                # Update bbox and area stats from the expanded mask.
+                ys, xs = np.where(expand > 0)
+                stats[cc_id][cv.CC_STAT_LEFT]   = int(xs.min())
+                stats[cc_id][cv.CC_STAT_TOP]    = int(ys.min())
+                stats[cc_id][cv.CC_STAT_WIDTH]  = int(xs.max() - xs.min() + 1)
+                stats[cc_id][cv.CC_STAT_HEIGHT] = int(ys.max() - ys.min() + 1)
+                stats[cc_id][cv.CC_STAT_AREA]   = int((expand > 0).sum())
+
+                # Recompute mean colour from original roi pixels within expanded region.
+                newMean, _ = cv.meanStdDev(roi, mask=expand)
+                newCcMeans[k] = newMean
+                newAcceptedArea += stats[cc_id][cv.CC_STAT_AREA]
+
+            ccMeans = newCcMeans
+            acceptedArea = newAcceptedArea
+
         return acceptedIds, labels, stats, ccMeans, acceptedArea
 
     @staticmethod
@@ -244,7 +291,7 @@ class IIRStyleClassifyPass(IIRPass):
     ) -> typing.List[typing.Tuple[np.ndarray, float]]:
         """Extract colour clusters from a text box ROI.
         Returns [(avgColourBGR, areaRatio), ...] sorted descending by fill score
-        (sum of area x fillRatio for CCs in that cluster), so compact fill regions
+        (sum of area x fillRatio**2 for CCs in that cluster), so compact fill regions
         rank above thin-ring outline regions even when the outline has more total area.
         avgColourBGR is a shape (3,) float array;
         areaRatio is the cluster's share of total accepted CC area (0.0-1.0).
@@ -298,7 +345,7 @@ class IIRStyleClassifyPass(IIRPass):
                 clusterCcIds[cid] = []
             clusterColours[cid].append((ccMeansArr[idx], ccAreasArr[idx]))
             clusterAreas[cid] += ccAreasArr[idx]
-            clusterFillScores[cid] += ccAreasArr[idx] * ccFillRatios[idx]
+            clusterFillScores[cid] += ccAreasArr[idx] * (ccFillRatios[idx] ** 2)
             clusterCcIds[cid].append(cc_id)
 
         # Sort cluster IDs by fill score descending (compact fill > thin outline).
@@ -336,7 +383,7 @@ class IIRStyleClassifyPass(IIRPass):
         """Extract radial soft-layer profile from a text box ROI (Stage A of radialSoft algorithm).
 
         Uses extractColourClusters to colour-cluster accepted CCs sorted by fill score
-        (sum of area × fillRatio).  The top-ranked cluster — compact fill letters — becomes
+        (sum of area x fillRatio**2).  The top-ranked cluster — compact fill letters — becomes
         the coreMask origin for the radial distance transform.  Thin-ring outline CCs have
         lower fillRatio and rank below the fill cluster regardless of absolute area.
 
@@ -409,12 +456,10 @@ class IIRStyleClassifyPass(IIRPass):
             labMeans[k] = labMean
             cohesions[k] = cohesion
             supports[k] = support
-            # localQuality uses sqrt(support) to compress the steep radial drop-off: outer
-            # bins (outline/shadow) have far fewer pixels than the core but carry the most
-            # style-distinguishing colour.  sqrt brings their peer-reinforcement vote weight
-            # into a comparable range with the core bin.
-            # Cohesion is applied later in buildStyleOutputs as a quality gate on rep colours.
-            localQualities[k] = float(np.sqrt(support))
+            # localQuality = support ** SUPPORT_EXPONENT.
+            # Smaller exponent -> outer bins get relatively more influence; larger → core dominates.
+            SUPPORT_EXPONENT = 0.75
+            localQualities[k] = float(support ** SUPPORT_EXPONENT)
 
         # B0 (core fill) cohesion is forced to 1.0: the core mask captures the dominant fill
         # colour, so any variance at B0 comes from legitimate fill-colour diversity (e.g. when

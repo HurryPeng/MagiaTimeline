@@ -494,7 +494,7 @@ sty:
   minCcAreaRatio: 0.0
   maxCcAreaRatio: 0.3
   maxCcStddev: 10.0
-  clusterThreshold: 1.0
+  clusterThreshold: 0.5
   minColourAreaRatio: 0.01
   # Text detection parameters
   nonMajorBoxSuppressionMaxRatio: 0.1
