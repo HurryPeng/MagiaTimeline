@@ -283,9 +283,11 @@ class IIRStyleClassifyPass(IIRPass):
         outTopClusterMask: typing.Optional[np.ndarray] = None,
     ) -> typing.List[typing.Tuple[np.ndarray, float]]:
         """Extract colour clusters from a text box ROI.
-        Returns [(avgColourBGR, areaRatio), ...] sorted descending by fill score
-        (sum of area x fillRatio**2 for CCs in that cluster), so compact fill regions
-        rank above thin-ring outline regions even when the outline has more total area.
+        Returns [(avgColourBGR, areaRatio), ...] sorted descending by nesting score
+        (sum of area x nestDepth for CCs in that cluster).  CCs whose bounding boxes are
+        enclosed by other CCs' bounding boxes receive higher depth values, so core fill
+        pixels (nested inside outline/shadow layers) rank above outer-ring CCs regardless
+        of absolute area or compactness.
         avgColourBGR is a shape (3,) float array;
         areaRatio is the cluster's share of total accepted CC area (0.0-1.0).
         Returns empty list if no valid regions are found.
@@ -312,10 +314,53 @@ class IIRStyleClassifyPass(IIRPass):
 
         ccMeansArr = np.array(ccMeans).reshape(len(ccMeans), -1)
         ccAreasArr = np.array([stats[i][cv.CC_STAT_AREA] for i in acceptedIds], dtype=np.float64)
-        ccFillRatios = np.array([
-            float(stats[i][cv.CC_STAT_AREA]) / max(stats[i][cv.CC_STAT_WIDTH] * stats[i][cv.CC_STAT_HEIGHT], 1)
-            for i in acceptedIds
-        ], dtype=np.float64)
+
+        # Compute nesting depth for each accepted CC using bounding-box containment.
+        # A CC's direct parent is the accepted CC with the smallest bbox area that fully
+        # encloses it (i.e. the tightest wrapper).  If none exists, its parent is the
+        # virtual root at depth 0, so the CC itself gets depth 1.
+        # Deeper CCs (fill inside outline inside shadow) receive higher multipliers,
+        # which is what we want: core fill pixels rank above outer-shell pixels.
+        n = len(acceptedIds)
+        ccBoxes = [
+            (stats[acceptedIds[i]][cv.CC_STAT_LEFT],
+             stats[acceptedIds[i]][cv.CC_STAT_TOP],
+             stats[acceptedIds[i]][cv.CC_STAT_LEFT] + stats[acceptedIds[i]][cv.CC_STAT_WIDTH],
+             stats[acceptedIds[i]][cv.CC_STAT_TOP]  + stats[acceptedIds[i]][cv.CC_STAT_HEIGHT])
+            for i in range(n)
+        ]
+        ccBboxAreas = [float(ccBoxes[i][2] - ccBoxes[i][0]) * float(ccBoxes[i][3] - ccBoxes[i][1])
+                       for i in range(n)]
+
+        def bbContains(outer: int, inner: int) -> bool:
+            """True when outer's bbox fully contains inner's bbox (outer ≠ inner)."""
+            ol, ot, or_, ob = ccBoxes[outer]
+            il, it, ir, ib = ccBoxes[inner]
+            return ol <= il and ir <= or_ and ot <= it and ib <= ob
+
+        # directParent[i] = index into acceptedIds of i's tightest enclosing CC, or -1.
+        directParent: typing.List[int] = []
+        for i in range(n):
+            bestArea = float('inf')
+            parent = -1
+            for j in range(n):
+                if j != i and bbContains(j, i) and ccBboxAreas[j] < bestArea:
+                    bestArea = ccBboxAreas[j]
+                    parent = j
+            directParent.append(parent)
+
+        # Memoised depth: depth[i] = depth[directParent[i]] + 1; virtual root = 0.
+        ccNestDepths: typing.List[int] = [0] * n
+
+        def getDepth(i: int) -> int:
+            if ccNestDepths[i] != 0:
+                return ccNestDepths[i]
+            d = 1 if directParent[i] == -1 else getDepth(directParent[i]) + 1
+            ccNestDepths[i] = d
+            return d
+
+        for i in range(n):
+            getDepth(i)
 
         scaler = sklearn.preprocessing.StandardScaler()
         ccMeansScaled = scaler.fit_transform(ccMeansArr)
@@ -326,7 +371,7 @@ class IIRStyleClassifyPass(IIRPass):
 
         clusterColours: typing.Dict[int, typing.List[typing.Tuple[np.ndarray, float]]] = {}
         clusterAreas: typing.Dict[int, float] = {}
-        clusterFillScores: typing.Dict[int, float] = {}
+        clusterNestScores: typing.Dict[int, float] = {}
         clusterCcIds: typing.Dict[int, typing.List[int]] = {}
 
         for idx, (cc_id, cid) in enumerate(zip(acceptedIds, clusterAssign)):
@@ -334,15 +379,15 @@ class IIRStyleClassifyPass(IIRPass):
             if cid not in clusterColours:
                 clusterColours[cid] = []
                 clusterAreas[cid] = 0.0
-                clusterFillScores[cid] = 0.0
+                clusterNestScores[cid] = 0.0
                 clusterCcIds[cid] = []
             clusterColours[cid].append((ccMeansArr[idx], ccAreasArr[idx]))
             clusterAreas[cid] += ccAreasArr[idx]
-            clusterFillScores[cid] += ccAreasArr[idx] * (ccFillRatios[idx] ** 2)
+            clusterNestScores[cid] += ccAreasArr[idx] * ccNestDepths[idx]
             clusterCcIds[cid].append(cc_id)
 
-        # Sort cluster IDs by fill score descending (compact fill > thin outline).
-        sortedCids = sorted(clusterFillScores, key=lambda c: clusterFillScores[c], reverse=True)
+        # Sort cluster IDs by nesting score descending (deeper fill > outer shell).
+        sortedCids = sorted(clusterNestScores, key=lambda c: clusterNestScores[c], reverse=True)
 
         # Fill the top-cluster mask before applying minColourAreaRatio filter, so
         # extractLocalProfile always gets a valid coreMask even if the top cluster
