@@ -464,7 +464,7 @@ sty:
   # --- radialSoft parameters (only used when featureType == "radialSoft") ---
   # radialDecayRatio: decay radius as a fraction of min(cropWidth, cropHeight).
   #   Pixels beyond this distance from the core fill area receive weight 0. Default 0.25.
-  radialDecayRatio: 0.1
+  radialDecayRatio: 0.15
   # cohesionSigma: Lab stddev at which a bin's cohesion drops to ~37%.
   #   Lower = stricter colour consistency required. Default 12.0.
   cohesionSigma: 50

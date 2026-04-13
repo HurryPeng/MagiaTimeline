@@ -240,14 +240,19 @@ class IIRStyleClassifyPass(IIRPass):
         clusterThreshold: float,
         minColourAreaRatio: float,
         debugRoiOut: typing.Optional[cv.Mat] = None,
+        outTopClusterMask: typing.Optional[np.ndarray] = None,
     ) -> typing.List[typing.Tuple[np.ndarray, float]]:
         """Extract colour clusters from a text box ROI.
-        Returns [(avgColourBGR, areaRatio), ...] sorted descending by area ratio.
+        Returns [(avgColourBGR, areaRatio), ...] sorted descending by fill score
+        (sum of area x fillRatio for CCs in that cluster), so compact fill regions
+        rank above thin-ring outline regions even when the outline has more total area.
         avgColourBGR is a shape (3,) float array;
         areaRatio is the cluster's share of total accepted CC area (0.0-1.0).
         Returns empty list if no valid regions are found.
         If debugRoiOut is provided (a writable view into a debug canvas), accepted CC
-        pixels are painted onto it with their original colours from roi."""
+        pixels are painted onto it with their original colours from roi.
+        If outTopClusterMask is provided (a zeroed uint8 array of the same HxW as roi),
+        pixels belonging to the top-ranked cluster are set to 255 in it."""
         acceptedIds, labels, stats, ccMeans, acceptedArea = IIRStyleClassifyPass.runSobelCcFilter(
             roi, sobelThreshold, minCcAreaRatio, maxCcAreaRatio, maxCcStddev
         )
@@ -261,38 +266,59 @@ class IIRStyleClassifyPass(IIRPass):
             return []
 
         if len(acceptedIds) == 1:
+            if outTopClusterMask is not None:
+                outTopClusterMask[labels == acceptedIds[0]] = 255
             return [(ccMeans[0].flatten(), 1.0)]
 
-        ccMeans = np.array(ccMeans).reshape(len(ccMeans), -1)
-        ccAreas = np.array([stats[i][cv.CC_STAT_AREA] for i in acceptedIds]).reshape(-1, 1)
+        ccMeansArr = np.array(ccMeans).reshape(len(ccMeans), -1)
+        ccAreasArr = np.array([stats[i][cv.CC_STAT_AREA] for i in acceptedIds], dtype=np.float64)
+        ccFillRatios = np.array([
+            float(stats[i][cv.CC_STAT_AREA]) / max(stats[i][cv.CC_STAT_WIDTH] * stats[i][cv.CC_STAT_HEIGHT], 1)
+            for i in acceptedIds
+        ], dtype=np.float64)
 
         scaler = sklearn.preprocessing.StandardScaler()
-        ccMeansScaled = scaler.fit_transform(ccMeans)
+        ccMeansScaled = scaler.fit_transform(ccMeansArr)
 
         distMat = scipy.spatial.distance.pdist(ccMeansScaled, metric='euclidean')
         Z = scipy.cluster.hierarchy.linkage(distMat, method='weighted')
-        clusters = scipy.cluster.hierarchy.fcluster(Z, clusterThreshold, criterion='distance')
+        clusterAssign = scipy.cluster.hierarchy.fcluster(Z, clusterThreshold, criterion='distance')
 
         clusterColours: typing.Dict[int, typing.List[typing.Tuple[np.ndarray, float]]] = {}
         clusterAreas: typing.Dict[int, float] = {}
+        clusterFillScores: typing.Dict[int, float] = {}
+        clusterCcIds: typing.Dict[int, typing.List[int]] = {}
 
-        for i, clusterId in enumerate(clusters):
-            if clusterId not in clusterColours:
-                clusterColours[clusterId] = []
-                clusterAreas[clusterId] = 0
-            clusterColours[clusterId].append((ccMeans[i], ccAreas[i][0]))
-            clusterAreas[clusterId] += ccAreas[i][0]
+        for idx, (cc_id, cid) in enumerate(zip(acceptedIds, clusterAssign)):
+            cid = int(cid)
+            if cid not in clusterColours:
+                clusterColours[cid] = []
+                clusterAreas[cid] = 0.0
+                clusterFillScores[cid] = 0.0
+                clusterCcIds[cid] = []
+            clusterColours[cid].append((ccMeansArr[idx], ccAreasArr[idx]))
+            clusterAreas[cid] += ccAreasArr[idx]
+            clusterFillScores[cid] += ccAreasArr[idx] * ccFillRatios[idx]
+            clusterCcIds[cid].append(cc_id)
+
+        # Sort cluster IDs by fill score descending (compact fill > thin outline).
+        sortedCids = sorted(clusterFillScores, key=lambda c: clusterFillScores[c], reverse=True)
+
+        # Fill the top-cluster mask before applying minColourAreaRatio filter, so
+        # extractLocalProfile always gets a valid coreMask even if the top cluster
+        # would otherwise be filtered out.
+        if outTopClusterMask is not None and sortedCids:
+            for cc_id in clusterCcIds[sortedCids[0]]:
+                outTopClusterMask[labels == cc_id] = 255
 
         result: typing.List[typing.Tuple[np.ndarray, float]] = []
-        for clusterId, colours in clusterColours.items():
-            totalArea = clusterAreas[clusterId]
-            weightedColourSum = np.sum([mean * a for mean, a in colours], axis=0)
-            avgColour = weightedColourSum / totalArea
+        for cid in sortedCids:
+            totalArea = clusterAreas[cid]
             areaRatio = totalArea / acceptedArea
             if areaRatio >= minColourAreaRatio:
-                result.append((avgColour.flatten(), areaRatio))
+                weightedSum = np.sum([mean * a for mean, a in clusterColours[cid]], axis=0)
+                result.append((weightedSum / totalArea, areaRatio))
 
-        result.sort(key=lambda x: x[1], reverse=True)
         return result
 
     @staticmethod
@@ -304,30 +330,30 @@ class IIRStyleClassifyPass(IIRPass):
         maxCcStddev: float,
         radialDecayRatio: float,
         cohesionSigma: float,
+        clusterThreshold: float,
         debugRoiOut: typing.Optional[cv.Mat] = None,
     ) -> typing.Optional[IIRStyleClassifyPass.RadialProfile]:
         """Extract radial soft-layer profile from a text box ROI (Stage A of radialSoft algorithm).
 
-        Uses the Sobel/CC filter pipeline to identify core text fill pixels (coreMask),
-        then bins all ROI pixels into 8 overlapping soft radial layers by distance from coreMask.
-        Pixels closer to the core are weighted more heavily; the outermost bin captures shadow/outline.
+        Uses extractColourClusters to colour-cluster accepted CCs sorted by fill score
+        (sum of area × fillRatio).  The top-ranked cluster — compact fill letters — becomes
+        the coreMask origin for the radial distance transform.  Thin-ring outline CCs have
+        lower fillRatio and rank below the fill cluster regardless of absolute area.
 
         If debugRoiOut is provided (writable view into a debug canvas), core pixels are painted onto it.
 
         Returns None if the Sobel/CC pipeline finds no core area."""
-        acceptedIds, labels, _, _, _ = IIRStyleClassifyPass.runSobelCcFilter(
-            roi, sobelThreshold, minCcAreaRatio, maxCcAreaRatio, maxCcStddev
-        )
-
-        if not acceptedIds:
-            return None
-
         roiH, roiW = roi.shape[:2]
 
-        # Build coreMask: union of accepted CC pixels (= text fill layer)
         coreMask = np.zeros((roiH, roiW), dtype=np.uint8)
-        for i in acceptedIds:
-            coreMask[labels == i] = 255
+        clusters = IIRStyleClassifyPass.extractColourClusters(
+            roi, sobelThreshold, minCcAreaRatio, maxCcAreaRatio, maxCcStddev,
+            clusterThreshold, minColourAreaRatio=0.0,
+            outTopClusterMask=coreMask,
+        )
+
+        if not clusters or not coreMask.any():
+            return None
 
         if debugRoiOut is not None:
             coreMaskBool = coreMask.astype(bool)
@@ -810,6 +836,7 @@ class IIRStyleClassifyPass(IIRPass):
                     self.maxCcStddev,
                     self.radialDecayRatio,
                     self.cohesionSigma,
+                    self.clusterThreshold,
                     debugRoiOut=debugRoiOut,
                 )
                 if profile is not None:
