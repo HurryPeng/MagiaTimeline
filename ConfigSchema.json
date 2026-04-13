@@ -858,11 +858,6 @@
                     "type": "number",
                     "minimum": 0
                 },
-                "minColourAreaRatio": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 1
-                },
                 "nonMajorBoxSuppressionMaxRatio": {
                     "description": "boxes with a ratio (over all boxes) lower than this will be suppressed (for text detection preprocessing)",
                     "type": "number",
@@ -919,7 +914,6 @@
                 "maxCcAreaRatio",
                 "maxCcStddev",
                 "clusterThreshold",
-                "minColourAreaRatio",
                 "nonMajorBoxSuppressionMaxRatio",
                 "nonMajorBoxSuppressionMinRank"
             ],

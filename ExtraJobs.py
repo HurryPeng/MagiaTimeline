@@ -140,7 +140,6 @@ class IIRStyleClassifyPass(IIRPass):
         self.maxCcAreaRatio: float = config["maxCcAreaRatio"]
         self.maxCcStddev: float = config["maxCcStddev"]
         self.clusterThreshold: float = config["clusterThreshold"]
-        self.minColourAreaRatio: float = config["minColourAreaRatio"]
 
         # radialSoft feature parameters
         self.radialDecayRatio: float = config["radialDecayRatio"]
@@ -280,7 +279,6 @@ class IIRStyleClassifyPass(IIRPass):
         maxCcAreaRatio: float,
         maxCcStddev: float,
         clusterThreshold: float,
-        minColourAreaRatio: float,
         debugRoiOut: typing.Optional[cv.Mat] = None,
         outTopClusterMask: typing.Optional[np.ndarray] = None,
     ) -> typing.List[typing.Tuple[np.ndarray, float]]:
@@ -357,9 +355,8 @@ class IIRStyleClassifyPass(IIRPass):
         for cid in sortedCids:
             totalArea = clusterAreas[cid]
             areaRatio = totalArea / acceptedArea
-            if areaRatio >= minColourAreaRatio:
-                weightedSum = np.sum([mean * a for mean, a in clusterColours[cid]], axis=0)
-                result.append((weightedSum / totalArea, areaRatio))
+            weightedSum = np.sum([mean * a for mean, a in clusterColours[cid]], axis=0)
+            result.append((weightedSum / totalArea, areaRatio))
 
         return result
 
@@ -390,7 +387,7 @@ class IIRStyleClassifyPass(IIRPass):
         coreMask = np.zeros((roiH, roiW), dtype=np.uint8)
         clusters = IIRStyleClassifyPass.extractColourClusters(
             roi, sobelThreshold, minCcAreaRatio, maxCcAreaRatio, maxCcStddev,
-            clusterThreshold, minColourAreaRatio=0.0,
+            clusterThreshold,
             outTopClusterMask=coreMask,
         )
 
@@ -426,6 +423,8 @@ class IIRStyleClassifyPass(IIRPass):
         supports = np.zeros(binCount, dtype=np.float32)
         localQualities = np.zeros(binCount, dtype=np.float32)
 
+        # Smaller exponent -> outer bins get relatively more influence; larger → core dominates.
+        SUPPORT_EXPONENT = 0.75
         for k in range(binCount):
             center = float(binCenters[k])
             kernel = np.maximum(0.0, 1.0 - np.abs(normDist - center) / binHalfWidth).astype(np.float32)
@@ -451,9 +450,6 @@ class IIRStyleClassifyPass(IIRPass):
             labMeans[k] = labMean
             cohesions[k] = cohesion
             supports[k] = support
-            # localQuality = support ** SUPPORT_EXPONENT.
-            # Smaller exponent -> outer bins get relatively more influence; larger → core dominates.
-            SUPPORT_EXPONENT = 0.75
             localQualities[k] = float(support ** SUPPORT_EXPONENT)
 
         # B0 (core fill) cohesion is forced to 1.0: the core mask captures the dominant fill
@@ -756,7 +752,7 @@ class IIRStyleClassifyPass(IIRPass):
 
         return filteredBoxes
 
-    def computeAllFeaturesRadialSoft(self, iir: IIR) -> typing.Tuple[
+    def computeAllFeatures(self, iir: IIR) -> typing.Tuple[
         typing.List[typing.Optional[np.ndarray]],
         typing.List[typing.Optional[np.ndarray]]
     ]:
@@ -870,15 +866,6 @@ class IIRStyleClassifyPass(IIRPass):
                 cv.imwrite(os.path.join("STY_debug", f"{timeStr}_feat.png"), debugFeatImg)
 
         return features, repColours
-
-    def computeAllFeatures(self, iir: IIR) -> typing.Tuple[
-        typing.List[typing.Optional[np.ndarray]],
-        typing.List[typing.Optional[np.ndarray]]
-    ]:
-        """Compute per-interval features and representative colours for all intervals.
-        Returns (features, repColours) where each is a list parallel to iir.intervals.
-        None entries indicate intervals with no valid colour data."""
-        return self.computeAllFeaturesRadialSoft(iir)
 
     def cluster(self, features: typing.List[typing.Optional[np.ndarray]], validIndices: typing.List[int]) -> typing.List[int]:
         """Cluster valid intervals by their features using euclidean distance.
