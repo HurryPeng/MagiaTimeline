@@ -234,15 +234,15 @@ class IIRStyleClassifyPass(IIRPass):
 
             # Initial claimed mask: all accepted CC pixels before any dilation.
             claimedMask = np.zeros((roiH, roiW), dtype=np.uint8)
-            for cc_id in acceptedIds:
-                claimedMask[labels == cc_id] = 255
+            for ccId in acceptedIds:
+                claimedMask[labels == ccId] = 255
 
             newCcMeans: typing.List[np.ndarray] = list(ccMeans)  # filled in-order below
             newAcceptedArea = 0
 
             for k in byArea:
-                cc_id = acceptedIds[k]
-                origMask = (labels == cc_id).astype(np.uint8) * 255
+                ccId = acceptedIds[k]
+                origMask = (labels == ccId).astype(np.uint8) * 255
                 dilated  = cv.dilate(origMask, starKernel)
 
                 # Expansion is allowed into pixels not claimed by OTHER accepted CCs.
@@ -250,21 +250,21 @@ class IIRStyleClassifyPass(IIRPass):
                 expand = ((dilated > 0) & (claimedByOthers == 0)).astype(np.uint8) * 255
 
                 # Claim the expanded pixels.
-                labels[expand > 0] = cc_id
+                labels[expand > 0] = ccId
                 claimedMask[expand > 0] = 255
 
                 # Update bbox and area stats from the expanded mask.
                 ys, xs = np.where(expand > 0)
-                stats[cc_id][cv.CC_STAT_LEFT]   = int(xs.min())
-                stats[cc_id][cv.CC_STAT_TOP]    = int(ys.min())
-                stats[cc_id][cv.CC_STAT_WIDTH]  = int(xs.max() - xs.min() + 1)
-                stats[cc_id][cv.CC_STAT_HEIGHT] = int(ys.max() - ys.min() + 1)
-                stats[cc_id][cv.CC_STAT_AREA]   = int((expand > 0).sum())
+                stats[ccId][cv.CC_STAT_LEFT]   = int(xs.min())
+                stats[ccId][cv.CC_STAT_TOP]    = int(ys.min())
+                stats[ccId][cv.CC_STAT_WIDTH]  = int(xs.max() - xs.min() + 1)
+                stats[ccId][cv.CC_STAT_HEIGHT] = int(ys.max() - ys.min() + 1)
+                stats[ccId][cv.CC_STAT_AREA]   = int((expand > 0).sum())
 
                 # Recompute mean colour from original roi pixels within expanded region.
                 newMean, _ = cv.meanStdDev(roi, mask=expand)
                 newCcMeans[k] = newMean
-                newAcceptedArea += stats[cc_id][cv.CC_STAT_AREA]
+                newAcceptedArea += stats[ccId][cv.CC_STAT_AREA]
 
             ccMeans = newCcMeans
             acceptedArea = newAcceptedArea
@@ -374,7 +374,7 @@ class IIRStyleClassifyPass(IIRPass):
         clusterNestScores: typing.Dict[int, float] = {}
         clusterCcIds: typing.Dict[int, typing.List[int]] = {}
 
-        for idx, (cc_id, cid) in enumerate(zip(acceptedIds, clusterAssign)):
+        for idx, (ccId, cid) in enumerate(zip(acceptedIds, clusterAssign)):
             cid = int(cid)
             if cid not in clusterColours:
                 clusterColours[cid] = []
@@ -384,17 +384,68 @@ class IIRStyleClassifyPass(IIRPass):
             clusterColours[cid].append((ccMeansArr[idx], ccAreasArr[idx]))
             clusterAreas[cid] += ccAreasArr[idx]
             clusterNestScores[cid] += ccAreasArr[idx] * ccNestDepths[idx]
-            clusterCcIds[cid].append(cc_id)
+            clusterCcIds[cid].append(ccId)
 
         # Sort cluster IDs by nesting score descending (deeper fill > outer shell).
         sortedCids = sorted(clusterNestScores, key=lambda c: clusterNestScores[c], reverse=True)
 
-        # Fill the top-cluster mask before applying minColourAreaRatio filter, so
-        # extractLocalProfile always gets a valid coreMask even if the top cluster
-        # would otherwise be filtered out.
+        # Fill the top-cluster mask with an outer-border pruning step.
+        #
+        # Only "root" CCs within the top cluster (those not bbox-contained by any other
+        # top-cluster CC) are candidates for removal.  CCs that are already inside another
+        # same-cluster CC are permanently safe.  This is a single-pass, one-layer-only
+        # prune: no cascading, once a root CC is removed its former children become safe
+        # automatically because they now have no same-cluster parent.
+        #
+        # Removal criterion for a root CC that contains other same-cluster CCs:
+        #   FR_self  < 0.5 × FR_subtree
+        # where FR_subtree is the area-weighted mean fill ratio of all same-cluster CCs
+        # contained within this CC's bbox.  A thin outer border has a low fill ratio
+        # relative to the compact fill letters it surrounds, so it is pruned; genuine
+        # character strokes have similar fill ratios to the
+        # strokes they enclose and are kept.
         if outTopClusterMask is not None and sortedCids:
-            for cc_id in clusterCcIds[sortedCids[0]]:
-                outTopClusterMask[labels == cc_id] = 255
+            ccIdToIdx = {acceptedIds[i]: i for i in range(n)}
+            topIndices = [ccIdToIdx[ccId] for ccId in clusterCcIds[sortedCids[0]]]
+
+            # containedBy[i] = all top-cluster indices j whose bbox lies inside bbox_i.
+            containedBy: typing.Dict[int, typing.List[int]] = {i: [] for i in topIndices}
+            hasParentInCluster: typing.Set[int] = set()
+            for i in topIndices:
+                for j in topIndices:
+                    if i != j and bbContains(i, j):
+                        containedBy[i].append(j)
+                        hasParentInCluster.add(j)
+
+            kept: typing.Set[int] = set(topIndices)
+            for i in topIndices:
+                if i in hasParentInCluster:
+                    continue  # safe: already inside another same-cluster CC
+                children = containedBy[i]
+                if not children:
+                    continue  # leaf root: safe
+                # Root CC that wraps other same-cluster CCs: apply FR criterion.
+                frSelf = float(stats[acceptedIds[i]][cv.CC_STAT_AREA]) / max(
+                    float(stats[acceptedIds[i]][cv.CC_STAT_WIDTH]) *
+                    float(stats[acceptedIds[i]][cv.CC_STAT_HEIGHT]), 1.0
+                )
+                totalChildArea = sum(float(stats[acceptedIds[j]][cv.CC_STAT_AREA]) for j in children)
+                frSubtree = (
+                    sum(
+                        float(stats[acceptedIds[j]][cv.CC_STAT_AREA]) *
+                        float(stats[acceptedIds[j]][cv.CC_STAT_AREA]) / max(
+                            float(stats[acceptedIds[j]][cv.CC_STAT_WIDTH]) *
+                            float(stats[acceptedIds[j]][cv.CC_STAT_HEIGHT]), 1.0
+                        )
+                        for j in children
+                    ) / totalChildArea
+                    if totalChildArea > 0 else 0.0
+                )
+                if frSelf < 0.5 * frSubtree:
+                    kept.discard(i)
+
+            for i in kept:
+                outTopClusterMask[labels == acceptedIds[i]] = 255
 
         result: typing.List[typing.Tuple[np.ndarray, float]] = []
         for cid in sortedCids:
@@ -699,9 +750,9 @@ class IIRStyleClassifyPass(IIRPass):
             ("finalWt",  "finalWeights"),
         ]
 
-        total_w = LABEL_W + N_BINS * CELL_W
-        total_h = H_HDR + H_COLOUR + len(SCALAR_ROWS) * H_SCALAR + 2 + H_REP
-        img = np.full((total_h, total_w, 3), 40, dtype=np.uint8)
+        totalW = LABEL_W + N_BINS * CELL_W
+        totalH = H_HDR + H_COLOUR + len(SCALAR_ROWS) * H_SCALAR + 2 + H_REP
+        img = np.full((totalH, totalW, 3), 40, dtype=np.uint8)
 
         font = cv.FONT_HERSHEY_SIMPLEX
         fs   = 0.38
@@ -727,40 +778,40 @@ class IIRStyleClassifyPass(IIRPass):
 
         # Rows 2-5: scalar rows (greyscale brightness = value; auto-contrast text)
         y0 += H_COLOUR
-        for row_label, arr_key in SCALAR_ROWS:
-            raw = getattr(profile, arr_key)
+        for rowLabel, arrKey in SCALAR_ROWS:
+            raw = getattr(profile, arrKey)
             arr: np.ndarray = raw if raw is not None else np.zeros(N_BINS, dtype=np.float32)
-            cv.putText(img, row_label, (4, y0 + H_SCALAR - 6), font, fs, (160, 160, 160), th, cv.LINE_AA)
+            cv.putText(img, rowLabel, (4, y0 + H_SCALAR - 6), font, fs, (160, 160, 160), th, cv.LINE_AA)
             for k in range(N_BINS):
                 x = LABEL_W + k * CELL_W
                 val = float(np.clip(arr[k], 0.0, 1.0))
                 grey = int(val * 255)
                 cv.rectangle(img, (x, y0), (x + CELL_W - 1, y0 + H_SCALAR - 1),
                              (grey, grey, grey), -1)
-                txt_col = (0, 0, 0) if grey >= 128 else (255, 255, 255)
+                txtCol = (0, 0, 0) if grey >= 128 else (255, 255, 255)
                 cv.putText(img, f"{val:.2f}", (x + 4, y0 + H_SCALAR - 7),
-                           font, fs, txt_col, th, cv.LINE_AA)
+                           font, fs, txtCol, th, cv.LINE_AA)
             y0 += H_SCALAR
 
         # Divider
-        cv.rectangle(img, (0, y0), (total_w - 1, y0 + 1), (80, 80, 80), -1)
+        cv.rectangle(img, (0, y0), (totalW - 1, y0 + 1), (80, 80, 80), -1)
         y0 += 2
 
         # Row 6: representative colours proportional to weight
         cv.putText(img, "repClr", (4, y0 + H_REP - 6), font, fs, (160, 160, 160), th, cv.LINE_AA)
-        bar_w = N_BINS * CELL_W
+        barW = N_BINS * CELL_W
         if repColoursBgr and repWeights:
-            x_cursor = LABEL_W
-            total_rw = sum(repWeights) or 1.0
+            xCursor = LABEL_W
+            totalRw = sum(repWeights) or 1.0
             for colour, weight in zip(repColoursBgr, repWeights):
-                seg_w = max(1, round((weight / total_rw) * bar_w))
-                seg_w = min(seg_w, LABEL_W + bar_w - x_cursor)
+                segW = max(1, round((weight / totalRw) * barW))
+                segW = min(segW, LABEL_W + barW - xCursor)
                 c = np.clip(colour, 0, 255).astype(np.uint8)
-                cv.rectangle(img, (x_cursor, y0), (x_cursor + seg_w - 1, y0 + H_REP - 1),
+                cv.rectangle(img, (xCursor, y0), (xCursor + segW - 1, y0 + H_REP - 1),
                              (int(c[0]), int(c[1]), int(c[2])), -1)
-                x_cursor += seg_w
+                xCursor += segW
         else:
-            cv.rectangle(img, (LABEL_W, y0), (LABEL_W + bar_w - 1, y0 + H_REP - 1), (50, 50, 50), -1)
+            cv.rectangle(img, (LABEL_W, y0), (LABEL_W + barW - 1, y0 + H_REP - 1), (50, 50, 50), -1)
             cv.putText(img, "none", (LABEL_W + 4, y0 + H_REP - 6),
                        font, fs, (120, 120, 120), th, cv.LINE_AA)
 
