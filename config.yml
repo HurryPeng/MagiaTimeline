@@ -488,46 +488,35 @@ ocr:
   tesseractLang: "jpn"
 
 sty:
-  # clusterDistThreshold: distance threshold for agglomerative clustering cutoff.
-  # Set to 0 (or any negative value) to use the inconsistency criterion (auto mode):
-  #   each merge is cut if its height is >2 std-devs above the mean of the two levels
-  #   below it.  Works well with many clusters; no manual tuning needed.
-  # If auto gives wrong results, override with a manual distance value (euclidean, 32-dim normalised): try 0.3-1.0
+  # clusterDistThreshold: distance threshold for agglomerative clustering; set to 0 or negative for auto (inconsistency criterion)
   clusterDistThreshold: 0.2
-  # --- radialSoft parameters (only used when featureType == "radialSoft") ---
-  # radialDecayRatio: decay radius as a fraction of min(cropWidth, cropHeight).
-  #   Pixels beyond this distance from the core fill area receive weight 0. Default 0.25.
-  radialDecayRatio: 0.15
-  # cohesionSigma: Lab stddev at which a bin's cohesion drops to ~37%.
-  #   Lower = stricter colour consistency required. Default 12.0.
-  cohesionSigma: 50
-  # peerSigma: Lab colour distance at which a peer's similarity drops to ~61%.
-  #   Lower = only near-identical colours count as peers. Default 14.0.
-  peerSigma: 50
-  # rareStyleFloor: minimum weight fraction a bin receives even with zero peer support.
-  #   Prevents rare-but-real styles from being completely suppressed. Range [0,1]. Default 0.25.
-  rareStyleFloor: 0.25
-  # weightFeatureScale: scale factor for the explicit weight channel in the feature vector. Default 0.5.
-  weightFeatureScale: 0.5
-  # intraSigma: Lab-space sigma for intra-cluster colour spread tolerance.
-  #   Higher = more tolerant of per-frame colour variation within one style. Default 15.0.
-  intraSigma: 15.0
-  # crossSigma: Lab-space sigma for cross-cluster distinctiveness scoring.
-  #   Higher = need larger colour gap between clusters to consider a bin distinctive. Default 20.0.
-  crossSigma: 20.0
   # minIntervalCount: minimum number of intervals a cluster must have to be assigned a named style
   minIntervalCount: 2
-  # styleNames: optional list of style names; clusters are ordered by size (largest first)
-  styleNames: []
-  # baseStyleTemplate: ASS Style line template with {name}, {primaryColour}, {outlineColour} placeholders
-  # (leave commented to use the built-in default matching template.asst)
-  # baseStyleTemplate: "Style: {name},Microsoft YaHei,80,{primaryColour},&H000000FF,{outlineColour},&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,200,1"
-  # Parameters for extractColourClusters (per-box colour extraction)
-  sobelThreshold: 32
-  minCcAreaRatio: 0.0
-  maxCcAreaRatio: 0.3
-  maxCcStddev: 10.0
-  clusterThreshold: 0.5
-  # Text detection parameters
+  # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
   nonMajorBoxSuppressionMaxRatio: 0.1
+  # nonMajorBoxSuppressionMinRank: but at least this number of boxes will be kept
   nonMajorBoxSuppressionMinRank: 1
+  # sobelThreshold: threshold for the Sobel edge detection
+  sobelThreshold: 32
+  # minCcAreaRatio: minimum ratio (over all connected components) to be considered text area candidate
+  minCcAreaRatio: 0.0
+  # maxCcAreaRatio: maximum ratio (over all connected components) to be considered text area candidate
+  maxCcAreaRatio: 0.3
+  # maxCcStddev: maximum standard deviation for a connected component to be considered consistent enough to be text
+  maxCcStddev: 10.0
+  # clusterThreshold: colour distance threshold for hierarchical clustering within a detected box
+  clusterThreshold: 0.5
+  # radialDecayRatio: decay radius for bin weighting as a fraction of min(cropWidth, cropHeight)
+  radialDecayRatio: 0.15
+  # cohesionSigma: larger values tolerate more colour spread within a bin
+  cohesionSigma: 50.0
+  # peerSigma: larger values allow more colour-distant intervals to reinforce each other
+  peerSigma: 50.0
+  # rareStyleFloor: minimum weight fraction a bin receives even with zero peer support
+  rareStyleFloor: 0.25
+  # weightFeatureScale: scale factor for the weight channel in the feature vector
+  weightFeatureScale: 0.5
+  # intraSigma: Lab sigma for intra-cluster colour spread tolerance in representative colour selection
+  intraSigma: 15.0
+  # crossSigma: Lab sigma for cross-cluster colour distinctiveness in representative colour selection
+  crossSigma: 20.0

@@ -159,9 +159,7 @@ class IIRStyleClassifyPass(IIRPass):
         self.debug: bool = False
 
         # Output parameters
-        self.styleNames: typing.List[str] = config.get("styleNames", [])
-        self.baseStyleTemplate: str = config.get(
-            "baseStyleTemplate",
+        self.baseStyleTemplate: str = (
             "Style: {name},Microsoft YaHei,80,{primaryColour},&H000000FF,"
             "{outlineColour},&H00000000,0,0,0,0,100,100,0,0,1,4,2,2,10,10,200,1"
         )
@@ -1053,10 +1051,7 @@ class IIRStyleClassifyPass(IIRPass):
                 self.intraSigma, self.crossSigma,
             )
 
-            if self.styleNames and clusterId < len(self.styleNames):
-                styleName = self.styleNames[clusterId]
-            else:
-                styleName = f"StyleClass_{clusterId}"
+            styleName = f"StyleClass_{clusterId}"
 
             primaryColour, outlineColour = repColour
             pb, pg, pr = primaryColour

@@ -768,19 +768,19 @@
             "properties": {
                 "standaloneOutput": {
                     "type": "boolean",
-                    "description": "Whether to output OCR results to a standalone file instead of embedding them in the subtitle file."
+                    "description": "whether to output OCR results to a standalone file instead of embedding them in the subtitle file"
                 },
                 "standaloneOutputSuffix": {
                     "type": "string",
-                    "description": "Suffix for the OCR output file."
+                    "description": "suffix for the standalone OCR output file"
                 },
                 "separator": {
                     "type": "string",
-                    "description": "Separator used in OCR output."
+                    "description": "separator used in OCR output"
                 },
                 "doPaddle": {
                     "type": "boolean",
-                    "description": "Whether to perform OCR using PaddleOCR."
+                    "description": "whether to perform OCR using PaddleOCR"
                 },
                 "nonMajorBoxSuppressionMaxRatio": {
                     "description": "boxes with a ratio (over all boxes) lower than this will be suppressed",
@@ -794,11 +794,11 @@
                 },
                 "doTesseract": {
                     "type": "boolean",
-                    "description": "Whether to perform OCR using Tesseract."
+                    "description": "whether to perform OCR using Tesseract"
                 },
                 "tesseractLang": {
                     "type": "string",
-                    "description": "Language setting for Tesseract OCR (e.g., jpn for Japanese)."
+                    "description": "language setting for Tesseract OCR (e.g., jpn for Japanese)"
                 }
             },
             "required": [
@@ -819,91 +819,87 @@
             "properties": {
                 "clusterDistThreshold": {
                     "type": "number",
-                    "description": "Distance threshold for agglomerative clustering cutoff (euclidean, 32-dim normalised feature space). Set to 0 or negative to use the inconsistency criterion (auto mode)."
+                    "description": "distance threshold for agglomerative clustering; set to 0 or negative for auto (inconsistency criterion)"
                 },
                 "minIntervalCount": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Minimum number of intervals a cluster must have to be assigned a named style."
+                    "description": "minimum number of intervals a cluster must have to be assigned a named style"
                 },
-                "styleNames": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "Optional list of style names. Clusters are ordered by size (largest first) and matched to this list."
+                "nonMajorBoxSuppressionMaxRatio": {
+                    "description": "boxes with a ratio (over all boxes) lower than this will be suppressed",
+                    "type": "number",
+                    "minimum": 0
                 },
-                "baseStyleTemplate": {
-                    "type": "string",
-                    "description": "ASS Style line template with {name} and {primaryColour} placeholders."
+                "nonMajorBoxSuppressionMinRank": {
+                    "description": "but at least this number of boxes will be kept",
+                    "type": "integer",
+                    "minimum": 1
                 },
                 "sobelThreshold": {
+                    "description": "threshold for the Sobel edge detection",
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 255
                 },
                 "minCcAreaRatio": {
+                    "description": "minimum ratio (over all connected components) to be considered text area candidate",
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
                 },
                 "maxCcAreaRatio": {
+                    "description": "maximum ratio (over all connected components) to be considered text area candidate",
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
                 },
                 "maxCcStddev": {
+                    "description": "maximum standard deviation for a connected component to be considered consistent enough to be text",
                     "type": "number",
                     "minimum": 0
                 },
                 "clusterThreshold": {
+                    "description": "colour distance threshold for hierarchical clustering within a detected box",
                     "type": "number",
                     "minimum": 0
-                },
-                "nonMajorBoxSuppressionMaxRatio": {
-                    "description": "boxes with a ratio (over all boxes) lower than this will be suppressed (for text detection preprocessing)",
-                    "type": "number",
-                    "minimum": 0
-                },
-                "nonMajorBoxSuppressionMinRank": {
-                    "description": "but at least this number of boxes will be kept (for text detection preprocessing)",
-                    "type": "integer",
-                    "minimum": 1
                 },
                 "radialDecayRatio": {
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1,
-                    "description": "Decay radius as a fraction of min(cropWidth, cropHeight). Only used when featureType is radialSoft."
+                    "description": "decay radius for bin weighting as a fraction of min(cropWidth, cropHeight)"
                 },
                 "cohesionSigma": {
                     "type": "number",
                     "minimum": 0,
-                    "description": "Lab stddev at which a bin's cohesion drops to ~37%. Only used when featureType is radialSoft."
+                    "description": "larger values tolerate more colour spread within a bin"
                 },
                 "peerSigma": {
                     "type": "number",
                     "minimum": 0,
-                    "description": "Lab colour distance at which a peer's similarity drops to ~61%. Only used when featureType is radialSoft."
+                    "description": "larger values allow more colour-distant intervals to reinforce each other"
                 },
                 "rareStyleFloor": {
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1,
-                    "description": "Minimum weight fraction a bin receives even with zero peer support. Only used when featureType is radialSoft."
+                    "description": "minimum weight fraction a bin receives even with zero peer support"
                 },
                 "weightFeatureScale": {
                     "type": "number",
                     "minimum": 0,
-                    "description": "Scale factor for the explicit weight channel in the feature vector. Only used when featureType is radialSoft."
+                    "description": "scale factor for the weight channel in the feature vector"
                 },
                 "intraSigma": {
                     "type": "number",
                     "minimum": 0,
-                    "description": "Lab-space sigma for intra-cluster colour spread tolerance in post-clustering rep-colour selection."
+                    "description": "Lab sigma for intra-cluster colour spread tolerance in representative colour selection"
                 },
                 "crossSigma": {
                     "type": "number",
                     "minimum": 0,
-                    "description": "Lab-space sigma for cross-cluster distinctiveness scoring in post-clustering rep-colour selection."
+                    "description": "Lab sigma for cross-cluster colour distinctiveness in representative colour selection"
                 }
             },
             "required": [
