@@ -435,7 +435,7 @@ extraJobs: []
 ocr:
   standaloneOutput: false
   standaloneOutputSuffix: "-ocr.txt"
-  separator: "@"
+  separator: ""
   doPaddle: true
   # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
   nonMajorBoxSuppressionMaxRatio: 0.1
