@@ -156,6 +156,8 @@ class IIRStyleClassifyPass(IIRPass):
         self.clusterDistThreshold: float = config["clusterDistThreshold"]
         self.minIntervalCount: int = config["minIntervalCount"]
 
+        self.debug: bool = False
+
         # Output parameters
         self.styleNames: typing.List[str] = config.get("styleNames", [])
         self.baseStyleTemplate: str = config.get(
@@ -660,14 +662,13 @@ class IIRStyleClassifyPass(IIRPass):
             binFeatures[k] = [wSqrt * lNorm, wSqrt * aNorm, wSqrt * bNorm, weightFeatureScale * w]
         return binFeatures.flatten()
 
-    @staticmethod
     def selectClusterRepColour(
+        self,
         memberProfiles: typing.List['IIRStyleClassifyPass.RadialProfile'],
         allClusterMeans: np.ndarray,
         thisClusterIdx: int,
         intraSigma: float,
         crossSigma: float,
-        debug: bool = False,
     ) -> typing.Tuple[np.ndarray, np.ndarray]:
         """Select the most representative colour bin for a style cluster (post-clustering Stage D).
 
@@ -738,7 +739,7 @@ class IIRStyleClassifyPass(IIRPass):
         outlineScore = repScore[1:]               # B1-B7 only
         bestOutlineBin = int(np.argmax(outlineScore)) + 1
 
-        if debug:
+        if self.debug:
             fmt = lambda arr: "".join(f"{float(x):6.2f}" for x in arr)
             hdr = "".join(f"{'B'+str(k):>6}" for k in range(8))
             print(f"    [sty] cluster {thisClusterIdx}:")
@@ -900,8 +901,6 @@ class IIRStyleClassifyPass(IIRPass):
                 (likely background) are attenuated.
         Pass 2: buildStyleOutputs converts each profile into a 32-dim feature vector and
                 a list of representative BGR colours."""
-        debug: bool = True
-
         # --- Phase 1: extract local profiles ---
         allProfiles: typing.List[typing.Optional[IIRStyleClassifyPass.RadialProfile]] = []
 
@@ -914,7 +913,7 @@ class IIRStyleClassifyPass(IIRPass):
 
             boxes = self.detectBoxes(image)
             debugCcImg: typing.Optional[cv.Mat] = \
-                checkerboardBackground(image.shape[1], image.shape[0]) if debug else None
+                checkerboardBackground(image.shape[1], image.shape[0]) if self.debug else None
 
             boxProfiles: typing.List[typing.Tuple[IIRStyleClassifyPass.RadialProfile, float]] = []
 
@@ -964,7 +963,7 @@ class IIRStyleClassifyPass(IIRPass):
             styleVec = self.buildStyleOutputs(profile, self.weightFeatureScale)
             features.append(styleVec)
 
-            if debug:
+            if self.debug:
                 debugFeatImg = IIRStyleClassifyPass.makeRadialSoftDebugImage(profile, [], [])
                 timeStr = interval.timeStringBegin().replace(":", "-")
                 os.makedirs("STY_debug", exist_ok=True)
@@ -1000,7 +999,6 @@ class IIRStyleClassifyPass(IIRPass):
 
     def apply(self, iir: IIR):
         print(f"IIRStyleClassifyPass: processing {len(iir.intervals)} intervals")
-        debug: bool = True
 
         # 1. Compute features and per-interval profiles
         features, allProfiles = self.computeAllFeatures(iir)
@@ -1059,7 +1057,6 @@ class IIRStyleClassifyPass(IIRPass):
             repColour = self.selectClusterRepColour(
                 memberProfiles, allClusterMeans, clusterId,
                 self.intraSigma, self.crossSigma,
-                debug=debug,
             )
 
             if self.styleNames and clusterId < len(self.styleNames):
