@@ -24,55 +24,12 @@
 # You may specify multiple source files for batching.
 # They will be processed with the same settings.
 source:
-# - ./note/md/Bubbles.mp4
-# - ./note/md/NatsumeKako5.mp4
-# - ./note/md/ChouseiJiken-1.mp4
-# - ./note/md/Yachiyo-4.mp4
-# - ./note/md/Main-1-clip1.mp4
-# - ./note/md/CrescentMemoria-1.mp4
-# - ./note/Scene0/Scene0-Film10Side.mp4
-# - ./note/bcs/zundahouse-asakusa/zundahouse-asakusa.mp4
-# - ./note/bcs/zundahouse-asakusa/zundahouse-asakusa-clip.1.mp4
-# - ./note/bcs/zundahouse-yokohamacapsule/zundahouse-yokohamacapsule.mp4
-# - ./note/bcs/yukinyan-20230604/yukinyan-20230604.mp4
-# - ./note/bcs/yukkuri-jouetsushinkansen/yukkuri-jouetsushinkansen.mp4
-# - ./note/bcs/konketsu-20250314/konketsu-20250314.mp4
-# - ./note/bcs/hundrednote-bug/hundrednote-bug.mp4
-# - ./note/bcs/amainu-20230627/amainu-20230627.mp4
-# - ./note/bcs/machidamon-20250510/machidamon-20250510.mp4
-# - ./note/bcs/japantravellab-jrwest5/japantravellab-jrwest5.mp4
-# - ./note/bcs/japantravellab-jrshikoku1/japantravellab-jrshikoku1.mp4
-# - ./note/bcs/zundahouse-ikebukuro/zundahouse-ikebukuro.mp4
-# - ./note/bcs/japantravellab-minamidaitoujima/japantravellab-minamidaitoujima.mp4
-# - ./note/bcs/zundahouse-nara/zundahouse-nara.mp4
-# - ./note/std/takumikku-creditcard/takumikku-creditcard.mp4
-
-# - ./note/std/yukkuri-yabaitetsuota/yukkuri-yabaitetsuota-4min.mp4
-- ./note/std/zundahouse-asakusabashi/zundahouse-asakusabashi-4min.mp4
-
-# - ./note/std/yukkuri-yabaitetsuota/yukkuri-yabaitetsuota.mp4
-# - ./note/std/yukkurikakueki-negoshi/yukkurikakueki-negoshi.mp4
-# - ./note/std/mari-20240828/mari-20240828.mp4
-# - ./note/std/toraku-20250517/toraku-20250517.mp4
-# - ./note/std/zundanoberu-hitoduma/zundanoberu-hitoduma.mp4
-# - ./note/std/jagaimon-20241112/jagaimon-20241112.mp4
-# - ./note/std/zundahouse-asakusabashi/zundahouse-asakusabashi.mp4
-# - ./note/std/hotelzdm-yokohama/hotelzdm-yokohama.mp4
-# - ./note/std/japantravellab-svalbard/japantravellab-svalbard.mp4
-# - ./note/std/potatopictures-20230825/potatopictures-20230825.mp4
-# - ./note/std/potatopictures-20221125/potatopictures-20221125.mp4
-# - ./note/std/zutomayo-benkyou/zutomayo-benkyou.mp4
-# - ./note/std/hundrednote-20250309/hundrednote-20250309.mp4
-# - ./note/std/flagchan-20250526/flagchan-20250526.mp4
-# - ./note/std/parako-511/parako-511.mp4
-
-# - src.mp4
+- src.mp4
 # - src2.mp4
 
 # destination: path(s) of destination subtitle files with no extension
 # There must be equal number of source(s) and destination(s). 
 # Leave as "..." for auto naming, or specify a name for each destination.
-# destination: [..., ..., ..., ..., ..., ..., ..., ..., ..., ..., ..., ...] # 12
 destination:
 - ...
 # - src2.ass
@@ -470,10 +427,10 @@ speculative:
 # Extra Jobs
 
 # Extra jobs are additional tasks that can be performed after the subtitles are extracted.
-# Currently, the program supports only one experimental extra job: OCR.
+# Currently supported: ocr (text extraction), sty (automatic style classification).
 
 # extraJobs: list of extra jobs to perform after subtitle extraction
-extraJobs: [sty]
+extraJobs: []
 
 ocr:
   standaloneOutput: false
