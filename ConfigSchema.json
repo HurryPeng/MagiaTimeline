@@ -895,15 +895,15 @@
                     "minimum": 0,
                     "description": "Scale factor for the explicit weight channel in the feature vector. Only used when featureType is radialSoft."
                 },
-                "minBinWeight": {
+                "intraSigma": {
                     "type": "number",
                     "minimum": 0,
-                    "description": "Bins with finalWeight below this are ignored when recovering representative colours. Only used when featureType is radialSoft."
+                    "description": "Lab-space sigma for intra-cluster colour spread tolerance in post-clustering rep-colour selection."
                 },
-                "repMergeLabDist": {
+                "crossSigma": {
                     "type": "number",
                     "minimum": 0,
-                    "description": "Lab distance below which adjacent bins are merged into one representative colour. Only used when featureType is radialSoft."
+                    "description": "Lab-space sigma for cross-cluster distinctiveness scoring in post-clustering rep-colour selection."
                 }
             },
             "required": [

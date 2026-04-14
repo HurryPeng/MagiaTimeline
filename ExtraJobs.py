@@ -122,12 +122,12 @@ class IIRStyleClassifyPass(IIRPass):
     @dataclasses.dataclass
     class RadialProfile:
         """Per-interval colour profile produced by the radial soft-layer pipeline."""
-        labMeans:       np.ndarray                       # (8, 3) float32 — weighted LAB mean per radial bin
-        cohesions:      np.ndarray                       # (8,)   float32 — colour uniformity per bin
-        supports:       np.ndarray                       # (8,)   float32 — relative pixel mass per bin
-        localQualities: np.ndarray                       # (8,)   float32 — support × cohesion
-        peerSupports:   typing.Optional[np.ndarray] = None   # (8,) float32 — set by applyPeerReinforcement
-        finalWeights:   typing.Optional[np.ndarray] = None   # (8,) float32 — set by applyPeerReinforcement
+        labMeans:       np.ndarray                       # (8, 3) float32 - weighted LAB mean per radial bin
+        cohesions:      np.ndarray                       # (8,)   float32 - colour uniformity per bin
+        supports:       np.ndarray                       # (8,)   float32 - relative pixel mass per bin
+        localQualities: np.ndarray                       # (8,)   float32 - support × cohesion
+        peerSupports:   typing.Optional[np.ndarray] = None   # (8,) float32 - set by applyPeerReinforcement
+        finalWeights:   typing.Optional[np.ndarray] = None   # (8,) float32 - set by applyPeerReinforcement
 
     def __init__(self, config: dict, frameKey: type):
         self.frameKey: type = frameKey
@@ -147,8 +147,10 @@ class IIRStyleClassifyPass(IIRPass):
         self.peerSigma: float = config["peerSigma"]
         self.rareStyleFloor: float = config["rareStyleFloor"]
         self.weightFeatureScale: float = config["weightFeatureScale"]
-        self.minBinWeight: float = config["minBinWeight"]
-        self.repMergeLabDist: float = config["repMergeLabDist"]
+
+        # Post-clustering rep-colour selection parameters
+        self.intraSigma: float = config["intraSigma"]
+        self.crossSigma: float = config["crossSigma"]
 
         # Inter-interval clustering parameters
         self.clusterDistThreshold: float = config["clusterDistThreshold"]
@@ -159,7 +161,7 @@ class IIRStyleClassifyPass(IIRPass):
         self.baseStyleTemplate: str = config.get(
             "baseStyleTemplate",
             "Style: {name},Microsoft YaHei,80,{primaryColour},&H000000FF,"
-            "&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,200,1"
+            "{outlineColour},&H00000000,0,0,0,0,100,100,0,0,1,4,2,2,10,10,200,1"
         )
 
         suppressPaddleWarnings()
@@ -471,7 +473,7 @@ class IIRStyleClassifyPass(IIRPass):
         """Extract radial soft-layer profile from a text box ROI (Stage A of radialSoft algorithm).
 
         Uses extractColourClusters to colour-cluster accepted CCs sorted by fill score
-        (sum of area x fillRatio**2).  The top-ranked cluster — compact fill letters — becomes
+        (sum of area x fillRatio**2).  The top-ranked cluster - compact fill letters - becomes
         the coreMask origin for the radial distance transform.  Thin-ring outline CCs have
         lower fillRatio and rank below the fill cluster regardless of absolute area.
 
@@ -633,23 +635,11 @@ class IIRStyleClassifyPass(IIRPass):
     def buildStyleOutputs(
         profile: IIRStyleClassifyPass.RadialProfile,
         weightFeatureScale: float,
-        minBinWeight: float,
-        repMergeLabDist: float,
-        globalBaseline: typing.Optional[np.ndarray] = None,
-    ) -> typing.Tuple[np.ndarray, typing.List[np.ndarray], typing.List[float]]:
-        """Build 32-dim style feature vector and representative BGR colours from a profile (Stages C + D).
-
-        Args:
-            globalBaseline: (8,) float32 mean normFW across all valid profiles in this pass.
-                            When provided, rep-colour candidates are scored with a TF-IDF-style
-                            discriminative weight so colours that are common across ALL styles
-                            (e.g. white fill) are deprioritised in favour of colours that are
-                            distinctive to this specific style (e.g. its unique outline colour).
+    ) -> np.ndarray:
+        """Build 32-dim style feature vector from a profile (for agglomerative clustering).
 
         Returns:
-            styleFeatureVector: np.ndarray shape (32,), float32 — for agglomerative clustering
-            repColoursBgr:      list of float32 shape-(3,) BGR arrays — for ASS style generation
-            repWeights:         list of floats normalised to sum 1.0"""
+            styleFeatureVector: np.ndarray shape (32,), float32"""
         assert profile.finalWeights is not None, "buildStyleOutputs requires peer reinforcement to have run"
         finalWeights = profile.finalWeights  # (8,)
         labMeans = profile.labMeans          # (8, 3)
@@ -669,54 +659,102 @@ class IIRStyleClassifyPass(IIRPass):
             bNorm = (lm[2] - 128.0) / 128.0
             wSqrt = float(np.sqrt(max(w, 0.0)))
             binFeatures[k] = [wSqrt * lNorm, wSqrt * aNorm, wSqrt * bNorm, weightFeatureScale * w]
-        styleFeatureVector = binFeatures.flatten()
+        return binFeatures.flatten()
 
-        cohesions = profile.cohesions
+    @staticmethod
+    def selectClusterRepColour(
+        memberProfiles: typing.List['IIRStyleClassifyPass.RadialProfile'],
+        allClusterMeans: np.ndarray,
+        thisClusterIdx: int,
+        intraSigma: float,
+        crossSigma: float,
+        debug: bool = False,
+    ) -> typing.Tuple[np.ndarray, np.ndarray]:
+        """Select the most representative colour bin for a style cluster (post-clustering Stage D).
 
-        # TF-IDF discriminative score: bins whose normFW is high relative to the global
-        # average across all styles get a boost; bins that are uniformly high in every
-        # style (e.g. white fill) are suppressed.  The filter still uses the raw weight
-        # so we don't exclude a bin just because its colour is globally common.
-        if globalBaseline is not None:
-            discScore = normFW / (globalBaseline + 1e-6)
-        else:
-            discScore = np.ones(8, dtype=np.float32)
+        For each radial bin k, two soft scores are computed:
 
-        candidates = [(k, float(finalWeights[k] * cohesions[k] * discScore[k]), labMeans[k])
-                      for k in range(8) if float(finalWeights[k] * cohesions[k]) >= minBinWeight]
-        candidates.sort(key=lambda x: x[1], reverse=True)
+          intraBinding[k]:   how consistently all member profiles share the same colour at bin k.
+                             Gaussian decay of the support-weighted mean intra-cluster LAB spread.
+                             1 = all frames agree, 0 = chaotic across frames.
 
-        if not candidates:
-            return styleFeatureVector, [], []
+          externContrast[k]: how distinct this cluster's bin-k colour is from all other clusters.
+                             1 - Gaussian decay of the minimum cross-cluster LAB distance.
+                             1 = unique to this style, 0 = identical to another cluster.
 
-        mergedClusters: typing.List[typing.Tuple[np.ndarray, float]] = []
-        for _, w, lm in candidates:
-            merged = False
-            for mi in range(len(mergedClusters)):
-                prevLm, prevW = mergedClusters[mi]
-                dist = float(np.sqrt(float(((lm - prevLm) ** 2).sum())))
-                if dist < repMergeLabDist:
-                    newW = prevW + w
-                    if newW > 0:
-                        mergedClusters[mi] = (prevLm * (prevW / newW) + lm * (w / newW), newW)
-                    merged = True
-                    break
-            if not merged:
-                mergedClusters.append((lm.copy(), w))
+          repScore[k] = intraBinding[k] x externContrast[k]
 
-        mergedClusters.sort(key=lambda x: x[1], reverse=True)
-        mergedClusters = mergedClusters[:3]
-        totalW = sum(w for _, w in mergedClusters)
+        The bin with the highest repScore supplies the representative colour.
+        Ties (e.g. all zeros when profiles are empty) fall back to bin 0 (core fill).
 
-        repColoursBgr: typing.List[np.ndarray] = []
-        repWeights: typing.List[float] = []
-        for lm, w in mergedClusters:
-            labPixel = np.clip(lm, 0, 255).reshape(1, 1, 3).astype(np.uint8)
-            bgrPixel = cv.cvtColor(labPixel, cv.COLOR_LAB2BGR)
-            repColoursBgr.append(bgrPixel.flatten().astype(np.float32))
-            repWeights.append(w / totalW if totalW > 0 else 0.0)
+        Args:
+            memberProfiles:   profiles of all valid member intervals in this cluster.
+            allClusterMeans:  (numClusters, 8, 3) float32 - support-weighted LAB mean per bin per cluster,
+                              pre-computed by the caller so all clusters share a consistent reference.
+            thisClusterIdx:   index of this cluster in allClusterMeans.
+            intraSigma:       LAB-space sigma for intraBinding Gaussian (higher = more tolerant of spread).
+            crossSigma:       LAB-space sigma for externContrast Gaussian (higher = need greater distance to contrast).
 
-        return styleFeatureVector, repColoursBgr, repWeights
+        Returns:
+            BGR uint8 array shape (3,) - the representative colour."""
+        binCount = 8
+        eps = 1e-6
+        twoIntraSq = 2.0 * intraSigma * intraSigma + eps
+        twoCrossSq = 2.0 * crossSigma * crossSigma + eps
+
+        clusterMean = allClusterMeans[thisClusterIdx]  # (8, 3)
+
+        # intraBinding: support-weighted mean squared LAB distance from each member to cluster mean.
+        # Single-member clusters get intraBinding = 1.0 (no spread to measure).
+        intraBinding = np.ones(binCount, dtype=np.float32)
+        if len(memberProfiles) > 1:
+            for k in range(binCount):
+                totalW = 0.0
+                weightedDistSq = 0.0
+                for p in memberProfiles:
+                    w = float(p.supports[k])
+                    diff = p.labMeans[k] - clusterMean[k]
+                    weightedDistSq += w * float(np.dot(diff, diff))
+                    totalW += w
+                meanDistSq = weightedDistSq / totalW if totalW > eps else 0.0
+                intraBinding[k] = float(np.exp(-meanDistSq / twoIntraSq))
+
+        # externContrast: 1 - Gaussian decay of min LAB distance to any other cluster's mean.
+        # Single cluster (no others) gets externContrast = 1.0 everywhere.
+        numClusters = allClusterMeans.shape[0]
+        externContrast = np.ones(binCount, dtype=np.float32)
+        otherIndices = [c for c in range(numClusters) if c != thisClusterIdx]
+        if otherIndices:
+            for k in range(binCount):
+                minDistSq = float('inf')
+                for c in otherIndices:
+                    diff = clusterMean[k] - allClusterMeans[c, k]
+                    distSq = float(np.dot(diff, diff))
+                    if distSq < minDistSq:
+                        minDistSq = distSq
+                externContrast[k] = 1.0 - float(np.exp(-minDistSq / twoCrossSq))
+
+        # B0 is always the primary (inner fill) colour — exclude it from outline competition.
+        repScore = intraBinding * externContrast  # (8,)
+        outlineScore = repScore[1:]               # B1-B7 only
+        bestOutlineBin = int(np.argmax(outlineScore)) + 1
+
+        if debug:
+            fmt = lambda arr: "".join(f"{float(x):6.2f}" for x in arr)
+            hdr = "".join(f"{'B'+str(k):>6}" for k in range(8))
+            print(f"    [sty] cluster {thisClusterIdx}:")
+            print(f"          bins : {hdr}")
+            print(f"          intra: {fmt(intraBinding)}")
+            print(f"          ext  : {fmt(externContrast)}")
+            print(f"          rep  : {fmt(repScore)}  -> outline B{bestOutlineBin}")
+
+        def labToBgr(lab: np.ndarray) -> np.ndarray:
+            px = np.clip(lab, 0, 255).reshape(1, 1, 3).astype(np.uint8)
+            return cv.cvtColor(px, cv.COLOR_LAB2BGR)[0, 0].astype(np.uint8)
+
+        primaryBgr = labToBgr(clusterMean[0])
+        outlineBgr = labToBgr(clusterMean[bestOutlineBin])
+        return primaryBgr, outlineBgr
 
     @staticmethod
     def makeRadialSoftDebugImage(
@@ -850,7 +888,7 @@ class IIRStyleClassifyPass(IIRPass):
 
     def computeAllFeatures(self, iir: IIR) -> typing.Tuple[
         typing.List[typing.Optional[np.ndarray]],
-        typing.List[typing.Optional[np.ndarray]]
+        typing.List[typing.Optional['IIRStyleClassifyPass.RadialProfile']]
     ]:
         """Two-pass feature extraction using the radial soft-layer algorithm.
 
@@ -858,7 +896,7 @@ class IIRStyleClassifyPass(IIRPass):
                 The Sobel/CC pipeline identifies core fill pixels (coreMask); radial bins
                 then describe colour from core outward, capturing outline and shadow layers.
                 Per-box profiles are area-weighted and merged into one profile per interval.
-        Global: applyPeerReinforcement cross-correlates all interval profiles — bins that
+        Global: applyPeerReinforcement cross-correlates all interval profiles - bins that
                 show a consistent colour across many intervals are boosted; one-off bins
                 (likely background) are attenuated.
         Pass 2: buildStyleOutputs converts each profile into a 32-dim feature vector and
@@ -916,52 +954,24 @@ class IIRStyleClassifyPass(IIRPass):
         # --- Global: peer reinforcement ---
         self.applyPeerReinforcement(allProfiles, self.peerSigma, self.rareStyleFloor)
 
-        # --- Phase 2: build feature vectors and representative colours ---
-
-        # Compute global per-bin baseline (mean normFW across all valid profiles) for
-        # TF-IDF discriminative rep-colour scoring.  Colours that appear with similar
-        # weight in every style (e.g. white fill) will be deprioritised; colours that
-        # are distinctive to one style (e.g. a red outline) will be boosted.
-        validProfilesForBaseline = [
-            p for p in allProfiles if p is not None and p.finalWeights is not None
-        ]
-        if len(validProfilesForBaseline) > 1:
-            normFWStack = np.stack([
-                p.finalWeights / (p.finalWeights.sum() + 1e-6)  # type: ignore[union-attr]
-                for p in validProfilesForBaseline
-            ])  # (N, 8)
-            globalBaseline: typing.Optional[np.ndarray] = normFWStack.mean(axis=0).astype(np.float32)
-        else:
-            globalBaseline = None  # single style: no cross-style comparison possible
-
+        # --- Phase 2: build feature vectors (rep-colour selection deferred to post-clustering) ---
         features: typing.List[typing.Optional[np.ndarray]] = []
-        repColours: typing.List[typing.Optional[np.ndarray]] = []
 
         for interval, profile in zip(iir.intervals, allProfiles):
             if profile is None:
                 features.append(None)
-                repColours.append(None)
                 continue
 
-            styleVec, repColoursBgr, repWeights = self.buildStyleOutputs(
-                profile,
-                self.weightFeatureScale,
-                self.minBinWeight,
-                self.repMergeLabDist,
-                globalBaseline,
-            )
+            styleVec = self.buildStyleOutputs(profile, self.weightFeatureScale)
             features.append(styleVec)
-            repColours.append(repColoursBgr[0] if repColoursBgr else None)
 
             if debug:
-                debugFeatImg = IIRStyleClassifyPass.makeRadialSoftDebugImage(
-                    profile, repColoursBgr, repWeights
-                )
+                debugFeatImg = IIRStyleClassifyPass.makeRadialSoftDebugImage(profile, [], [])
                 timeStr = interval.timeStringBegin().replace(":", "-")
                 os.makedirs("STY_debug", exist_ok=True)
                 cv.imwrite(os.path.join("STY_debug", f"{timeStr}_feat.png"), debugFeatImg)
 
-        return features, repColours
+        return features, allProfiles
 
     def cluster(self, features: typing.List[typing.Optional[np.ndarray]], validIndices: typing.List[int]) -> typing.List[int]:
         """Cluster valid intervals by their features using euclidean distance.
@@ -989,18 +999,12 @@ class IIRStyleClassifyPass(IIRPass):
 
         return rawLabels.tolist()
 
-    def computeClusterColour(self, repColours: typing.List[typing.Optional[np.ndarray]], memberIndices: typing.List[int]) -> np.ndarray:
-        """Average the representative colours of cluster members."""
-        validColours = [repColours[i] for i in memberIndices if repColours[i] is not None]
-        if len(validColours) > 0:
-            return np.mean(np.array(validColours), axis=0).astype(np.uint8)
-        return np.array([255, 255, 255], dtype=np.uint8)  # fallback: white
-
     def apply(self, iir: IIR):
         print(f"IIRStyleClassifyPass: processing {len(iir.intervals)} intervals")
+        debug: bool = True
 
-        # 1. Compute features and representative colours
-        features, repColours = self.computeAllFeatures(iir)
+        # 1. Compute features and per-interval profiles
+        features, allProfiles = self.computeAllFeatures(iir)
 
         # 2. Filter intervals with valid features
         validIndices = [i for i, f in enumerate(features) if f is not None]
@@ -1023,7 +1027,24 @@ class IIRStyleClassifyPass(IIRPass):
         nClusters = len(set(clusterAssignments))
         print(f"IIRStyleClassifyPass: {nClusters} clusters found")
 
-        # 5. Generate style declarations and assign styles to intervals
+        # 5. Pre-compute support-weighted LAB mean per bin for every cluster.
+        #    Used by selectClusterRepColour for both intra-binding and extern-contrast.
+        allClusterMeans = np.zeros((nClusters, 8, 3), dtype=np.float32)
+        allClusterWeights = np.zeros((nClusters, 8), dtype=np.float32)
+        for i, clusterId in zip(validIndices, clusterAssignments):
+            p = allProfiles[i]
+            if p is None:
+                continue
+            for k in range(8):
+                w = float(p.supports[k])
+                allClusterMeans[clusterId, k] += p.labMeans[k] * w
+                allClusterWeights[clusterId, k] += w
+        for c in range(nClusters):
+            for k in range(8):
+                if allClusterWeights[c, k] > 0:
+                    allClusterMeans[c, k] /= allClusterWeights[c, k]
+
+        # 6. Generate style declarations and assign styles to intervals
         clusterStyleNames: typing.Dict[int, str] = {}
         newStyleLines: typing.List[str] = []
 
@@ -1032,16 +1053,29 @@ class IIRStyleClassifyPass(IIRPass):
             if len(memberIndices) < self.minIntervalCount:
                 continue
 
-            repColour = self.computeClusterColour(repColours, memberIndices)
+            memberProfiles = [
+                typing.cast(IIRStyleClassifyPass.RadialProfile, allProfiles[i])
+                for i in memberIndices if allProfiles[i] is not None
+            ]
+            repColour = self.selectClusterRepColour(
+                memberProfiles, allClusterMeans, clusterId,
+                self.intraSigma, self.crossSigma,
+                debug=debug,
+            )
 
             if self.styleNames and clusterId < len(self.styleNames):
                 styleName = self.styleNames[clusterId]
             else:
                 styleName = f"StyleClass_{clusterId}"
 
-            b, g, r = repColour
-            assColour = f"&H00{b:02X}{g:02X}{r:02X}"
-            styleLine = self.baseStyleTemplate.format(name=styleName, primaryColour=assColour)
+            primaryColour, outlineColour = repColour
+            pb, pg, pr = primaryColour
+            ob, og, or_ = outlineColour
+            assPrimary = f"&H00{pb:02X}{pg:02X}{pr:02X}"
+            assOutline = f"&H00{ob:02X}{og:02X}{or_:02X}"
+            styleLine = self.baseStyleTemplate.format(
+                name=styleName, primaryColour=assPrimary, outlineColour=assOutline
+            )
             newStyleLines.append(styleLine)
             clusterStyleNames[clusterId] = styleName
 
