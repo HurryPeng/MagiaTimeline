@@ -321,8 +321,7 @@ class IIRStyleClassifyPass(IIRPass):
         # A CC's direct parent is the accepted CC with the smallest bbox area that fully
         # encloses it (i.e. the tightest wrapper).  If none exists, its parent is the
         # virtual root at depth 0, so the CC itself gets depth 1.
-        # Deeper CCs (fill inside outline inside shadow) receive higher multipliers,
-        # which is what we want: core fill pixels rank above outer-shell pixels.
+        # Deeper CCs (fill inside outline inside shadow) receive higher multipliers.
         n = len(acceptedIds)
         ccBoxes = [
             (stats[acceptedIds[i]][cv.CC_STAT_LEFT],
@@ -385,7 +384,7 @@ class IIRStyleClassifyPass(IIRPass):
                 clusterCcIds[cid] = []
             clusterColours[cid].append((ccMeansArr[idx], ccAreasArr[idx]))
             clusterAreas[cid] += ccAreasArr[idx]
-            clusterNestScores[cid] += ccAreasArr[idx] * ccNestDepths[idx]
+            clusterNestScores[cid] += ccAreasArr[idx] * (4**ccNestDepths[idx])
             clusterCcIds[cid].append(ccId)
 
         # Sort cluster IDs by nesting score descending (deeper fill > outer shell).
