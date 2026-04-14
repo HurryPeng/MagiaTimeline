@@ -156,7 +156,7 @@ class IIRStyleClassifyPass(IIRPass):
         self.clusterDistThreshold: float = config["clusterDistThreshold"]
         self.minIntervalCount: int = config["minIntervalCount"]
 
-        self.debug: bool = False
+        self.debug: bool = config["debug"]
 
         # Output parameters
         self.baseStyleTemplate: str = (
@@ -939,9 +939,9 @@ class IIRStyleClassifyPass(IIRPass):
 
             if debugCcImg is not None:
                 timeStr = interval.timeStringBegin().replace(":", "-")
-                os.makedirs("STY_debug", exist_ok=True)
-                cv.imwrite(os.path.join("STY_debug", f"{timeStr}_full.png"), image)
-                cv.imwrite(os.path.join("STY_debug", f"{timeStr}_cc.png"), debugCcImg)
+                os.makedirs("styDebug", exist_ok=True)
+                cv.imwrite(os.path.join("styDebug", f"{timeStr}_full.png"), image)
+                cv.imwrite(os.path.join("styDebug", f"{timeStr}_cc.png"), debugCcImg)
 
             allProfiles.append(self.mergeBoxProfiles(boxProfiles) if boxProfiles else None)
 

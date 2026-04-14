@@ -105,8 +105,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
     
-    @classmethod
-    def isEmptyFeature(cls, feature: typing.Tuple[cv.Mat, cv.Mat]) -> bool:
+    @staticmethod
+    def isEmptyFeature(feature: typing.Tuple[cv.Mat, cv.Mat]) -> bool:
         return feature[0] is None or feature[1] is None
 
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:

@@ -477,3 +477,5 @@ sty:
   intraSigma: 15.0
   # crossSigma: Lab sigma for cross-cluster colour distinctiveness in representative colour selection
   crossSigma: 20.0
+  # debug: whether to output per-interval debug images to the ./styDebug/ directory
+  debug: false
