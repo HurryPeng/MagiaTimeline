@@ -4,12 +4,12 @@ import os
 import pytesseract
 import paddleocr
 import typing
+import collections
 
 import scipy.cluster.hierarchy
 import scipy.spatial.distance
 import sklearn.preprocessing
 
-from IR import IIR
 from Util import *
 from AbstractFlagIndex import *
 from IR import *
@@ -288,7 +288,7 @@ class IIRStyleClassifyPass(IIRPass):
     ) -> typing.List[typing.Tuple[np.ndarray, float]]:
         """Extract colour clusters from a text box ROI.
         Returns [(avgColourBGR, areaRatio), ...] sorted descending by nesting score
-        (sum of area x nestDepth for CCs in that cluster).  CCs whose bounding boxes are
+        (sum of area x 4^nestDepth for CCs in that cluster).  CCs whose bounding boxes are
         enclosed by other CCs' bounding boxes receive higher depth values, so core fill
         pixels (nested inside outline/shadow layers) rank above outer-ring CCs regardless
         of absolute area or compactness.
@@ -323,7 +323,8 @@ class IIRStyleClassifyPass(IIRPass):
         # A CC's direct parent is the accepted CC with the smallest bbox area that fully
         # encloses it (i.e. the tightest wrapper).  If none exists, its parent is the
         # virtual root at depth 0, so the CC itself gets depth 1.
-        # Deeper CCs (fill inside outline inside shadow) receive higher multipliers.
+        # Cluster score uses 4^depth as multiplier so each nesting level dominates all
+        # shallower levels combined, ensuring fill (deepest) always outranks outline/shadow.
         n = len(acceptedIds)
         ccBoxes = [
             (stats[acceptedIds[i]][cv.CC_STAT_LEFT],
@@ -473,10 +474,10 @@ class IIRStyleClassifyPass(IIRPass):
     ) -> typing.Optional[IIRStyleClassifyPass.RadialProfile]:
         """Extract radial soft-layer profile from a text box ROI (Stage A of radialSoft algorithm).
 
-        Uses extractColourClusters to colour-cluster accepted CCs sorted by fill score
-        (sum of area x fillRatio**2).  The top-ranked cluster - compact fill letters - becomes
-        the coreMask origin for the radial distance transform.  Thin-ring outline CCs have
-        lower fillRatio and rank below the fill cluster regardless of absolute area.
+        Uses extractColourClusters to colour-cluster accepted CCs sorted by nesting score
+        (sum of area x 4^nestDepth).  The top-ranked cluster: deeply nested fill letters
+        becomes the coreMask origin for the radial distance field.  Outer-ring CCs (outline,
+        shadow) have shallower nesting and rank below the fill cluster regardless of absolute area.
 
         If debugRoiOut is provided (writable view into a debug canvas), core pixels are painted onto it.
 
@@ -757,7 +758,7 @@ class IIRStyleClassifyPass(IIRPass):
         return primaryBgr, outlineBgr
 
     @staticmethod
-    def makeRadialSoftDebugImage(
+    def makeDebugImage(
         profile: IIRStyleClassifyPass.RadialProfile,
         repColoursBgr: typing.List[np.ndarray],
         repWeights: typing.List[float],
@@ -963,12 +964,6 @@ class IIRStyleClassifyPass(IIRPass):
             styleVec = self.buildStyleOutputs(profile, self.weightFeatureScale)
             features.append(styleVec)
 
-            if self.debug:
-                debugFeatImg = IIRStyleClassifyPass.makeRadialSoftDebugImage(profile, [], [])
-                timeStr = interval.timeStringBegin().replace(":", "-")
-                os.makedirs("STY_debug", exist_ok=True)
-                cv.imwrite(os.path.join("STY_debug", f"{timeStr}_feat.png"), debugFeatImg)
-
         return features, allProfiles
 
     def cluster(self, features: typing.List[typing.Optional[np.ndarray]], validIndices: typing.List[int]) -> typing.List[int]:
@@ -976,7 +971,7 @@ class IIRStyleClassifyPass(IIRPass):
         Returns cluster assignments parallel to validIndices.
 
         When clusterDistThreshold <= 0, uses scipy's inconsistency criterion with
-        depth=2 and t=2.0: each merge node is cut if its height is more than 2 standard
+        depth=2 and t=1.5: each merge node is cut if its height is more than 1.5 standard
         deviations above the mean height of the two levels below it.  This detects all
         class boundaries independently and works well with many clusters.
         When clusterDistThreshold > 0, falls back to a fixed distance threshold."""
@@ -1015,8 +1010,7 @@ class IIRStyleClassifyPass(IIRPass):
         clusterAssignments = self.cluster(features, validIndices)
 
         # 4. Reorder clusters by member count (largest first) for stable naming
-        from collections import Counter
-        clusterCounts = Counter(clusterAssignments)
+        clusterCounts = collections.Counter(clusterAssignments)
         sizeOrder = [cid for cid, _ in clusterCounts.most_common()]
         remapping = {old: new for new, old in enumerate(sizeOrder)}
         clusterAssignments = [remapping[c] for c in clusterAssignments]
@@ -1074,6 +1068,18 @@ class IIRStyleClassifyPass(IIRPass):
             )
             newStyleLines.append(styleLine)
             clusterStyleNames[clusterId] = styleName
+
+            if self.debug:
+                repColoursBgr = [primaryColour.astype(np.float32), outlineColour.astype(np.float32)]
+                repWeights = [0.5, 0.5]
+                os.makedirs("styDebug", exist_ok=True)
+                for i in memberIndices:
+                    p = allProfiles[i]
+                    if p is None:
+                        continue
+                    debugFeatImg = IIRStyleClassifyPass.makeDebugImage(p, repColoursBgr, repWeights)
+                    timeStr = iir.intervals[i].timeStringBegin().replace(":", "-")
+                    cv.imwrite(os.path.join("styDebug", f"{timeStr}_feat.png"), debugFeatImg)
 
         # Atomically: append style declarations AND assign interval styles
         iir.styles.extend(newStyleLines)
