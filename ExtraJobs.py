@@ -31,6 +31,7 @@ class IIROcrPass(IIRPass):
         self.tesseractLang: str = config["tesseractLang"]
 
     def apply(self, iir: IIR):
+        print(f"IIROcrPass: processing {len(iir.intervals)} intervals")
         file = None
         if self.standaloneOutput:
             filename = self.dest + self.standaloneOutputSuffix
