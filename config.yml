@@ -54,7 +54,7 @@ contentRect: [0.0, 1.0, 0.0, 1.0]
 # Set either to 0 to disable that axis. Keeping maxResHeight lower than maxResWidth
 # ensures portrait/vertical videos are downsampled more aggressively.
 maxResWidth: 2000
-maxResHeight: 1000
+maxResHeight: 1200
 
 # Strategies and Presets
 
