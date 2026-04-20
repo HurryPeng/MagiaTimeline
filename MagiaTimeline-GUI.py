@@ -115,7 +115,11 @@ class MagiaTimelineGUI(customtkinter.CTk):
 
         self.player: typing.Optional[VideoPlayer] = None
         self.currentPilImage: typing.Optional[Image.Image] = None
-        self.rectId: typing.Optional[int] = None
+        self.rectNorm = {"left": 0.005, "right": 0.995, "top": 0.75, "bottom": 0.995}
+        self.dragMode: typing.Optional[str] = None
+        self.dragStartCanvas: typing.Optional[typing.Tuple[float, float]] = None
+        self.rectAtDragStart: typing.Optional[dict] = None
+        self.rectEditable: bool = True
         self.process: typing.Optional[multiprocessing.Process] = None
         self.queue = multiprocessing.Queue()
 
@@ -135,36 +139,19 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.videoFrame = customtkinter.CTkFrame(self.leftFrame)
         self.videoFrame.grid(row=0, column=0, sticky="nsew")
         self.videoFrame.grid_columnconfigure(0, weight=1)
-        self.videoFrame.grid_columnconfigure(1, weight=0)
-        self.videoFrame.grid_columnconfigure(2, weight=0)
         self.videoFrame.grid_rowconfigure(0, weight=1)
 
         self.canvas = tk.Canvas(self.videoFrame, bg="black")
         self.canvas.grid(row=0, column=0, sticky="nsew")
-        # Bind resizing to auto-scale image
         self.canvas.bind('<Configure>', self.onCanvasResize)
-
-        self.sliderTop = customtkinter.CTkSlider(self.videoFrame, from_=0, to=1, orientation="vertical", command=self.onSliderChange("top"))
-        self.sliderBottom = customtkinter.CTkSlider(self.videoFrame, from_=0, to=1, orientation="vertical", command=self.onSliderChange("bottom"))
-        self.sliderTop.grid(row=0, column=1, sticky="ns", padx=(4, 2))
-        self.sliderTop.set(1 - 0.75)
-        self.sliderBottom.grid(row=0, column=2, sticky="ns", padx=2)
-        self.sliderBottom.set(1 - 0.995)
-
-        # Horizontal sliders
-        self.horizontalSliderFrame = customtkinter.CTkFrame(self.leftFrame)
-        self.horizontalSliderFrame.grid(row=1, column=0, sticky="ews", pady=(2,0))
-        self.horizontalSliderFrame.grid_columnconfigure(0, weight=1)
-        self.sliderLeft = customtkinter.CTkSlider(self.horizontalSliderFrame, from_=0, to=1, command=self.onSliderChange("left"))
-        self.sliderRight = customtkinter.CTkSlider(self.horizontalSliderFrame, from_=0, to=1, command=self.onSliderChange("right"))
-        self.sliderLeft.grid(row=0, column=0, sticky="ew", padx=5, pady=2)
-        self.sliderLeft.set(0.005)
-        self.sliderRight.grid(row=1, column=0, sticky="ew", padx=5, pady=2)
-        self.sliderRight.set(0.995)
+        self.canvas.bind('<ButtonPress-1>', self.onCanvasPress)
+        self.canvas.bind('<B1-Motion>', self.onCanvasDrag)
+        self.canvas.bind('<ButtonRelease-1>', self.onCanvasRelease)
+        self.canvas.bind('<Motion>', self.onCanvasMotion)
 
         # Bottom video controls: open button + time seek slider + time label
         self.controlFrame = customtkinter.CTkFrame(self.leftFrame)
-        self.controlFrame.grid(row=2, column=0, sticky="ews", pady=(10,0))
+        self.controlFrame.grid(row=1, column=0, sticky="ews", pady=(10,0))
         self.controlFrame.grid_columnconfigure(0, weight=0)
         self.controlFrame.grid_columnconfigure(1, weight=1)
         self.controlFrame.grid_columnconfigure(2, weight=0)
@@ -174,8 +161,8 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.sliderTime = customtkinter.CTkSlider(self.controlFrame, from_=0, to=1, command=self.onTimeSliderChange, state="disabled")
         self.sliderTime.set(0)
         self.sliderTime.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        self.labelTime = customtkinter.CTkLabel(self.controlFrame, text="--:--:--.--", width=90, anchor="e")
-        self.labelTime.grid(row=0, column=2, padx=(0,8), pady=5, sticky="e")
+        self.labelTime = customtkinter.CTkLabel(self.controlFrame, text="00:00:00.00", width=90, anchor="e")
+        self.labelTime.grid(row=0, column=2, padx=(0,32), pady=5, sticky="e")
 
         # Right frame: console output and action buttons
         self.rightFrame = customtkinter.CTkFrame(self, width=100)
@@ -270,58 +257,121 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.tk_image = ImageTk.PhotoImage(resized)
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor='nw', image=self.tk_image)
-        # draw crop rectangle on top
-        self.updateRectangle()
+        self.drawRect()
 
     def onCanvasResize(self, event):
         self.displayScaledImage()
 
-    def onSliderChange(self, sliderId):
-        def onSliderChangeImpl(val):
-            th = 1 - self.sliderTop.get()
-            bh = 1 - self.sliderBottom.get()
-            lw = self.sliderLeft.get()
-            rw = self.sliderRight.get()
+    HANDLE_R = 6
+    HANDLE_HIT_R = 10
+    HANDLE_CURSORS = {
+        "TL": "size_nw_se", "BR": "size_nw_se",
+        "TR": "size_ne_sw", "BL": "size_ne_sw",
+        "TC": "sb_v_double_arrow", "BC": "sb_v_double_arrow",
+        "ML": "sb_h_double_arrow", "MR": "sb_h_double_arrow",
+        "move": "fleur",
+    }
 
-            # enforce bounds
-            if lw > rw:
-                if sliderId == "left":
-                    rw = lw
-                    self.sliderRight.set(rw)
-                if sliderId == "right":
-                    lw = rw
-                    self.sliderLeft.set(lw)
-            if th > bh:
-                if sliderId == "top":
-                    bh = th
-                    self.sliderBottom.set(1 - bh)
-                if sliderId == "bottom":
-                    th = bh
-                    self.sliderTop.set(1 - th)
-
-            self.displayScaledImage()
-        return onSliderChangeImpl
-
-    def updateRectangle(self):
-        """Draw a hollow red rectangle according to sliders (left≤right, top≤bottom)."""
-        if not self.currentPilImage:
-            return
-        th = 1 - self.sliderTop.get()
-        bh = 1 - self.sliderBottom.get()
-        lw = self.sliderLeft.get()
-        rw = self.sliderRight.get()
+    def drawRect(self) -> None:
+        self.canvas.delete("rect_overlay")
         W = self.canvas.winfo_width()
         H = self.canvas.winfo_height()
-        x1 = lw * W; x2 = rw * W
-        y1 = th * H; y2 = bh * H
-        # remove old
-        if self.rectId:
-            self.canvas.delete(self.rectId)
-        # draw new
-        self.rectId = self.canvas.create_rectangle(
-            x1, y1, x2, y2,
-            outline='red', width=4
-        )
+        if W < 1 or H < 1:
+            return
+        l = self.rectNorm["left"] * W
+        r = self.rectNorm["right"] * W
+        t = self.rectNorm["top"] * H
+        b = self.rectNorm["bottom"] * H
+        mx = (l + r) / 2
+        my = (t + b) / 2
+        HR = self.HANDLE_R
+        self.canvas.create_rectangle(l - 3, t - 3, r + 3, b + 3, outline="#336699", width=2, tags="rect_overlay")
+        self.canvas.create_rectangle(l, t, r, b, outline="#e0aaf2", width=4, tags="rect_overlay")
+        self.canvas.create_rectangle(l + 3, t + 3, r - 3, b - 3, outline="#336699", width=2, tags="rect_overlay")
+        for hx, hy in [(l, t), (mx, t), (r, t), (l, my), (r, my), (l, b), (mx, b), (r, b)]:
+            self.canvas.create_rectangle(
+                hx - HR - 4, hy - HR - 4, hx + HR + 4, hy + HR + 4,
+                fill="#336699", outline="", tags="rect_overlay"
+            )
+            self.canvas.create_rectangle(
+                hx - HR - 2, hy - HR - 2, hx + HR + 2, hy + HR + 2,
+                fill="#e0aaf2", outline="", tags="rect_overlay"
+            )
+            self.canvas.create_rectangle(
+                hx - HR + 2, hy - HR + 2, hx + HR - 2, hy + HR - 2,
+                fill="#336699", outline="", tags="rect_overlay"
+            )
+
+    def hitTest(self, cx: float, cy: float) -> typing.Optional[str]:
+        W = self.canvas.winfo_width()
+        H = self.canvas.winfo_height()
+        l = self.rectNorm["left"] * W
+        r = self.rectNorm["right"] * W
+        t = self.rectNorm["top"] * H
+        b = self.rectNorm["bottom"] * H
+        mx = (l + r) / 2
+        my = (t + b) / 2
+        R = self.HANDLE_HIT_R
+        for name, hx, hy in [
+            ("TL", l, t), ("TC", mx, t), ("TR", r, t),
+            ("ML", l, my), ("MR", r, my),
+            ("BL", l, b), ("BC", mx, b), ("BR", r, b),
+        ]:
+            if abs(cx - hx) <= R and abs(cy - hy) <= R:
+                return name
+        if l <= cx <= r and t <= cy <= b:
+            return "move"
+        return None
+
+    def onCanvasPress(self, event) -> None:
+        if not self.rectEditable or not self.player:
+            return
+        mode = self.hitTest(event.x, event.y)
+        if mode:
+            self.dragMode = mode
+            self.dragStartCanvas = (float(event.x), float(event.y))
+            self.rectAtDragStart = dict(self.rectNorm)
+
+    def onCanvasDrag(self, event) -> None:
+        if not self.dragMode or not self.rectEditable or not self.dragStartCanvas or not self.rectAtDragStart:
+            return
+        W = self.canvas.winfo_width()
+        H = self.canvas.winfo_height()
+        dx = (event.x - self.dragStartCanvas[0]) / W
+        dy = (event.y - self.dragStartCanvas[1]) / H
+        r = dict(self.rectAtDragStart)
+        MIN_SIZE = 0.01
+        if self.dragMode == "move":
+            w = r["right"] - r["left"]
+            h = r["bottom"] - r["top"]
+            newLeft = max(0.0, min(1.0 - w, r["left"] + dx))
+            newTop = max(0.0, min(1.0 - h, r["top"] + dy))
+            r["left"] = newLeft
+            r["right"] = newLeft + w
+            r["top"] = newTop
+            r["bottom"] = newTop + h
+        else:
+            if "L" in self.dragMode:
+                r["left"] = max(0.0, min(r["right"] - MIN_SIZE, r["left"] + dx))
+            if "R" in self.dragMode:
+                r["right"] = min(1.0, max(r["left"] + MIN_SIZE, r["right"] + dx))
+            if "T" in self.dragMode:
+                r["top"] = max(0.0, min(r["bottom"] - MIN_SIZE, r["top"] + dy))
+            if "B" in self.dragMode:
+                r["bottom"] = min(1.0, max(r["top"] + MIN_SIZE, r["bottom"] + dy))
+        self.rectNorm = r
+        self.drawRect()
+
+    def onCanvasRelease(self, event) -> None:
+        self.dragMode = None
+        self.dragStartCanvas = None
+        self.rectAtDragStart = None
+
+    def onCanvasMotion(self, event) -> None:
+        if not self.rectEditable or not self.player or self.dragMode:
+            return
+        mode = self.hitTest(event.x, event.y)
+        self.canvas.configure(cursor=self.HANDLE_CURSORS.get(mode, "") if mode else "")
 
     @staticmethod
     def processWorker(queue, *args, **kwargs):
@@ -370,10 +420,10 @@ class MagiaTimelineGUI(customtkinter.CTk):
         if not self.player:
             return self.writeConsole("[Error] No video loaded.\n")
 
-        th = 1 - self.sliderTop.get()
-        bh = 1 - self.sliderBottom.get()
-        lw = self.sliderLeft.get()
-        rw = self.sliderRight.get()
+        lw = self.rectNorm["left"]
+        rw = self.rectNorm["right"]
+        th = self.rectNorm["top"]
+        bh = self.rectNorm["bottom"]
 
         schema = json.load(open("ConfigSchema.json", "r", encoding="utf-8"))
         config = yaml.load(open("config.yml", "r", encoding="utf-8").read(), Loader=yaml.FullLoader)
@@ -406,10 +456,8 @@ class MagiaTimelineGUI(customtkinter.CTk):
     def disableControls(self):
         self.btnStart.configure(state="disabled")
         self.btnAbort.configure(state="normal")
-        self.sliderTop.configure(state="disabled")
-        self.sliderBottom.configure(state="disabled")
-        self.sliderLeft.configure(state="disabled")
-        self.sliderRight.configure(state="disabled")
+        self.rectEditable = False
+        self.canvas.configure(cursor="")
         self.sliderTime.configure(state="disabled")
         self.btnOpen.configure(state="disabled")
         self.checkboxTextExtraction.configure(state="disabled")
@@ -435,10 +483,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
     def enableControls(self):
         self.btnStart.configure(state="normal")
         self.btnAbort.configure(state="disabled")
-        self.sliderTop.configure(state="normal")
-        self.sliderBottom.configure(state="normal")
-        self.sliderLeft.configure(state="normal")
-        self.sliderRight.configure(state="normal")
+        self.rectEditable = True
         self.sliderTime.configure(state="normal")
         self.btnOpen.configure(state="normal")
         self.checkboxTextExtraction.configure(state="normal")
