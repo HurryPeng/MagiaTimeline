@@ -92,8 +92,12 @@
             },
             "minLength": 1
         },
+        "outputSrt": {
+            "description": "whether to additionally output an SRT file alongside the always-generated ASS file; SRT loses style information",
+            "type": "boolean"
+        },
         "assTemplate": {
-            "description": "template ass file defining the header of destination ass file, in asst format",
+            "description": "template ass file defining the header of destination ass file, in asst format; required when outputFormat is 'ass'",
             "type": "string"
         },
         "enableOpenCL": {

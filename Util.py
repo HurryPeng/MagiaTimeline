@@ -136,6 +136,10 @@ def formatTimestamp(timeBase: fractions.Fraction, timestamp: int) -> str:
     timeStr = dTimestamp.strftime("%H:%M:%S.%f")[:-3]
     return timeStr[:-1]
 
+def formatTimestampSrt(timeBase: fractions.Fraction, timestamp: int) -> str:
+    dTimestamp = datetime.datetime.fromtimestamp(float(timestamp * timeBase), datetime.timezone(datetime.timedelta()))
+    return dTimestamp.strftime("%H:%M:%S,%f")[:-3]
+
 def inRange(frame, lower: typing.List[int], upper: typing.List[int]):
     # just a syntactic sugar
     return cv.inRange(frame, np.array(lower), np.array(upper))

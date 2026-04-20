@@ -188,15 +188,19 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.checkboxStyleClassify = customtkinter.CTkCheckBox(self.rightFrame, text="Enable Style Classification")
         self.checkboxStyleClassify.grid(row=2, column=0, sticky="ew", padx=5, pady=(0,10))
 
+        # Checkbox: Enable Additional SRT Output
+        self.checkboxOutputSrt = customtkinter.CTkCheckBox(self.rightFrame, text="Enable Additional SRT Output")
+        self.checkboxOutputSrt.grid(row=3, column=0, sticky="ew", padx=5, pady=(0,10))
+
         # Progress bar
         self.progressBar = customtkinter.CTkProgressBar(self.rightFrame, mode="determinate")
-        self.progressBar.grid(row=3, column=0, sticky="ew", padx=5, pady=(0,10))
+        self.progressBar.grid(row=4, column=0, sticky="ew", padx=5, pady=(0,10))
         self.progressBar.set(1.0)
         self.progressBar.stop()
 
         # Action buttons: Start and Abort
         self.actionFrame = customtkinter.CTkFrame(self.rightFrame)
-        self.actionFrame.grid(row=4, column=0, sticky="ew")
+        self.actionFrame.grid(row=5, column=0, sticky="ew")
         self.actionFrame.grid_columnconfigure(0, weight=1)
         self.actionFrame.grid_columnconfigure(1, weight=1)
 
@@ -437,6 +441,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         if self.checkboxStyleClassify.get():
             extraJobs.append("sty")
         config["extraJobs"] = extraJobs
+        config["outputSrt"] = bool(self.checkboxOutputSrt.get())
 
         self.writeConsole("[Info] Starting process...\n")
         self.writeConsole(f"[Trace] dialogRect: [{lw:.3f}, {rw:.3f}, {th:.3f}, {bh:.3f}]\n")
@@ -462,6 +467,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.btnOpen.configure(state="disabled")
         self.checkboxTextExtraction.configure(state="disabled")
         self.checkboxStyleClassify.configure(state="disabled")
+        self.checkboxOutputSrt.configure(state="disabled")
         self.progressBar.configure(mode="indeterminate")
         self.progressBar.start()
 
@@ -488,6 +494,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.btnOpen.configure(state="normal")
         self.checkboxTextExtraction.configure(state="normal")
         self.checkboxStyleClassify.configure(state="normal")
+        self.checkboxOutputSrt.configure(state="normal")
         self.progressBar.configure(mode="determinate")
         self.progressBar.set(1.0)
         self.progressBar.stop()

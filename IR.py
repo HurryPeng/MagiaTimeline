@@ -244,7 +244,7 @@ class Interval:
             return val.get()
         return val
 
-    def eventStr(self, id: int = -1) -> str:
+    def assEventStr(self, id: int = -1) -> str:
         template = "Dialogue: 0,{},{},{},,0,0,0,,{}"
         sBegin = formatTimestamp(self.timeBase, self.begin)
         sEnd = formatTimestamp(self.timeBase, self.end)
@@ -252,6 +252,12 @@ class Interval:
         if text == "":
             text = self.getName(id)
         return template.format(sBegin, sEnd, self.style, text)
+
+    def srtEventStr(self, counter: int) -> str:
+        sBegin = formatTimestampSrt(self.timeBase, self.begin)
+        sEnd = formatTimestampSrt(self.timeBase, self.end)
+        text = self.text if self.text else self.getName(counter - 1)
+        return f"{counter}\n{sBegin} --> {sEnd}\n{text}"
     
     def timeString(self) -> str:
         return "[{}, {})".format(formatTimestamp(self.timeBase, self.begin), formatTimestamp(self.timeBase, self.end))
@@ -315,14 +321,20 @@ class IIR: # Interval Intermediate Representation
     def stylesStr(self) -> str:
         return "".join(style + "\n" for style in self.styles)
 
-    def eventsStr(self) -> str:
+    def assEventsStr(self) -> str:
         lines: typing.List[str] = []
         labelCounter: typing.Dict[str, int] = {}
         for _, interval in enumerate(self.intervals):
             id = labelCounter.get(interval.label, 0)
             labelCounter[interval.label] = id + 1
-            lines.append(interval.eventStr(id) + "\n")
+            lines.append(interval.assEventStr(id) + "\n")
         return "".join(lines)
+
+    def srtEventStr(self) -> str:
+        blocks: typing.List[str] = []
+        for counter, interval in enumerate(self.intervals, start=1):
+            blocks.append(interval.srtEventStr(counter))
+        return "\n\n".join(blocks) + "\n"
 
     def getMidpoints(self) -> typing.List[typing.Tuple[str, int]]:
         midpoints: typing.List[typing.Tuple[str, int]] = []

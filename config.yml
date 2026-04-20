@@ -34,8 +34,12 @@ destination:
 - ...
 # - src2.ass
 
+# outputSrt: whether to additionally output an SRT file alongside the ASS file
+# ASS is always output. Enabling this also writes a .srt file with plain timing (style information is lost).
+outputSrt: false
+
 # assTemplate: template ass file defining the header of destination ass file, in asst format
-# The default template should work for most cases. 
+# The default template should work for most cases.
 assTemplate: template.asst
 
 # enableOpenCL: enable OpenCL acceleration

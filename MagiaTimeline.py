@@ -171,18 +171,23 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
                     iirStyleClassifyPass.apply(iir)
 
         print("==== IIR to ASS ====")
-        asstStr = asstStr.format(
+        assStr: str = asstStr.format(
             playResX = originalSize[0],
             playResY = originalSize[1],
             styles = "".join(iir.stylesStr()),
-            events = iir.eventsStr()
+            events = iir.assEventsStr()
         )
-
         dstAss = open(dst + ".ass", "w", encoding="utf-8")
-        dstAss.write(asstStr)
+        dstAss.write(assStr)
         dstAss.close()
-
         print("Result written to", dst + ".ass")
+
+        if config["outputSrt"]:
+            print("==== IIR to SRT ====")
+            dstSrt = open(dst + ".srt", "w", encoding="utf-8")
+            dstSrt.write(iir.srtEventStr())
+            dstSrt.close()
+            print("Result written to", dst + ".srt")
 
         timeOverallEnd = time.time()
         timeOverallElapsed = timeOverallEnd - timeStart
