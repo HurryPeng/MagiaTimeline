@@ -7,7 +7,6 @@ import av
 import av.container
 import av.video
 import fractions
-import random
 import sys
 import multiprocessing
 import threading
@@ -34,26 +33,27 @@ class VideoPlayer:
         height = self.stream.codec_context.height
         # Timebase and frame rate
         assert self.stream.time_base is not None
-        self.time_base: fractions.Fraction = self.stream.time_base
+        self.timeBase: fractions.Fraction = self.stream.time_base
         self.frames: int = self.stream.frames
         assert self.stream.average_rate is not None
         self.fps: fractions.Fraction = self.stream.average_rate
         # Duration (in seconds)
         self.duration = float(self.frames) / float(self.fps)
-    
+
     def getFrameAt(self, seconds: float):
         """Seek to the nearest keyframe before seconds and decode next frame."""
-        # Convert seconds to pts
-        target_pts = int(seconds / float(self.time_base))
-        # Seek in container
-        self.container.seek(target_pts, any_frame=False, backward=True, stream=self.stream)
-        for frame in self.container.decode(self.stream):
-            if frame.pts >= target_pts:
+        seconds = max(0.0, min(seconds, self.duration))
+        targetPts = int(seconds / float(self.timeBase))
+        try:
+            self.container.seek(targetPts, any_frame=False, backward=True, stream=self.stream)
+            for frame in self.container.decode(self.stream):
+                if frame.pts >= targetPts:
+                    return frame.to_image()
+            frame = next(self.container.decode(self.stream), None)
+            if frame:
                 return frame.to_image()
-        # fallback to first frame
-        frame = next(self.container.decode(self.stream), None)
-        if frame:
-            return frame.to_image()
+        except Exception:
+            pass
         return None
 
 class QueueWriter:
@@ -64,6 +64,40 @@ class QueueWriter:
             self.queue.put(msg)
     def flush(self):
         pass
+
+class FrameSeekService:
+    """Coalescing seek service: callers post a time; only the latest pending seek is decoded."""
+    def __init__(
+        self,
+        schedule: typing.Callable,
+        getPlayer: typing.Callable[[], typing.Optional[VideoPlayer]],
+        onFrame: typing.Callable[[Image.Image], None],
+    ):
+        self.schedule = schedule
+        self.getPlayer = getPlayer
+        self.onFrame = onFrame
+        self.pending: typing.Optional[float] = None
+        self.event = threading.Event()
+        threading.Thread(target=self.worker, daemon=True).start()
+
+    def request(self, seconds: float) -> None:
+        self.pending = seconds
+        self.event.set()
+
+    def worker(self) -> None:
+        while True:
+            try:
+                self.event.wait()
+                self.event.clear()
+                t = self.pending
+                player = self.getPlayer()
+                if t is None or player is None:
+                    continue
+                img = player.getFrameAt(t)
+                if img:
+                    self.schedule(0, lambda i=img: self.onFrame(i))
+            except Exception:
+                pass
 
 class MagiaTimelineGUI(customtkinter.CTk):
     def __init__(self):
@@ -84,6 +118,12 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.rectId: typing.Optional[int] = None
         self.process: typing.Optional[multiprocessing.Process] = None
         self.queue = multiprocessing.Queue()
+
+        self.seekSvc = FrameSeekService(
+            schedule=self.after,
+            getPlayer=lambda: self.player,
+            onFrame=self.applySeekResult,
+        )
 
         # Left frame
         self.leftFrame = customtkinter.CTkFrame(self)
@@ -122,24 +162,20 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.sliderRight.grid(row=1, column=0, sticky="ew", padx=5, pady=2)
         self.sliderRight.set(0.995)
 
-        # Bottom video controls: open, timestamp entry, jump, random
+        # Bottom video controls: open button + time seek slider + time label
         self.controlFrame = customtkinter.CTkFrame(self.leftFrame)
         self.controlFrame.grid(row=2, column=0, sticky="ews", pady=(10,0))
-        self.controlFrame.grid_columnconfigure((0,1,2,3), weight=1)
+        self.controlFrame.grid_columnconfigure(0, weight=0)
+        self.controlFrame.grid_columnconfigure(1, weight=1)
+        self.controlFrame.grid_columnconfigure(2, weight=0)
 
-        # Open video file button
         self.btnOpen = customtkinter.CTkButton(self.controlFrame, text="Open Video", command=self.openVideo)
         self.btnOpen.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        # Timestamp entry
-        self.entryTime = customtkinter.CTkEntry(self.controlFrame, placeholder_text="HH:MM:SS.ss")
-        self.entryTime.insert(0, "00:00:00.00")
-        self.entryTime.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-        # Jump to time button
-        self.btnJump = customtkinter.CTkButton(self.controlFrame, text="Go To", command=self.jumpToTime)
-        self.btnJump.grid(row=0, column=2, padx=5, pady=5, sticky="ew")
-        # Random time button
-        self.btnRandom = customtkinter.CTkButton(self.controlFrame, text="Random", command=self.jumpRandom)
-        self.btnRandom.grid(row=0, column=3, padx=5, pady=5, sticky="ew")
+        self.sliderTime = customtkinter.CTkSlider(self.controlFrame, from_=0, to=1, command=self.onTimeSliderChange, state="disabled")
+        self.sliderTime.set(0)
+        self.sliderTime.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        self.labelTime = customtkinter.CTkLabel(self.controlFrame, text="--:--:--.--", width=90, anchor="e")
+        self.labelTime.grid(row=0, column=2, padx=(0,8), pady=5, sticky="e")
 
         # Right frame: console output and action buttons
         self.rightFrame = customtkinter.CTkFrame(self, width=100)
@@ -189,6 +225,17 @@ class MagiaTimelineGUI(customtkinter.CTk):
 
         self.tempDir: typing.Optional[tempfile.TemporaryDirectory] = None
 
+    @staticmethod
+    def fmtTime(seconds: float) -> str:
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        s = seconds % 60
+        return f"{h:02d}:{m:02d}:{s:05.2f}"
+
+    def applySeekResult(self, img: Image.Image) -> None:
+        self.currentPilImage = img
+        self.displayScaledImage()
+
     def writeConsole(self, msg: str):
         """Helper to append text to the read-only console."""
         self.textbox.configure(state="normal")
@@ -200,49 +247,16 @@ class MagiaTimelineGUI(customtkinter.CTk):
         filePath = filedialog.askopenfilename(filetypes=[("Video Files", "*.mp4")])
         if filePath:
             self.player = VideoPlayer(filePath)
-            img = self.player.getFrameAt(0.0)
-            if img:
-                self.currentPilImage = img
-                self.displayScaledImage()
-                self.writeConsole(f"[Info] Opened video: {filePath}\n")
+            self.sliderTime.configure(to=self.player.duration, state="normal")
+            self.sliderTime.set(0)
+            self.labelTime.configure(text=self.fmtTime(0.0))
+            self.seekSvc.request(0.0)
+            self.writeConsole(f"[Info] Opened video: {filePath}\n")
 
-    def jumpToTime(self):
-        ts = self.entryTime.get()
-        parts = ts.split(':')
-        try:
-            h, m = int(parts[0]), int(parts[1])
-            s = float(parts[2])
-            total = h*3600 + m*60 + s
-        except:
-            self.writeConsole(f"[Error] Invalid timestamp: {ts}\n")
-            return
+    def onTimeSliderChange(self, val: float):
+        self.labelTime.configure(text=self.fmtTime(val))
         if self.player:
-            img = self.player.getFrameAt(total)
-            if img:
-                self.currentPilImage = img
-                self.displayScaledImage()
-                self.writeConsole(f"[Info] Jumped to: {ts}\n")
-        else:
-            self.writeConsole("[Error] No video loaded.\n")
-
-    def jumpRandom(self):
-        if not self.player:
-            return self.writeConsole("[Error] No video loaded.\n")
-        total = random.uniform(0, self.player.duration)
-        img = self.player.getFrameAt(total)
-        if img:
-            # format hh:mm:ss.ss
-            h = int(total // 3600)
-            m = int((total % 3600) // 60)
-            s = total % 60
-            ts_str = f"{h:02d}:{m:02d}:{s:05.2f}"
-            # update entry field
-            self.entryTime.delete(0, "end")
-            self.entryTime.insert(0, ts_str)
-            # show frame
-            self.currentPilImage = img
-            self.displayScaledImage()
-            self.writeConsole(f"[Info] Jumped random to: {ts_str}\n")
+            self.seekSvc.request(val)
 
     def displayScaledImage(self):
         if not self.currentPilImage:
@@ -262,7 +276,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
     def onCanvasResize(self, event):
         self.displayScaledImage()
 
-    def onSliderChange(self, slider_id):
+    def onSliderChange(self, sliderId):
         def onSliderChangeImpl(val):
             th = 1 - self.sliderTop.get()
             bh = 1 - self.sliderBottom.get()
@@ -271,20 +285,20 @@ class MagiaTimelineGUI(customtkinter.CTk):
 
             # enforce bounds
             if lw > rw:
-                if slider_id == "left":
+                if sliderId == "left":
                     rw = lw
                     self.sliderRight.set(rw)
-                if slider_id == "right":
+                if sliderId == "right":
                     lw = rw
                     self.sliderLeft.set(lw)
             if th > bh:
-                if slider_id == "top":
+                if sliderId == "top":
                     bh = th
                     self.sliderBottom.set(1 - bh)
-                if slider_id == "bottom":
+                if sliderId == "bottom":
                     th = bh
                     self.sliderTop.set(1 - th)
-            
+
             self.displayScaledImage()
         return onSliderChangeImpl
 
@@ -328,20 +342,14 @@ class MagiaTimelineGUI(customtkinter.CTk):
             while True:
                 msg: str = self.queue.get_nowait()
                 self.writeConsole(msg)
-                # Update entry field and video frame on messages like:
-                # frame 00:01:01.72
+                # Update slider, label, and video preview on messages like: frame 00:01:01.72
                 if msg.startswith("frame "):
-                    ts_str = msg.split()[1]
-                    self.entryTime.configure(state="normal")
-                    self.entryTime.delete(0, "end")
-                    self.entryTime.insert(0, ts_str)
-                    self.entryTime.configure(state="readonly")
-                    # Jump to the frame
-                    if self.player:
-                        img = self.player.getFrameAt(float(ts_str.split(':')[0]) * 3600 + float(ts_str.split(':')[1]) * 60 + float(ts_str.split(':')[2]))
-                        if img:
-                            self.currentPilImage = img
-                            self.displayScaledImage()
+                    tsStr = msg.split()[1]
+                    parts = tsStr.split(':')
+                    seconds = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+                    self.sliderTime.set(seconds)
+                    self.labelTime.configure(text=tsStr)
+                    self.seekSvc.request(seconds)
         except:
             pass
 
@@ -350,9 +358,9 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.after(100, self.consolePoll)
 
     @staticmethod
-    def startWithHook(p: multiprocessing.Process, on_exit: typing.Callable[[], None]):
+    def startWithHook(p: multiprocessing.Process, onExit: typing.Callable[[], None]):
         p.start()
-        threading.Thread(target=lambda: (p.join(), on_exit()), daemon=True).start()
+        threading.Thread(target=lambda: (p.join(), onExit()), daemon=True).start()
         return p
 
     def startProcess(self):
@@ -361,7 +369,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
 
         if not self.player:
             return self.writeConsole("[Error] No video loaded.\n")
-        
+
         th = 1 - self.sliderTop.get()
         bh = 1 - self.sliderBottom.get()
         lw = self.sliderLeft.get()
@@ -389,7 +397,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
         )
         self.startWithHook(
             self.process,
-            on_exit=self.enableControls
+            onExit=self.enableControls
         )
 
         self.disableControls()
@@ -402,10 +410,8 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.sliderBottom.configure(state="disabled")
         self.sliderLeft.configure(state="disabled")
         self.sliderRight.configure(state="disabled")
-        self.entryTime.configure(state="disabled")
+        self.sliderTime.configure(state="disabled")
         self.btnOpen.configure(state="disabled")
-        self.btnJump.configure(state="disabled")
-        self.btnRandom.configure(state="disabled")
         self.checkboxTextExtraction.configure(state="disabled")
         self.checkboxStyleClassify.configure(state="disabled")
         self.progressBar.configure(mode="indeterminate")
@@ -433,10 +439,8 @@ class MagiaTimelineGUI(customtkinter.CTk):
         self.sliderBottom.configure(state="normal")
         self.sliderLeft.configure(state="normal")
         self.sliderRight.configure(state="normal")
-        self.entryTime.configure(state="normal")
+        self.sliderTime.configure(state="normal")
         self.btnOpen.configure(state="normal")
-        self.btnJump.configure(state="normal")
-        self.btnRandom.configure(state="normal")
         self.checkboxTextExtraction.configure(state="normal")
         self.checkboxStyleClassify.configure(state="normal")
         self.progressBar.configure(mode="determinate")
