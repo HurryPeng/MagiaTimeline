@@ -104,8 +104,13 @@
             "description": "defines the rectangle that wraps the content of a frame, cutting away black bars around",
             "$ref": "#/$defs/ratioRectangle"
         },
-        "maxResolution": {
-            "description": "if the video width or height exceeds this value, both dimensions will be halved until they are below this value. Set to 0 to disable.",
+        "maxResWidth": {
+            "description": "if the video width exceeds this value, both dimensions will be halved until within limits. Set to 0 to disable.",
+            "type": "integer",
+            "minimum": 0
+        },
+        "maxResHeight": {
+            "description": "if the video height exceeds this value, both dimensions will be halved until within limits. Set to 0 to disable. Keep lower than maxResWidth to aggressively downsample portrait videos.",
             "type": "integer",
             "minimum": 0
         },
@@ -933,7 +938,8 @@
         "destination",
         "assTemplate",
         "contentRect",
-        "maxResolution",
+        "maxResWidth",
+        "maxResHeight",
         "strategy",
         "preset",
         "engine",

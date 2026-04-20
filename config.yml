@@ -49,10 +49,12 @@ enableOpenCL: false
 # then you should set this to [0.01, 0.99, 0.09, 0.91]. 
 contentRect: [0.0, 1.0, 0.0, 1.0]
 
-# maxResolution: if the video width or height exceeds this value,
-# both dimensions will be halved until they are below this value.
-# Set to 0 to disable.
-maxResolution: 2000
+# maxResWidth / maxResHeight: if the video width or height exceeds the respective value,
+# both dimensions are halved together until both are within limits.
+# Set either to 0 to disable that axis. Keeping maxResHeight lower than maxResWidth
+# ensures portrait/vertical videos are downsampled more aggressively.
+maxResWidth: 2000
+maxResHeight: 1000
 
 # Strategies and Presets
 

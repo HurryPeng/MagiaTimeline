@@ -87,12 +87,12 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         srcStream.thread_type = 'FRAME'
         originalSize: typing.Tuple[int, int] = (srcStream.codec_context.width, srcStream.codec_context.height)
         size: typing.Tuple[int, int] = originalSize
-        maxResolution: int = config["maxResolution"]
+        maxResWidth: int = config["maxResWidth"]
+        maxResHeight: int = config["maxResHeight"]
         scaleDown: int = 1
-        if maxResolution > 0:
-            while size[0] > maxResolution or size[1] > maxResolution:
-                scaleDown *= 2
-                size = (size[0] // 2, size[1] // 2)
+        while (maxResWidth > 0 and size[0] > maxResWidth) or (maxResHeight > 0 and size[1] > maxResHeight):
+            scaleDown *= 2
+            size = (size[0] // 2, size[1] // 2)
         timeBase: fractions.Fraction = srcStream.time_base
         fps: fractions.Fraction = srcStream.average_rate
 
