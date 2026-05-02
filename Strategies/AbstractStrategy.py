@@ -25,6 +25,9 @@ class AbstractStrategy(abc.ABC):
     def getContentRect(self) -> AbstractRectangle:
         return self.contentRect
 
+    def getDebugString(self) -> str:
+        return ""
+
 class AbstractFramewiseStrategy(AbstractStrategy, abc.ABC):
     @abc.abstractmethod
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:

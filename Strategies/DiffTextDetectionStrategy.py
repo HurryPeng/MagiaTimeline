@@ -147,6 +147,18 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     
     def getSpecIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
         return self.specIirPasses
+
+    def getDebugString(self) -> str:
+        if self.debugLevel < 1:
+            return ""
+        return (
+            f"statDecideFeatureMerge {self.statDecideFeatureMerge}\n"
+            f"statDecideFeatureMergeDiff {self.statDecideFeatureMergeDiff}\n"
+            f"statDecideFeatureMergeComputeECC {self.statDecideFeatureMergeComputeECC}\n"
+            f"statDecideFeatureMergeFindTransformECC {self.statDecideFeatureMergeFindTransformECC}\n"
+            f"statDecideFeatureMergeInpaint {self.statDecideFeatureMergeInpaint}\n"
+            f"statDecideFeatureMergeOCR {self.statDecideFeatureMergeOCR}\n"
+        )
     
     def decideFeatureMerge(self, oldFeatures: typing.List[typing.Any], newFeatures: typing.List[typing.Any]) -> bool:
         self.statDecideFeatureMerge += 1
