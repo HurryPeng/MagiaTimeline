@@ -378,14 +378,20 @@ dtd:
     featureThreshold: 2
     # boxVerticalExpansion: vertical expansion ratio of the detected dialog box
     boxVerticalExpansion: 0.20
-    # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over all boxes) lower than this will be suppressed
+    # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over the biggest box) lower than this will be suppressed
     nonMajorBoxSuppressionMaxRatio: 0.1
-    # nonMajorBoxSuppressionMinRank: but at least this number of boxes will be kept
-    nonMajorBoxSuppressionMinRank: 1
     # colourTolerance: distance from the selected mean colour to be filtered for text
     colourTolerance: 70
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
     iirPassDenoiseMinTime: 100
+    # enableTypewriter: whether to activate typewriter subtitle support
+    enableTypewriter: true
+    # typewriterXCoverageThreshold: minimum old-mask X projection coverage by the intersection mask for typewriter candidate detection
+    typewriterXCoverageThreshold: 0.80
+    # typewriterAreaRatioThreshold: minimum ratio of the new box area to the old mask area for a frame pair to be considered a typewriter candidate
+    typewriterAreaRatioThreshold: 0.90
+    # enableShortCircuit: allow early decisions before reaching the final OCR stage
+    enableShortCircuit: true
     # debugLevel: 1 saves logs
     debugLevel: 0
 

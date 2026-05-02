@@ -668,14 +668,9 @@
                             "minimum": 0
                         },
                         "nonMajorBoxSuppressionMaxRatio": {
-                            "description": "boxes with a ratio (over all boxes) lower than this will be suppressed",
+                            "description": "boxes with a ratio (over the biggest box) lower than this will be suppressed",
                             "type": "number",
                             "minimum": 0
-                        },
-                        "nonMajorBoxSuppressionMinRank": {
-                            "description": "but at least this number of boxes will be kept",
-                            "type": "integer",
-                            "minimum": 1
                         },
                         "colourTolerance": {
                             "description": "distance from the selected mean colour to be filtered for text",
@@ -693,6 +688,26 @@
                             "type": "integer",
                             "minimum": 0
                         },
+                        "enableTypewriter": {
+                            "description": "whether to activate typewriter subtitle support; when false, behaviour is identical to the pre-typewriter algorithm",
+                            "type": "boolean"
+                        },
+                        "typewriterXCoverageThreshold": {
+                            "description": "minimum old-mask X projection coverage by the intersection mask for a frame pair to be considered a typewriter candidate",
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                        },
+                        "typewriterAreaRatioThreshold" : {
+                            "description": "minimum ratio of the new box area to the old mask area for a frame pair to be considered a typewriter candidate",
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                        },
+                        "enableShortCircuit": {
+                            "description": "allow early decisions before reaching the final OCR stage",
+                            "type": "boolean"
+                        },
                         "debugLevel": {
                             "description": "1 saves logs",
                             "type": "integer",
@@ -705,6 +720,10 @@
                         "featureThreshold",
                         "colourTolerance",
                         "iirPassDenoiseMinTime",
+                        "enableTypewriter",
+                        "typewriterXCoverageThreshold",
+                        "typewriterAreaRatioThreshold",
+                        "enableShortCircuit",
                         "debugLevel"
                     ],
                     "additionalProperties": false

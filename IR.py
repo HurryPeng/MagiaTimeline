@@ -244,6 +244,9 @@ class Interval:
             return val.get()
         return val
 
+    def isAttachmentInDiskCache(self, key: type) -> bool:
+        return isinstance(self.attachments.get(key), DiskCacheHandle)
+
     def assEventStr(self, id: int = -1) -> str:
         template = "Dialogue: 0,{},{},{},,0,0,0,,{}"
         sBegin = formatTimestamp(self.timeBase, self.begin)
@@ -301,7 +304,10 @@ class Interval:
     
     def merge(self, other: Interval) -> Interval:
         merged = Interval(self.label, min(self.begin, other.begin), max(self.end, other.end), self.timeBase, self.framePoints + other.framePoints)
-        merged.attachments = dict(self.attachments)
+        later = self if self.end >= other.end else other
+        earlier = other if self.end >= other.end else self
+        # Prefer later's attachments
+        merged.attachments = dict(later.attachments)
         return merged
 
 class IIR: # Interval Intermediate Representation

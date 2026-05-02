@@ -71,25 +71,32 @@ class IntervalGrower(IIR):
     def insertInterval(self, framePoint: FramePoint, image: typing.Optional[cv.Mat]) -> Interval:
         label = INTERVAL_LABEL_DIALOG if self.strategy.isFpNonEmpty(framePoint) else INTERVAL_LABEL_EMPTY
         interval = Interval(label, framePoint.timestamp, framePoint.timestamp, self.timeBase, [framePoint])
-        interval.setAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey, self.strategy.getFpFeature(framePoint), inDiskCache=True)
+        interval.setAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey, self.strategy.getFpFeature(framePoint), inDiskCache=False)
         if self.extraJobFrameKey is not None:
             assert image is not None
             assert self.cutExtraJobFrame is not None
             extraJobImage = self.cutExtraJobFrame(image)
-            interval.setAttachment(self.extraJobFrameKey, extraJobImage, inDiskCache=True)
+            interval.setAttachment(self.extraJobFrameKey, extraJobImage, inDiskCache=False)
         self.intervals.append(interval)
         self.sort()
         if self.verbose:
             print("insertInterval       ", f"({interval.timeStringBegin()}, {interval.timeStringEnd()}) ({interval.begin}, {interval.end}) {(interval.end - interval.begin)}")
         return interval
 
-    def extendInterval(self, interval: Interval, framePoint: FramePoint) -> None:
+    def extendInterval(self, interval: Interval, framePoint: FramePoint, image: typing.Optional[cv.Mat] = None) -> None:
         if interval.begin > framePoint.timestamp:
             interval.begin = framePoint.timestamp
             if self.verbose:
                 print("extendIntervalToLeft ", f"<{interval.timeStringBegin()}, {interval.timeStringEnd()}] <{interval.begin}, {interval.end}] {(interval.end - interval.begin)}")
         elif interval.end < framePoint.timestamp:
             interval.end = framePoint.timestamp
+            # Update representative feature to the newest (temporally latest) frame (memory only, finalized later)
+            interval.setAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey, self.strategy.getFpFeature(framePoint), inDiskCache=False)
+            # Update the extra job frame to the newer (temporally later) frame (memory only, finalized later)
+            if self.extraJobFrameKey is not None and image is not None:
+                assert self.cutExtraJobFrame is not None
+                extraJobImage = self.cutExtraJobFrame(image)
+                interval.setAttachment(self.extraJobFrameKey, extraJobImage, inDiskCache=False)
             if self.verbose:
                 print("extendIntervalToRight", f"[{interval.timeStringBegin()}, {interval.timeStringEnd()}> [{interval.begin}, {interval.end}> {(interval.end - interval.begin)}")
         interval.framePoints.append(framePoint)
@@ -98,17 +105,29 @@ class IntervalGrower(IIR):
     def hookInterval(self, intervalL: Interval, intervalR: Interval):
         assert intervalL.end < intervalR.begin
         intervalL.end = intervalR.begin
-
-        # Aggregate the features and move them to the left interval
-        features = [self.strategy.getFpFeature(framePoint) for framePoint in intervalL.framePoints]
-        featuresAggregated = self.strategy.aggregateFeatures(features)
-        intervalL.setAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey, featuresAggregated, inDiskCache=True)
-        for framePoint in intervalL.framePoints:
-            self.strategy.freeFpFeature(framePoint)
-        
+        self.finalizeInterval(intervalL)
         if self.verbose:
             print("hookInterval         ", f"[{intervalL.timeStringBegin()}, {intervalL.timeStringEnd()}}} [{intervalL.begin}, {intervalL.end}}} {(intervalL.end - intervalL.begin)}")
 
+    def finalizeInterval(self, interval: Interval) -> None:
+        # Flush AggregatedFeatureKey from memory to DiskCache (single write per interval)
+        if not interval.isAttachmentInDiskCache(AbstractSpeculativeStrategy.AggregatedFeatureKey):
+            aggVal = interval.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)
+            if aggVal is not None:
+                interval.setAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey, aggVal, inDiskCache=True)
+        # Flush ExtraJobFrameKey from memory to DiskCache
+        if self.extraJobFrameKey is not None:
+            if not interval.isAttachmentInDiskCache(self.extraJobFrameKey):
+                ejVal = interval.getAttachment(self.extraJobFrameKey)
+                if ejVal is not None:
+                    interval.setAttachment(self.extraJobFrameKey, ejVal, inDiskCache=True)
+        # Free per-framePoint features to release memory
+        for framePoint in interval.framePoints:
+            self.strategy.freeFpFeature(framePoint)
+
+    def finalizeAll(self) -> None:
+        for interval in self.intervals:
+            self.finalizeInterval(interval)
 
 class FrameCache:
     def __init__(self, container: av.container.InputContainer, stream: av.video.stream.VideoStream) -> None:
@@ -287,9 +306,9 @@ class SpeculativeEngine(AbstractEngine):
                 prev = interval1
                 imageI2 = avFrame2CvMat(frameI2, self.scaleDown)
                 framePoint2 = strategy.genFramePoint(imageI2, frameI2.pts, timeBase)
-                merge = strategy.decideFeatureMerge([strategy.getFpFeature(framePoint) for framePoint in interval1.framePoints], [strategy.getFpFeature(framePoint2)])
+                merge = strategy.decideFeatureMerge([interval1.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)], [strategy.getFpFeature(framePoint2)])
                 if merge:
-                    intervalGrower.extendInterval(interval1, framePoint2)
+                    intervalGrower.extendInterval(interval1, framePoint2, imageI2)
                 else:
                     intervalGrower.insertInterval(framePoint2, imageI2)
             elif proposeC == -1: # grower is complete up to its last interval
@@ -316,11 +335,11 @@ class SpeculativeEngine(AbstractEngine):
                     frame = frameI2
                 image = avFrame2CvMat(frame, self.scaleDown)
                 framePoint = strategy.genFramePoint(image, frame.pts, timeBase)
-                merge = strategy.decideFeatureMerge([strategy.getFpFeature(fp) for fp in prev.framePoints], [strategy.getFpFeature(framePoint)])
+                merge = strategy.decideFeatureMerge([prev.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)], [strategy.getFpFeature(framePoint)])
                 distPrev = prev.distFramePoint(framePoint)
                 assert distPrev <= self.emptyFeatureMaxTimestamp
                 if merge:
-                    intervalGrower.extendInterval(prev, framePoint)
+                    intervalGrower.extendInterval(prev, framePoint, image)
                 else:
                     intervalGrower.insertInterval(framePoint, image)
             else: # reasonable proposal
@@ -335,18 +354,20 @@ class SpeculativeEngine(AbstractEngine):
                     continue
                 image = avFrame2CvMat(frame, self.scaleDown)
                 framePoint = strategy.genFramePoint(image, frame.pts, timeBase)
-                mergeLeft = strategy.decideFeatureMerge([strategy.getFpFeature(fp) for fp in prev.framePoints], [strategy.getFpFeature(framePoint)])
+                mergeLeft = strategy.decideFeatureMerge([prev.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)], [strategy.getFpFeature(framePoint)])
                 distLeft = prev.distFramePoint(framePoint)
                 if mergeLeft and not distLeft > self.emptyFeatureMaxTimestamp:
-                    intervalGrower.extendInterval(prev, framePoint)
+                    intervalGrower.extendInterval(prev, framePoint, image)
                 else:
-                    mergeRight = strategy.decideFeatureMerge([strategy.getFpFeature(framePoint)], [strategy.getFpFeature(fp) for fp in next.framePoints])
+                    mergeRight = strategy.decideFeatureMerge([strategy.getFpFeature(framePoint)], [next.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)])
                     distRight = next.distFramePoint(framePoint)
                     if mergeRight and not distRight > self.emptyFeatureMaxTimestamp:
-                        intervalGrower.extendInterval(next, framePoint)
+                        intervalGrower.extendInterval(next, framePoint, image)
                     else:
                         intervalGrower.insertInterval(framePoint, image)
         
+        intervalGrower.finalizeAll()
+
         print("==== IIR Passes ====")
 
         print("iirPassSuppressNonMain")
