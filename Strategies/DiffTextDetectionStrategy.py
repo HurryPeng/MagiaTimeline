@@ -297,7 +297,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             intersectMask = cv.bitwise_and(oldMask, warpedMask)
             unionMask = cv.bitwise_or(oldMask, warpedMask)
             if isTypewriterCandidate:
-                oldXWidth = self.xProjectionCoverage(oldMask)
                 intersectXWidth = self.xProjectionCoverage(intersectMask)
                 oldXCoverage = intersectXWidth / oldXWidth if oldXWidth > 0 else 0.0
                 if oldXCoverage < self.typewriterXCoverageThreshold:
@@ -310,7 +309,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 _, _, _, _czHeight = cv.boundingRect(czNonZero)
                 erosionRadius = max(1, int(_czHeight * self.boxExpansion / (1.0 + 2.0 * self.boxExpansion)))
                 erosionRadius = int(erosionRadius * 1.5) # erode even more in order not to leak strokes in
-                k = 2 * erosionRadius + 1
+                k = max(3, 2 * erosionRadius + 1)
                 iouMask = cv.morphologyEx(intersectMask, cv.MORPH_ERODE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (k, k)))
             else:
                 iouMask = intersectMask

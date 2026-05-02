@@ -110,6 +110,8 @@ class IntervalGrower(IIR):
             print("hookInterval         ", f"[{intervalL.timeStringBegin()}, {intervalL.timeStringEnd()}}} [{intervalL.begin}, {intervalL.end}}} {(intervalL.end - intervalL.begin)}")
 
     def finalizeInterval(self, interval: Interval) -> None:
+        """Flush accumulated in-memory features to disk cache once an interval is closed,
+        then free per-framePoint features to release memory."""
         # Flush AggregatedFeatureKey from memory to DiskCache (single write per interval)
         if not interval.isAttachmentInDiskCache(AbstractSpeculativeStrategy.AggregatedFeatureKey):
             aggVal = interval.getAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey)

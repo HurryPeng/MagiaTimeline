@@ -718,6 +718,8 @@
                     "required": [
                         "dialogRect",
                         "featureThreshold",
+                        "boxExpansion",
+                        "nonMajorBoxSuppressionMaxRatio",
                         "colourTolerance",
                         "iirPassDenoiseMinTime",
                         "enableTypewriter",
@@ -788,7 +790,11 @@
             "description": "list of extra jobs to perform after subtitle extraction",
             "type": "array",
             "items": {
-                "type": "string"
+                "type": "string",
+                "enum": [
+                    "ocr",
+                    "sty"
+                ]
             }
         },
         "ocr": {
@@ -959,7 +965,9 @@
     "required": [
         "source",
         "destination",
+        "outputSrt",
         "assTemplate",
+        "enableOpenCL",
         "contentRect",
         "maxResWidth",
         "maxResHeight",

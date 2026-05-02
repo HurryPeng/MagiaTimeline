@@ -305,7 +305,6 @@ class Interval:
     def merge(self, other: Interval) -> Interval:
         merged = Interval(self.label, min(self.begin, other.begin), max(self.end, other.end), self.timeBase, self.framePoints + other.framePoints)
         later = self if self.end >= other.end else other
-        earlier = other if self.end >= other.end else self
         # Prefer later's attachments
         merged.attachments = dict(later.attachments)
         return merged

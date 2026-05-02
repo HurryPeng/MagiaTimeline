@@ -979,6 +979,8 @@ class IIRStyleClassifyPass(IIRPass):
 
         featureMat = np.array([features[i] for i in validIndices])
         distMat = scipy.spatial.distance.pdist(featureMat, metric='euclidean')
+        if np.any(np.isnan(distMat)):
+            print(f"  [sty] warning: NaN in distance matrix: feature vectors may contain NaN; replacing with 1.0")
         distMat = np.nan_to_num(distMat, nan=1.0)
         Z = scipy.cluster.hierarchy.linkage(distMat, method='average')
 
@@ -986,7 +988,7 @@ class IIRStyleClassifyPass(IIRPass):
             print(f"  [sty] clustering: fixed distance threshold = {self.clusterDistThreshold:.4f}")
             rawLabels = scipy.cluster.hierarchy.fcluster(Z, self.clusterDistThreshold, criterion='distance')
         else:
-            print(f"  [sty] clustering: inconsistency criterion (depth=2, t=2.0)")
+            print(f"  [sty] clustering: inconsistency criterion (depth=2, t=1.5)")
             rawLabels = scipy.cluster.hierarchy.fcluster(Z, 1.5, depth=2, criterion='inconsistent')
 
         return rawLabels.tolist()

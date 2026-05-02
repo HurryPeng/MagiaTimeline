@@ -153,7 +153,9 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         print("Timeline Speed {:.2f}x".format(float(srcStream.frames / fps) / timeTimelineElapsed))
 
         if config["extraJobs"]:
-            if not isinstance(strategy, AbstractExtraJobStrategy):
+            if config["engine"] != "speculative":
+                print("Error: extra jobs are currently only supported with the speculative engine. Skipping all extra jobs.")
+            elif not isinstance(strategy, AbstractExtraJobStrategy):
                 print("Error: Strategy does not support extra jobs. Skipping all extra jobs.")
             else:
                 if "ocr" in config["extraJobs"]:

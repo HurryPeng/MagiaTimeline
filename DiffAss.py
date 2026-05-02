@@ -43,10 +43,9 @@ class DiffProblem:
 
 @dataclasses.dataclass
 class DiffReport:
-    standardDialogEvents: typing.List[AssEvent]
-    standardOtherEvents: typing.List[AssEvent]
+    standardEvents: typing.List[AssEvent]
     trialEvents: typing.List[AssEvent]
-    standardDialogByIndex: typing.Dict[int, AssEvent]
+    standardByIndex: typing.Dict[int, AssEvent]
     trialByIndex: typing.Dict[int, AssEvent]
     merges: typing.List[DiffProblem]
     splits: typing.List[DiffProblem]
@@ -90,7 +89,7 @@ def parseDialogueLine(line: str, index: int) -> AssEvent | None:
     parts = line[len("Dialogue:"):].split(",", 9)
     if len(parts) < 10:
         return None
-    layer, start, end, style, _, _, _, _, _, text = parts
+    layer, start, end, style, Name, MarginL, MarginR, MarginV, Effect, text = parts
     text = text.strip()
     return AssEvent(
         index=index,
@@ -147,18 +146,6 @@ def collectMatches(
     return matches
 
 
-def findCoveringNonDialogLabels(
-    event: AssEvent,
-    standardOtherEvents: typing.List[AssEvent],
-    toleranceCs: int,
-) -> typing.List[str]:
-    labels: typing.List[str] = []
-    for otherEvent in standardOtherEvents:
-        if isMatched(event, otherEvent, toleranceCs):
-            labels.append(otherEvent.label)
-    return sorted(set(labels))
-
-
 def buildExtraTags(event: AssEvent, noiseMaxCs: int) -> typing.List[str]:
     tags: typing.List[str] = []
     if event.durationCs() <= noiseMaxCs:
@@ -175,11 +162,10 @@ def analyzeAssDiff(
     standardAllEvents = loadAssEvents(standardPath)
     trialEvents = loadAssEvents(trialPath)
 
-    standardDialogEvents = [event for event in standardAllEvents if event.label == "Dialog"]
-    standardOtherEvents = [event for event in standardAllEvents if event.label != "Dialog"]
+    standardEvents = standardAllEvents
 
-    standardToTrial = collectMatches(standardDialogEvents, trialEvents, toleranceCs)
-    trialToStandard = collectMatches(trialEvents, standardDialogEvents, toleranceCs)
+    standardToTrial = collectMatches(standardEvents, trialEvents, toleranceCs)
+    trialToStandard = collectMatches(trialEvents, standardEvents, toleranceCs)
 
     merges: typing.List[DiffProblem] = []
     splits: typing.List[DiffProblem] = []
@@ -195,19 +181,14 @@ def analyzeAssDiff(
                 trialIndexes=[trialEvent.index],
             ))
         elif len(standardIndexes) == 0:
-            labels = findCoveringNonDialogLabels(trialEvent, standardOtherEvents, toleranceCs)
-            note = ""
-            if len(labels) > 0:
-                note = "Overlaps standard non-dialog region: " + ", ".join(labels)
             extra.append(DiffProblem(
                 type=ProblemType.Extra,
                 standardIndexes=[],
                 trialIndexes=[trialEvent.index],
                 tags=buildExtraTags(trialEvent, noiseMaxCs),
-                note=note,
             ))
 
-    for standardEvent in standardDialogEvents:
+    for standardEvent in standardEvents:
         trialIndexes = standardToTrial[standardEvent.index]
         if len(trialIndexes) >= 2:
             splits.append(DiffProblem(
@@ -223,10 +204,9 @@ def analyzeAssDiff(
             ))
 
     return DiffReport(
-        standardDialogEvents=standardDialogEvents,
-        standardOtherEvents=standardOtherEvents,
+        standardEvents=standardEvents,
         trialEvents=trialEvents,
-        standardDialogByIndex={event.index: event for event in standardDialogEvents},
+        standardByIndex={event.index: event for event in standardEvents},
         trialByIndex={event.index: event for event in trialEvents},
         merges=merges,
         splits=splits,
@@ -257,17 +237,17 @@ def formatProblem(
         lines.append(f"- Merge{tagPrefix}")
         lines.append(formatIndentedLine("Trial", formatEventRef(trialEvent)))
         for standardIndex in problem.standardIndexes:
-            standardEvent = report.standardDialogByIndex[standardIndex]
+            standardEvent = report.standardByIndex[standardIndex]
             lines.append(formatIndentedLine("Standard", formatEventRef(standardEvent)))
     elif problem.type == ProblemType.Split:
-        standardEvent = report.standardDialogByIndex[problem.standardIndexes[0]]
+        standardEvent = report.standardByIndex[problem.standardIndexes[0]]
         lines.append(f"- Split{tagPrefix}")
         lines.append(formatIndentedLine("Standard", formatEventRef(standardEvent)))
         for trialIndex in problem.trialIndexes:
             trialEvent = report.trialByIndex[trialIndex]
             lines.append(formatIndentedLine("Trial", formatEventRef(trialEvent)))
     elif problem.type == ProblemType.Missing:
-        standardEvent = report.standardDialogByIndex[problem.standardIndexes[0]]
+        standardEvent = report.standardByIndex[problem.standardIndexes[0]]
         lines.append(f"- Missing{tagPrefix}")
         lines.append(formatIndentedLine("Standard", formatEventRef(standardEvent)))
     elif problem.type == ProblemType.Extra:
@@ -308,9 +288,8 @@ def printHumanReadableReport(
     print(f"Trial: {trialPath}")
     print(f"Match tolerance: {toleranceCs} cs")
     print(f"Noise threshold: {noiseMaxCs} cs")
-    print(f"Standard dialog count: {len(report.standardDialogEvents)}")
-    print(f"Trial dialogue count: {len(report.trialEvents)}")
-    print(f"Standard non-dialog count: {len(report.standardOtherEvents)}")
+    print(f"Standard event count: {len(report.standardEvents)}")
+    print(f"Trial event count: {len(report.trialEvents)}")
 
     print("")
     print("Summary")

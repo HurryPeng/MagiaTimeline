@@ -14,6 +14,7 @@ import json
 import yaml
 import tempfile
 import traceback
+import queue
 
 from Version import VERSION
 
@@ -409,7 +410,7 @@ class MagiaTimelineGUI(customtkinter.CTk):
                     self.sliderTime.set(seconds)
                     self.labelTime.configure(text=tsStr)
                     self.seekSvc.request(seconds)
-        except:
+        except queue.Empty:
             pass
 
     def consolePoll(self):
