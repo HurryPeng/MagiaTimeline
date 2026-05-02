@@ -385,7 +385,7 @@ dtd:
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
     iirPassDenoiseMinTime: 100
     # enableTypewriter: whether to activate typewriter subtitle support
-    enableTypewriter: true
+    enableTypewriter: false
     # typewriterXCoverageThreshold: minimum old-mask X projection coverage by the intersection mask for typewriter candidate detection
     typewriterXCoverageThreshold: 0.80
     # typewriterAreaRatioThreshold: minimum ratio of the new box area to the old mask area for a frame pair to be considered a typewriter candidate
