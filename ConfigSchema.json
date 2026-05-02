@@ -662,8 +662,8 @@
                             "type": "number",
                             "minimum": 0
                         },
-                        "boxVerticalExpansion": {
-                            "description": "vertical expansion ratio of the detected dialog box",
+                        "boxExpansion": {
+                            "description": "expansion ratio of the detected dialog box",
                             "type": "number",
                             "minimum": 0
                         },

@@ -376,8 +376,8 @@ dtd:
     dialogRect: [0.00, 1.00, 0.75, 1.00]
     # featureThreshold: minimum feature weight for a frame to be considered containing subtitles
     featureThreshold: 2
-    # boxVerticalExpansion: vertical expansion ratio of the detected dialog box
-    boxVerticalExpansion: 0.20
+    # boxExpansion: expansion ratio of the detected dialog box#
+    boxExpansion: 0.20
     # nonMajorBoxSuppressionMaxRatio: boxes with a ratio (over the biggest box) lower than this will be suppressed
     nonMajorBoxSuppressionMaxRatio: 0.1
     # colourTolerance: distance from the selected mean colour to be filtered for text

@@ -61,9 +61,9 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.rectangles["dialogRect"] = RatioRectangle(contentRect, *config["dialogRect"])
 
         self.featureThreshold: float = config["featureThreshold"]
-        self.boxVerticalExpansion: float = config["boxVerticalExpansion"]
+        self.boxExpansion: float = config["boxExpansion"]
         self.smallTextRawShortSideThreshold: float = 60.0
-        self.smallTextBoxShortSideThreshold: float = self.smallTextRawShortSideThreshold * (1.0 + 2.0 * self.boxVerticalExpansion)
+        self.smallTextBoxShortSideThreshold: float = self.smallTextRawShortSideThreshold * (1.0 + 2.0 * self.boxExpansion)
         self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
         self.colourTolerance: int = config["colourTolerance"]
         self.minMaskIou: float = 0.5
@@ -296,7 +296,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             czNonZero = cv.findNonZero(intersectMask)
             if czNonZero is not None:
                 _, _, _, _czHeight = cv.boundingRect(czNonZero)
-                erosionRadius = max(1, int(_czHeight * self.boxVerticalExpansion / (1.0 + 2.0 * self.boxVerticalExpansion)))
+                erosionRadius = max(1, int(_czHeight * self.boxExpansion / (1.0 + 2.0 * self.boxExpansion)))
                 erosionRadius = int(erosionRadius * 1.5) # erode even more in order not to leak strokes in
                 k = 2 * erosionRadius + 1
                 iouMask = cv.morphologyEx(intersectMask, cv.MORPH_ERODE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (k, k)))
@@ -494,7 +494,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 continue
 
             x0, y0, w0, h0 = cv.boundingRect(wordInfo)
-            expand = int(h0 * self.boxVerticalExpansion)
+            expand = int(h0 * self.boxExpansion)
             x = max(0, x0 - expand)
             y = max(0, y0 - expand)
             w = min(imgW, w0 + 2 * expand)
