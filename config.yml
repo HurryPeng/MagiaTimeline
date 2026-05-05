@@ -383,7 +383,7 @@ dtd:
     # colourTolerance: distance from the selected mean colour to be filtered for text
     colourTolerance: 70
     # iirPassDenoiseMinTime: minimum time (in milliseconds) for an interval to be kept
-    iirPassDenoiseMinTime: 100
+    iirPassDenoiseMinTime: 200
     # enableTypewriter: whether to activate typewriter subtitle support
     enableTypewriter: false
     # typewriterXCoverageThreshold: minimum old-mask X projection coverage by the intersection mask for typewriter candidate detection

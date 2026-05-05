@@ -16,11 +16,53 @@ from IR import *
 
 class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, AbstractExtraJobStrategy):
     @dataclasses.dataclass
+    class TextBox:
+        x: int
+        y: int
+        w: int
+        h: int
+        rawH: int
+
+    @dataclasses.dataclass
     class DialogFeature:
         image: cv.Mat
         mask: cv.Mat
         time: str
-        maxTextBoxShortSide: int
+        maxTextBoxArea: int
+        maxTextBoxRawHeight: int
+
+    DebugLogFields = [
+        "time0",
+        "time1",
+        "merge",
+        "level",
+        "reason",
+        "maskIou",
+        "diffRate",
+        "cc",
+        "pcWarpDist",
+        "warpDist",
+        "maxWarpDist",
+        "sobelIou",
+        "postInpaintCommonEdgeRate",
+        "removedCommonEdgeRate",
+        "ocrIou",
+        "isTypewriterCandidate",
+        "isTypewriterRevoked",
+        "oldXCoverage",
+        "oldMaxTextBoxArea",
+        "newMaxTextBoxArea",
+        "oldMaxTextBoxRawHeight",
+        "newMaxTextBoxRawHeight",
+        "isSmallTextComparison",
+        "oneSidedEdgeRate",
+        "sobelEdgeDensity",
+        "postInpaintUnionEdgeRate",
+        "removedUnionEdgeRate",
+        "commonEdgeBaseArea",
+        "unionEdgeBaseArea",
+        "commonUnionRemovalGap",
+    ]
 
     class FlagIndex(AbstractFlagIndex):
         Dialog = enum.auto()
@@ -62,12 +104,18 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         self.featureThreshold: float = config["featureThreshold"]
         self.boxExpansion: float = config["boxExpansion"]
-        self.smallTextRawShortSideThreshold: float = 60.0
-        self.smallTextBoxShortSideThreshold: float = self.smallTextRawShortSideThreshold * (1.0 + 2.0 * self.boxExpansion)
+        self.smallTextBoxAreaThreshold: int = 60000
         self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
         self.colourTolerance: int = config["colourTolerance"]
         self.minMaskIou: float = 0.5
         self.minOcrIou: float = 0.10
+        self.commonEdgeRemovalMergeThreshold: float = 0.70
+        self.commonEdgeRemovalMergeMinSobelIou: float = 0.70
+        self.commonEdgeRemovalSplitThreshold: float = 0.25
+        self.commonEdgeRemovalMergeMaxOneSidedEdgeRate: float = 0.30
+        self.commonEdgeRemovalMergeMinUnionEdgeRemovalRate: float = 0.80
+        self.maxWarpTextBoxMinSideRatio: float = 0.60
+        self.sobelShortcutMaxEdgeDensity: float = 0.45
         self.iirPassDenoiseMinTime: int = config["iirPassDenoiseMinTime"]
         self.enableShortCircuit: bool = config["enableShortCircuit"]
         self.debugLevel: int = config["debugLevel"]
@@ -111,7 +159,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         
         if self.debugLevel == 1:
             self.log = open("dtdLog.csv", "w", encoding="utf-8")
-            self.log.write("time0,time1,merge,level,reason,maskIou,diffRate,cc,pcWarpDist,warpDist,sobelIou,postInpaintCommonEdgeRate,removedCommonEdgeRate,ocrIou,isTypewriterCandidate,isTypewriterRevoked,oldXCoverage,oldMaxTextBoxShortSide,newMaxTextBoxShortSide,isSmallTextComparison\n")
+            self.log.write(",".join(self.DebugLogFields) + "\n")
             self.log.flush()
             if os.path.exists("./dtdDebug"):
                 # Remove whole dir and all contents
@@ -129,6 +177,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     @staticmethod
     def xProjectionCoverage(mask: cv.Mat) -> int:
         return int(np.count_nonzero(np.any(mask > 0, axis=0)))
+
+    @staticmethod
+    def yProjectionCoverage(mask: cv.Mat) -> int:
+        return int(np.count_nonzero(np.any(mask > 0, axis=1)))
 
     def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
         return self.rectangles
@@ -174,16 +226,37 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         oldImage = oldFeature.image
         oldMask = oldFeature.mask
         oldTimeStr = oldFeature.time
-        oldMaxTextBoxShortSide = oldFeature.maxTextBoxShortSide
+        oldMaxTextBoxArea = oldFeature.maxTextBoxArea
+        oldMaxTextBoxRawHeight = oldFeature.maxTextBoxRawHeight
         newImage = newFeature.image
         newMask = newFeature.mask
         newTimeStr = newFeature.time
-        newMaxTextBoxShortSide = newFeature.maxTextBoxShortSide
+        newMaxTextBoxArea = newFeature.maxTextBoxArea
+        newMaxTextBoxRawHeight = newFeature.maxTextBoxRawHeight
         isSmallText = (
-            oldMaxTextBoxShortSide > 0 and
-            newMaxTextBoxShortSide > 0 and
-            max(oldMaxTextBoxShortSide, newMaxTextBoxShortSide) <= self.smallTextBoxShortSideThreshold
+            oldMaxTextBoxArea > 0 and
+            newMaxTextBoxArea > 0 and
+            max(oldMaxTextBoxArea, newMaxTextBoxArea) <= self.smallTextBoxAreaThreshold
         )
+        maskIou = 0.0
+        diffRate = 0.0
+        cc = 0.0
+        pcWarpDist = 0.0
+        warpDist = 0.0
+        sobelIou = 0.0
+        postInpaintCommonEdgeRate = 0.0
+        removedCommonEdgeRate = 0.0
+        isTypewriterCandidate = False
+        isTypewriterRevoked = False
+        oldXCoverage = 0.0
+        oneSidedEdgeRate = 0.0
+        sobelEdgeDensity = 0.0
+        postInpaintUnionEdgeRate = 0.0
+        removedUnionEdgeRate = 0.0
+        commonUnionRemovalGap = 0.0
+        commonEdgeBaseArea = 0.0
+        unionEdgeBaseArea = 0.0
+        maxWarpDist = 0.0
 
         if self.debugLevel == 1:
             # Save oldImage and newImage to "dtdDebug/<oldTimeStr>.png" and "dtdDebug/<newTimeStr>.png"
@@ -196,6 +269,52 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             def saveExtra(step: str, image: cv.Mat):
                 imwriteAsync(f"./dtdDebug/{oldTimeStrSemicolon}-{newTimeStrSemicolon}-{step}.png", image)
 
+        def writeDebugDecision(
+            merge: bool,
+            level: int,
+            reason: str,
+            ocrIou: float = 0.0,
+            images: typing.Sequence[typing.Tuple[str, cv.Mat]] = (),
+        ) -> None:
+            if self.debugLevel != 1:
+                return
+            values = [
+                oldTimeStr,
+                newTimeStr,
+                merge,
+                level,
+                reason,
+                maskIou,
+                diffRate,
+                cc,
+                pcWarpDist,
+                warpDist,
+                maxWarpDist,
+                sobelIou,
+                postInpaintCommonEdgeRate,
+                removedCommonEdgeRate,
+                ocrIou,
+                isTypewriterCandidate,
+                isTypewriterRevoked,
+                oldXCoverage,
+                oldMaxTextBoxArea,
+                newMaxTextBoxArea,
+                oldMaxTextBoxRawHeight,
+                newMaxTextBoxRawHeight,
+                isSmallText,
+                oneSidedEdgeRate,
+                sobelEdgeDensity,
+                postInpaintUnionEdgeRate,
+                removedUnionEdgeRate,
+                commonEdgeBaseArea,
+                unionEdgeBaseArea,
+                commonUnionRemovalGap,
+            ]
+            self.log.write(",".join(str(value) for value in values) + "\n")
+            saveFrames()
+            for step, image in images:
+                saveExtra(step, image)
+
         # Quick mask iou check before performing ocr on the intersection of the two images
         intersectMask = cv.bitwise_and(oldMask, newMask)
         unionMask = cv.bitwise_or(oldMask, newMask)
@@ -203,17 +322,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         unionArea = np.sum(unionMask) / 255
         
         if unionArea == 0:
-            if self.debugLevel == 1:
-                # time0,time1,merge,level,reason,sobelIou,postInpaintCommonEdgeRate,removedCommonEdgeRate,ocrIou
-                self.log.write(f"{oldTimeStr},{newTimeStr},False,0,empty mask,0,0,0,0,0,0,0,0,0,False,False,0.0,{oldMaxTextBoxShortSide},{newMaxTextBoxShortSide},{isSmallText}\n")
-                saveFrames()
+            writeDebugDecision(False, 0, "empty mask")
             return False
         
         maskIou = intersectArea / unionArea
-
-        isTypewriterCandidate = False
-        isTypewriterRevoked = False
-        oldXCoverage = 0.0
 
         if self.enableTypewriter:
             oldArea = np.sum(oldMask) / 255
@@ -225,15 +337,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             if oldXCoverage >= self.typewriterXCoverageThreshold and areaRatio > self.typewriterAreaRatioThreshold:
                 isTypewriterCandidate = True
 
-        if self.enableShortCircuit:
-            if maskIou < self.minMaskIou and not isTypewriterCandidate:
-                if self.debugLevel == 1:
-                    self.log.write(f"{oldTimeStr},{newTimeStr},False,1,mask iou too low,{maskIou},0,0,0,0,0,0,0,0,{isTypewriterCandidate},{isTypewriterRevoked},{oldXCoverage},{oldMaxTextBoxShortSide},{newMaxTextBoxShortSide},{isSmallText}\n")
-                    saveFrames()
-                    saveExtra("2oldMask", oldMask)
-                    saveExtra("3newMask", newMask)
-                return False
-        
         self.statDecideFeatureMergeDiff += 1
         
         diffMask: cv.Mat = rgbDiffMask(oldImage, newImage, self.colourTolerance)
@@ -242,10 +345,15 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         diffRate = diffArea / unionArea
         if self.enableShortCircuit:
             if diffRate < 0.05:
-                if self.debugLevel == 1:
-                    self.log.write(f"{oldTimeStr},{newTimeStr},True,1,diff rate too low,{maskIou},{diffRate},0,0,0,0,0,0,0,{isTypewriterCandidate},{isTypewriterRevoked},{oldXCoverage},{oldMaxTextBoxShortSide},{newMaxTextBoxShortSide},{isSmallText}\n")
-                    saveFrames()
+                writeDebugDecision(True, 1, "diff rate too low")
                 return True
+
+            if maskIou < self.minMaskIou and not isTypewriterCandidate:
+                writeDebugDecision(False, 1, "mask iou too low", images=[
+                    ("2oldMask", oldMask),
+                    ("3newMask", newMask),
+                ])
+                return False
         
         # Pre-ECC Sobel
         oldImageSobel = rgbSobel(oldImage, 1)
@@ -266,6 +374,10 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         newImageSobelMasked = cv.bitwise_and(newImageSobel, newImageSobel, mask=newMask)
         oldImageSobelMaskedF32 = np.float32(oldImageSobelMasked)
         newImageSobelMaskedF32 = np.float32(newImageSobelMasked)
+        oldTextMinSide = min(self.xProjectionCoverage(oldMask), self.yProjectionCoverage(oldMask))
+        newTextMinSide = min(self.xProjectionCoverage(newMask), self.yProjectionCoverage(newMask))
+        rawTextMinSide = min(oldTextMinSide, newTextMinSide) / (1.0 + 2.0 * self.boxExpansion)
+        maxWarpDist = min(50, self.maxWarpTextBoxMinSideRatio * rawTextMinSide)
         (shiftX, shiftY), response = phaseCorrelateMaxRes(
             src1=newImageSobelMaskedF32,
             src2=oldImageSobelMaskedF32,
@@ -274,7 +386,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if response > 0.1:
             warp = np.array([[1, 0, shiftX], [0, 1, shiftY]], dtype=np.float32)
         pcWarpDist = np.linalg.norm(warp[0:2, 2])
-        if pcWarpDist > 1.5 and pcWarpDist < 50 and cc < 0.99:
+        if pcWarpDist > 1.5 and pcWarpDist < maxWarpDist and cc < 0.99:
             try:
                 self.statDecideFeatureMergeFindTransformECC += 1
                 cc, warp = cv.findTransformECC(
@@ -291,7 +403,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         warpedImage = newImage
         warpDist = np.linalg.norm(warp[0:2, 2])
-        if warpDist > 1 and warpDist < 50 and cc > ccInit:
+        if warpDist > 1 and warpDist < maxWarpDist and cc > ccInit:
             warpedImage = cv.warpAffine(newImage, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
             warpedMask = cv.warpAffine(unionMask, warp, (newImage.shape[1], newImage.shape[0]), flags=cv.INTER_LINEAR)
             intersectMask = cv.bitwise_and(oldMask, warpedMask)
@@ -306,8 +418,12 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         if isTypewriterCandidate:
             czNonZero = cv.findNonZero(intersectMask)
             if czNonZero is not None:
-                _, _, _, _czHeight = cv.boundingRect(czNonZero)
-                erosionRadius = max(1, int(_czHeight * self.boxExpansion / (1.0 + 2.0 * self.boxExpansion)))
+                typewriterTextHeights = [
+                    height for height in [oldMaxTextBoxRawHeight, newMaxTextBoxRawHeight]
+                    if height > 0
+                ]
+                typewriterTextHeight = min(typewriterTextHeights) if typewriterTextHeights else cv.boundingRect(czNonZero)[3]
+                erosionRadius = max(1, int(typewriterTextHeight * self.boxExpansion))
                 erosionRadius = int(erosionRadius * 1.5) # erode even more in order not to leak strokes in
                 k = max(3, 2 * erosionRadius + 1)
                 iouMask = cv.morphologyEx(intersectMask, cv.MORPH_ERODE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (k, k)))
@@ -332,19 +448,27 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         intersectSobelBinMasked = cv.bitwise_and(intersectSobelBin, unionSobelBinMasked)
         intersectSobelBinMaskedDilate = cv.morphologyEx(intersectSobelBinMasked, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         iouUnionSobelBinMasked = cv.bitwise_and(unionSobelBin, iouMask)
-        iouIntersectSobelBinMasked = cv.bitwise_and(intersectSobelBin, iouUnionSobelBinMasked)
-        commonEdgeBaseArea = np.sum(iouUnionSobelBinMasked) + 1e-6
-        sobelIou = np.sum(iouIntersectSobelBinMasked) / commonEdgeBaseArea
+        oldOnlySobelBin = cv.bitwise_and(oldImageSobelBin, cv.bitwise_not(warpedImageSobelBinDilate))
+        warpedOnlySobelBin = cv.bitwise_and(warpedImageSobelBin, cv.bitwise_not(oldImageSobelBinDilate))
+        oneSidedSobelBin = cv.bitwise_or(oldOnlySobelBin, warpedOnlySobelBin)
+        oneSidedSobelBinMasked = cv.bitwise_and(oneSidedSobelBin, iouMask)
+        commonEdgeBaseMask = cv.bitwise_and(intersectSobelBin, iouUnionSobelBinMasked)
+        unionEdgeBaseArea = np.sum(iouUnionSobelBinMasked) + 1e-6
+        commonEdgeBaseArea = np.sum(commonEdgeBaseMask)
+        commonEdgeBaseAreaSafe = commonEdgeBaseArea + 1e-6
+        sobelIou = commonEdgeBaseArea / unionEdgeBaseArea
+        sobelEdgeDensity = (np.sum(iouUnionSobelBinMasked) / 255) / (iouArea + 1e-6)
+        oneSidedEdgeRate = (np.sum(oneSidedSobelBinMasked) / 255) / ((np.sum(iouUnionSobelBinMasked) / 255) + 1e-6)
 
         if self.enableShortCircuit:
-            if sobelIou > 0.9:
-                if self.debugLevel == 1:
-                    self.log.write(f"{oldTimeStr},{newTimeStr},True,3,sobel iou too high,{maskIou},{diffRate},{cc},{pcWarpDist},{warpDist},{sobelIou},0,0,0,{isTypewriterCandidate},{isTypewriterRevoked},{oldXCoverage},{oldMaxTextBoxShortSide},{newMaxTextBoxShortSide},{isSmallText}\n")
-                    saveFrames()
-                    saveExtra("2oldSobel", oldImageSobelBin)
-                    saveExtra("3newSobel", warpedImageSobelBin)
-                    saveExtra("4unionSobel", unionSobelBinMasked)
-                    saveExtra("5intersectSobel", intersectSobelBinMasked)
+            if sobelIou > 0.9 and sobelEdgeDensity < self.sobelShortcutMaxEdgeDensity:
+                writeDebugDecision(True, 3, "sobel iou too high", images=[
+                    ("2oldSobel", oldImageSobelBin),
+                    ("3newSobel", warpedImageSobelBin),
+                    ("4unionSobel", unionSobelBinMasked),
+                    ("5intersectSobel", intersectSobelBinMasked),
+                    ("6iouMask", iouMask),
+                ])
                 return True
 
         # Inpainting
@@ -399,57 +523,73 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         warpedImageInpaintSobelBin = cv.threshold(warpedImageInpaintSobel, 32, 255, cv.THRESH_BINARY)[1]
         warpedImageInpaintSobelBinDilate = cv.morphologyEx(warpedImageInpaintSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
         intersectPostInpaintSobel = cv.bitwise_and(oldImageSobelBinDilate, warpedImageInpaintSobelBinDilate)
-        intersectPostInpaintSobelMasked = cv.bitwise_and(intersectPostInpaintSobel, iouUnionSobelBinMasked)
-        postInpaintCommonEdgeRate = np.sum(intersectPostInpaintSobelMasked) / commonEdgeBaseArea
-
-        removedCommonEdgeRate = sobelIou - postInpaintCommonEdgeRate
+        remainingCommonEdgeMask = cv.bitwise_and(intersectPostInpaintSobel, commonEdgeBaseMask)
+        remainingUnionEdgeMask = cv.bitwise_and(warpedImageInpaintSobelBinDilate, iouUnionSobelBinMasked)
+        if commonEdgeBaseArea > 0:
+            postInpaintCommonEdgeRate = np.sum(remainingCommonEdgeMask) / commonEdgeBaseAreaSafe
+            removedCommonEdgeRate = 1.0 - postInpaintCommonEdgeRate
+        else:
+            postInpaintCommonEdgeRate = 0.0
+            removedCommonEdgeRate = 0.0
+        if unionEdgeBaseArea > 0:
+            postInpaintUnionEdgeRate = np.sum(remainingUnionEdgeMask) / unionEdgeBaseArea
+            removedUnionEdgeRate = 1.0 - postInpaintUnionEdgeRate
+        else:
+            postInpaintUnionEdgeRate = 0.0
+            removedUnionEdgeRate = 0.0
+        commonUnionRemovalGap = removedCommonEdgeRate - removedUnionEdgeRate
 
         if self.enableShortCircuit:
-            if removedCommonEdgeRate > 0.7:
-                if self.debugLevel == 1:
-                    self.log.write(f"{oldTimeStr},{newTimeStr},True,3,common edge removal too high,{maskIou},{diffRate},{cc},{pcWarpDist},{warpDist},{sobelIou},{postInpaintCommonEdgeRate},{removedCommonEdgeRate},0,{isTypewriterCandidate},{isTypewriterRevoked},{oldXCoverage},{oldMaxTextBoxShortSide},{newMaxTextBoxShortSide},{isSmallText}\n")
-                    saveFrames()
-                    saveExtra("2oldSobel", oldImageSobelBin)
-                    saveExtra("3newSobel", warpedImageSobelBin)
-                    saveExtra("4unionSobel", unionSobelBinMasked)
-                    saveExtra("5intersectSobel", intersectSobelBinMasked)
-                    saveExtra("6diffMask", diffMask)
-                    saveExtra("7inpaintMask", inpaintMask)
-                    saveExtra("8inpaint", warpedImageInpaint)
-                return True
-            if removedCommonEdgeRate < 0.2:
-                if self.debugLevel == 1:
-                    self.log.write(f"{oldTimeStr},{newTimeStr},False,3,common edge removal too low,{maskIou},{diffRate},{cc},{pcWarpDist},{warpDist},{sobelIou},{postInpaintCommonEdgeRate},{removedCommonEdgeRate},0,{isTypewriterCandidate},{isTypewriterRevoked},{oldXCoverage},{oldMaxTextBoxShortSide},{newMaxTextBoxShortSide},{isSmallText}\n")
-                    saveFrames()
-                    saveExtra("2oldSobel", oldImageSobelBin)
-                    saveExtra("3newSobel", warpedImageSobelBin)
-                    saveExtra("4unionSobel", unionSobelBinMasked)
-                    saveExtra("5intersectSobel", intersectSobelBinMasked)
-                    saveExtra("6diffMask", diffMask)
-                    saveExtra("7inpaintMask", inpaintMask)
-                    saveExtra("8inpaint", warpedImageInpaint)
+            if commonEdgeBaseArea > 0 and removedCommonEdgeRate < self.commonEdgeRemovalSplitThreshold:
+                writeDebugDecision(False, 3, "common edge removal too low", images=[
+                    ("2oldSobel", oldImageSobelBin),
+                    ("3newSobel", warpedImageSobelBin),
+                    ("4unionSobel", unionSobelBinMasked),
+                    ("5intersectSobel", intersectSobelBinMasked),
+                    ("6diffMask", diffMask),
+                    ("7inpaintMask", inpaintMask),
+                    ("8inpaint", warpedImageInpaint),
+                    ("10iouMask", iouMask),
+                ])
                 return False
+            if (
+                removedCommonEdgeRate > self.commonEdgeRemovalMergeThreshold and
+                sobelIou > self.commonEdgeRemovalMergeMinSobelIou and
+                oneSidedEdgeRate < self.commonEdgeRemovalMergeMaxOneSidedEdgeRate and
+                removedUnionEdgeRate > self.commonEdgeRemovalMergeMinUnionEdgeRemovalRate
+            ):
+                writeDebugDecision(True, 3, "common edge removal too high", images=[
+                    ("2oldSobel", oldImageSobelBin),
+                    ("3newSobel", warpedImageSobelBin),
+                    ("4unionSobel", unionSobelBinMasked),
+                    ("5intersectSobel", intersectSobelBinMasked),
+                    ("6diffMask", diffMask),
+                    ("7inpaintMask", inpaintMask),
+                    ("8inpaint", warpedImageInpaint),
+                    ("10iouMask", iouMask),
+                ])
+                return True
 
         # Stage 7: Post-inpaint text detection
         self.statDecideFeatureMergeOCR += 1
 
-        ocrMask, _, _, _ = self.ocrPass(warpedImageInpaint)
+        ocrMask, _, _, _, _ = self.ocrPass(warpedImageInpaint)
         ocrIntersectMask = cv.bitwise_and(ocrMask, iouMask)
         ocrIntersectVal = np.mean(ocrIntersectMask)
         ocrIntersectArea = np.sum(ocrIntersectMask) / 255
         ocrIou = ocrIntersectArea / iouArea if iouArea > 0 else 0.0
         ocrDecision: bool = ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou
-        if self.debugLevel == 1:
-            self.log.write(f"{oldTimeStr},{newTimeStr},{ocrDecision},4,ocr decision,{maskIou},{diffRate},{cc},{pcWarpDist},{warpDist},{sobelIou},{postInpaintCommonEdgeRate},{removedCommonEdgeRate},{ocrIou},{isTypewriterCandidate},{isTypewriterRevoked},{oldXCoverage},{oldMaxTextBoxShortSide},{newMaxTextBoxShortSide},{isSmallText}\n")
-            saveFrames()
-            saveExtra("2oldSobel", oldImageSobelBin)
-            saveExtra("3newSobel", warpedImageSobelBin)
-            saveExtra("4unionSobel", unionSobelBinMasked)
-            saveExtra("5intersectSobel", intersectSobelBinMasked)
-            saveExtra("6diffMask", diffMask)
-            saveExtra("7inpaintMask", inpaintMask)
-            saveExtra("8inpaint", warpedImageInpaint)
-            saveExtra("9ocrMask", ocrMask)
+        writeDebugDecision(ocrDecision, 4, "ocr decision", ocrIou=ocrIou, images=[
+            ("2oldSobel", oldImageSobelBin),
+            ("3newSobel", warpedImageSobelBin),
+            ("4unionSobel", unionSobelBinMasked),
+            ("5intersectSobel", intersectSobelBinMasked),
+            ("6diffMask", diffMask),
+            ("7inpaintMask", inpaintMask),
+            ("8inpaint", warpedImageInpaint),
+            ("9ocrMask", ocrMask),
+            ("10iouMask", iouMask),
+        ])
         return ocrDecision
     
     def aggregateFeatures(self, features: typing.List[typing.Any]) -> typing.Any:
@@ -468,7 +608,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
     
-    def detectTextBoxes(self, frame: cv.Mat) -> typing.List[typing.Tuple[int, int, int, int]]:
+    def detectTextBoxes(self, frame: cv.Mat) -> typing.List[TextBox]:
         imgH, imgW = frame.shape[:2]
 
         scaleDown = 1
@@ -510,8 +650,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             y = max(0, y0 - expand)
             w = min(imgW, w0 + 2 * expand)
             h = min(imgH, h0 + 2 * expand)
-            wordInfo = (x, y, w, h)
-            boxes.append(wordInfo)
+            boxes.append(DiffTextDetectionStrategy.TextBox(x=x, y=y, w=w, h=h, rawH=h0))
 
         return boxes
 
@@ -519,7 +658,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         image = self.cutExtraJobFrame(frame)
 
-        mask, dialogVal, debugFrame, maxTextBoxShortSide = self.ocrPass(image)
+        mask, dialogVal, debugFrame, maxTextBoxArea, maxTextBoxRawHeight = self.ocrPass(image)
 
         hasDialog = dialogVal > self.featureThreshold
 
@@ -530,7 +669,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 image=image,
                 mask=mask,
                 time=timeString,
-                maxTextBoxShortSide=maxTextBoxShortSide,
+                maxTextBoxArea=maxTextBoxArea,
+                maxTextBoxRawHeight=maxTextBoxRawHeight,
             )
 
         framePoint.setFlag(DiffTextDetectionStrategy.FlagIndex.Dialog, hasDialog)
@@ -539,21 +679,22 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
         return False
 
-    def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, float, cv.Mat | None, int]:
-        # returns mask, dialogVal, debugFrame, maxTextBoxShortSide
+    def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, float, cv.Mat | None, int, int]:
+        # returns mask, dialogVal, debugFrame, maxTextBoxArea, maxTextBoxRawHeight
 
         boxes = self.detectTextBoxes(frame)
 
         mask: cv.Mat = np.zeros_like(frame[:, :, 0])
-        boxes = sorted(boxes, key=lambda box: box[2] * box[3], reverse=True)
-        maxTextBoxShortSide = max((min(w, h) for _, _, w, h in boxes), default=0)
-        biggestBoxArea = boxes[0][2] * boxes[0][3] if boxes else 0
+        boxes = sorted(boxes, key=lambda box: box.w * box.h, reverse=True)
+        maxTextBoxArea = boxes[0].w * boxes[0].h if boxes else 0
+        maxTextBoxRawHeight = 0
         for rank, box in enumerate(boxes):
-            x, y, w, h = box
-            if w * h <= self.nonMajorBoxSuppressionMaxRatio * biggestBoxArea:
+            x, y, w, h = box.x, box.y, box.w, box.h
+            if w * h <= self.nonMajorBoxSuppressionMaxRatio * maxTextBoxArea:
                 break
+            maxTextBoxRawHeight = max(maxTextBoxRawHeight, box.rawH)
             mask[y:y+h, x:x+w] = 255
 
         dialogVal: float = np.mean(mask)
 
-        return mask, dialogVal, mask, maxTextBoxShortSide
+        return mask, dialogVal, mask, maxTextBoxArea, maxTextBoxRawHeight
