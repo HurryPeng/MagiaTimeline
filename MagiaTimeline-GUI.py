@@ -89,6 +89,11 @@ class FrameSeekService:
         while True:
             try:
                 self.event.wait()
+                # clear() before reading pending is intentional: if the main thread
+                # posts a new request between clear() and the read below, we pick up
+                # the newer value and the re-set event causes one extra (harmless) loop.
+                # Reading before clear() would be worse: we could miss a request posted
+                # in the clear->read window and stall until the next drag event.
                 self.event.clear()
                 t = self.pending
                 player = self.getPlayer()

@@ -143,7 +143,7 @@ class FrameCache:
         self.begin: int = 0
         self.end: int = 0
         self.nextI: int = 0
-        self.cacheNextI: av.frame.Frame = None
+        self.cacheNextI: typing.Optional[av.frame.Frame] = None
 
         self.fps: fractions.Fraction = self.stream.average_rate
         self.timeBase: fractions.Fraction = self.stream.time_base

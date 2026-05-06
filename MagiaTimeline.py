@@ -96,9 +96,8 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         timeBase: fractions.Fraction = srcStream.time_base
         fps: fractions.Fraction = srcStream.average_rate
 
-        templateAsst = open(config["assTemplate"], "r", encoding="utf-8")
-        asstStr: str = templateAsst.read()
-        templateAsst.close()
+        with open(config["assTemplate"], "r", encoding="utf-8") as templateAsst:
+            asstStr: str = templateAsst.read()
 
         contentRect = RatioRectangle(SrcRectangle(*size), *config["contentRect"])
         print(f"Resolution: {size[0]}x{size[1]}" + (f" (scaled down by {scaleDown})" if scaleDown > 1 else ""))
@@ -179,16 +178,14 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
             styles = "".join(iir.stylesStr()),
             events = iir.assEventsStr()
         )
-        dstAss = open(dst + ".ass", "w", encoding="utf-8")
-        dstAss.write(assStr)
-        dstAss.close()
+        with open(dst + ".ass", "w", encoding="utf-8") as dstAss:
+            dstAss.write(assStr)
         print("Result written to", dst + ".ass")
 
         if config["outputSrt"]:
             print("==== IIR to SRT ====")
-            dstSrt = open(dst + ".srt", "w", encoding="utf-8")
-            dstSrt.write(iir.srtEventStr())
-            dstSrt.close()
+            with open(dst + ".srt", "w", encoding="utf-8") as dstSrt:
+                dstSrt.write(iir.srtEventStr())
             print("Result written to", dst + ".srt")
 
         timeOverallEnd = time.time()
