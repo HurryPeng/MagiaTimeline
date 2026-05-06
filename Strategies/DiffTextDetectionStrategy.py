@@ -593,7 +593,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         return ocrDecision
     
     def aggregateFeatures(self, features: typing.List[typing.Any]) -> typing.Any:
-        # simply return the last feature
+        # Return the last feature
+        # For typewriter animation, the last frame is the one that contains the most test 
         return features[-1]
 
     def isFpNonEmpty(self, fp: FramePoint) -> bool:

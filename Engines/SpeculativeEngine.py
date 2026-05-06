@@ -71,7 +71,7 @@ class IntervalGrower(IIR):
     def insertInterval(self, framePoint: FramePoint, image: typing.Optional[cv.Mat]) -> Interval:
         label = INTERVAL_LABEL_DIALOG if self.strategy.isFpNonEmpty(framePoint) else INTERVAL_LABEL_EMPTY
         interval = Interval(label, framePoint.timestamp, framePoint.timestamp, self.timeBase, [framePoint])
-        interval.setAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey, self.strategy.getFpFeature(framePoint), inDiskCache=False)
+        self.refreshAggregatedFeature(interval)
         if self.extraJobFrameKey is not None:
             assert image is not None
             assert self.cutExtraJobFrame is not None
@@ -90,8 +90,6 @@ class IntervalGrower(IIR):
                 print("extendIntervalToLeft ", f"<{interval.timeStringBegin()}, {interval.timeStringEnd()}] <{interval.begin}, {interval.end}] {(interval.end - interval.begin)}")
         elif interval.end < framePoint.timestamp:
             interval.end = framePoint.timestamp
-            # Update representative feature to the newest (temporally latest) frame (memory only, finalized later)
-            interval.setAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey, self.strategy.getFpFeature(framePoint), inDiskCache=False)
             # Update the extra job frame to the newer (temporally later) frame (memory only, finalized later)
             if self.extraJobFrameKey is not None and image is not None:
                 assert self.cutExtraJobFrame is not None
@@ -100,6 +98,7 @@ class IntervalGrower(IIR):
             if self.verbose:
                 print("extendIntervalToRight", f"[{interval.timeStringBegin()}, {interval.timeStringEnd()}> [{interval.begin}, {interval.end}> {(interval.end - interval.begin)}")
         interval.framePoints.append(framePoint)
+        self.refreshAggregatedFeature(interval)
         self.sort()
 
     def hookInterval(self, intervalL: Interval, intervalR: Interval):
@@ -108,6 +107,11 @@ class IntervalGrower(IIR):
         self.finalizeInterval(intervalL)
         if self.verbose:
             print("hookInterval         ", f"[{intervalL.timeStringBegin()}, {intervalL.timeStringEnd()}}} [{intervalL.begin}, {intervalL.end}}} {(intervalL.end - intervalL.begin)}")
+
+    def refreshAggregatedFeature(self, interval: Interval) -> None:
+        framePoints = sorted(interval.framePoints, key=lambda framePoint: framePoint.timestamp)
+        features = [self.strategy.getFpFeature(framePoint) for framePoint in framePoints]
+        interval.setAttachment(AbstractSpeculativeStrategy.AggregatedFeatureKey, self.strategy.aggregateFeatures(features), inDiskCache=False)
 
     def finalizeInterval(self, interval: Interval) -> None:
         """Flush accumulated in-memory features to disk cache once an interval is closed,
