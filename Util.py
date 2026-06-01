@@ -15,6 +15,8 @@ import lz4
 import concurrent.futures
 import os
 import warnings
+import dataclasses
+import paddleocr
 
 class CompressedDisk(diskcache.Disk):
     """Cache key and value using zlib compression."""
@@ -269,9 +271,18 @@ def autoNumberedNaming(srcPath: str) -> str:
         if not conflictExists:
             return targetPrefix
         
-        suffix = chr(ord(suffix) + 1)
-        if suffix > 'z':
+        suffix = nextSuffix(suffix)
+        if len(suffix) > 4:
             raise Exception("Too many files with the same base name, please clean up the directory.")
+
+def nextSuffix(s: str) -> str:
+    """Increment alphabetic suffix: a->b->...->z->aa->ab->...->az->ba->...->zz->aaa"""
+    if not s:
+        return 'a'
+    if s[-1] < 'z':
+        return s[:-1] + chr(ord(s[-1]) + 1)
+    else:
+        return nextSuffix(s[:-1]) + 'a'
 
 def checkerboardBackground(width: int, height: int, squareSize: int = 8) -> cv.Mat:
     """Generate a BGR checkerboard image resembling Photoshop's transparency background.
@@ -282,6 +293,89 @@ def checkerboardBackground(width: int, height: int, squareSize: int = 8) -> cv.M
     channel = np.where(checker, 128, 192).astype(np.uint8)
     img = np.stack([channel, channel, channel], axis=2)
     return typing.cast(cv.Mat, img)
+
+@dataclasses.dataclass
+class TextDetectionResult:
+    """Result of a text detection pass including the raw probability map."""
+    boxes: list  # list of dt_polys (numpy arrays of polygon vertices)
+    scores: list  # list of float confidence scores
+    probabilityMap: np.ndarray  # float32, same size as input frame/crop
+
+class PaddleTextDetectionAdapter:
+    """Wraps a paddleocr.TextDetection instance to expose the raw prob map.
+    This implementation is based on paddlepaddle==3.1.0, paddlex[ocr]==3.1.3, paddleocr==3.1.0
+
+    Usage:
+        ocr = paddleocr.TextDetection(...)
+        adapter = PaddleTextDetectionAdapter(ocr)
+        result = adapter.detect(frame)
+        # result.boxes, result.scores, result.probabilityMap
+    """
+
+    def __init__(self, text_detection: paddleocr.TextDetection) -> None:
+        # Validate that internal attributes exist
+        assert hasattr(text_detection, "paddlex_predictor"), (
+            "paddleocr.TextDetection missing 'paddlex_predictor' attribute. "
+            "Check paddleocr version compatibility."
+        )
+        self.predictor = text_detection.paddlex_predictor
+        p = self.predictor
+        assert hasattr(p, "pre_tfs"), "PaddleX predictor missing 'pre_tfs'"
+        assert hasattr(p, "infer"), "PaddleX predictor missing 'infer'"
+        assert hasattr(p, "post_op"), "PaddleX predictor missing 'post_op'"
+
+    def detect(self, frame: np.ndarray) -> TextDetectionResult:
+        """Run text detection on a single frame and return boxes + probability map.
+
+        Args:
+            frame: BGR uint8 image (numpy array).
+
+        Returns:
+            TextDetectionResult with boxes, scores, and probabilityMap
+            (float32, same spatial size as input frame).
+        """
+        p = self.predictor
+
+        # Replicate PaddleX TextDetPredictor.process() for a single image
+        batch_raw_imgs = p.pre_tfs["Read"](imgs=[frame])
+        batch_imgs, batch_shapes = p.pre_tfs["Resize"](
+            imgs=batch_raw_imgs,
+            limit_side_len=p.limit_side_len,
+            limit_type=p.limit_type,
+            max_side_limit=p.max_side_limit,
+        )
+        batch_imgs = p.pre_tfs["Normalize"](imgs=batch_imgs)
+        batch_imgs = p.pre_tfs["ToCHW"](imgs=batch_imgs)
+        x = p.pre_tfs["ToBatch"](imgs=batch_imgs)
+
+        # Forward pass: get raw predictions (probability map)
+        preds = p.infer(x=x)
+
+        # Post-process to get boxes and scores
+        polys, scores = p.post_op(
+            preds,
+            batch_shapes,
+            thresh=p.thresh,
+            box_thresh=p.box_thresh,
+            unclip_ratio=p.unclip_ratio,
+        )
+
+        # Extract probability map: preds[0] shape is (batch, 1, H, W)
+        prob_map = preds[0][0, 0]  # float32, 2D, detector-resolution
+
+        # Resize probability map back to original frame size
+        src_h, src_w, _, _ = batch_shapes[0]
+        prob_map_resized = cv.resize(
+            prob_map,
+            (int(src_w), int(src_h)),
+            interpolation=cv.INTER_LINEAR,
+        )
+
+        return TextDetectionResult(
+            boxes=polys[0],
+            scores=scores[0],
+            probabilityMap=prob_map_resized,
+        )
 
 def suppressPaddleWarnings():
     warnings.filterwarnings(

@@ -40,13 +40,18 @@ def cli():
     )
     parser.add_argument("--config", type=str, default="config.yml", help="config file specifying the source and destination files and other parameters")
     parser.add_argument("--schema", type=str, default="ConfigSchema.json", help="schema file for config validation")
+    parser.add_argument("--no-pause", action="store_true", help="do not wait for Enter at the end of the run")
     parser.add_argument("--version", action="version", version=VERSION)
     args = parser.parse_args()
     
     schema = json.load(open(args.schema, "r", encoding="utf-8"))
     config = yaml.load(open(args.config, "r", encoding="utf-8").read(), Loader=yaml.FullLoader)
 
-    main(config, schema)
+    try:
+        main(config, schema)
+    finally:
+        if not args.no_pause:
+            input("Press Enter to continue...")
 
 def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
 
@@ -208,4 +213,3 @@ if __name__ == "__main__":
     except Exception as e:
         print("Exception caught: ", e)
         traceback.print_exc()
-    input("Press Enter to continue...")
