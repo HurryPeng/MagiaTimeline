@@ -13,3 +13,5 @@ debug*
 /dist/
 /*debug*/
 /note
+/dtdDebug/
+/experiments/

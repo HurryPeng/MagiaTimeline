@@ -54,7 +54,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         "newMaxTextBoxArea",
         "oldMaxTextBoxRawHeight",
         "newMaxTextBoxRawHeight",
-        "isSmallTextComparison",
+        "isSmallText",
         "oneSidedEdgeRate",
         "sobelEdgeDensity",
         "postInpaintUnionEdgeRate",
@@ -62,6 +62,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         "commonEdgeBaseArea",
         "unionEdgeBaseArea",
         "commonUnionRemovalGap",
+        "postInpaintProbValue",
+        "ocrBoxOutsideRatio",
     ]
 
     class FlagIndex(AbstractFlagIndex):
@@ -80,7 +82,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             ]
         
     @staticmethod
-    def genOcrEngine() -> paddleocr.TextDetection:
+    def genTextDetectionEngine() -> paddleocr.TextDetection:
         warnings.filterwarnings("ignore", 
                         message="No ccache found", 
                         category=UserWarning,
@@ -97,7 +99,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         AbstractStrategy.__init__(self, contentRect)
         AbstractSpeculativeStrategy.__init__(self)
 
-        self.ocr = DiffTextDetectionStrategy.genOcrEngine()
+        self.textDetectionEngine = DiffTextDetectionStrategy.genTextDetectionEngine()
+        self.textDetectionAdapter = PaddleTextDetectionAdapter(self.textDetectionEngine)
 
         self.rectangles: collections.OrderedDict[str, AbstractRectangle] = collections.OrderedDict()
         self.rectangles["dialogRect"] = RatioRectangle(contentRect, *config["dialogRect"])
@@ -116,6 +119,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         self.commonEdgeRemovalMergeMinUnionEdgeRemovalRate: float = 0.80
         self.maxWarpTextBoxMinSideRatio: float = 0.60
         self.sobelShortcutMaxEdgeDensity: float = 0.45
+        self.probMapThreshold: float = 0.5
         self.iirPassDenoiseMinTime: int = config["iirPassDenoiseMinTime"]
         self.enableShortCircuit: bool = config["enableShortCircuit"]
         self.debugLevel: int = config["debugLevel"]
@@ -257,6 +261,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         commonEdgeBaseArea = 0.0
         unionEdgeBaseArea = 0.0
         maxWarpDist = 0.0
+        postInpaintProbValue = 0.0
+        ocrBoxOutsideRatio = 0.0
 
         if self.debugLevel == 1:
             # Save oldImage and newImage to "dtdDebug/<oldTimeStr>.png" and "dtdDebug/<newTimeStr>.png"
@@ -309,6 +315,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 commonEdgeBaseArea,
                 unionEdgeBaseArea,
                 commonUnionRemovalGap,
+                postInpaintProbValue,
+                ocrBoxOutsideRatio,
             ]
             self.log.write(",".join(str(value) for value in values) + "\n")
             saveFrames()
@@ -440,6 +448,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         warpedImageSobel = rgbSobel(warpedImage, 1)
         oldImageSobelBin = cv.threshold(oldImageSobel, 32, 255, cv.THRESH_BINARY)[1]
         warpedImageSobelBin = cv.threshold(warpedImageSobel, 32, 255, cv.THRESH_BINARY)[1]
+
         oldImageSobelBinDilate = cv.morphologyEx(oldImageSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         warpedImageSobelBinDilate = cv.morphologyEx(warpedImageSobelBin, cv.MORPH_DILATE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
         unionSobelBin = cv.bitwise_or(oldImageSobelBin, warpedImageSobelBin) # No dilate for union
@@ -571,15 +580,60 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 return True
 
         # Stage 7: Post-inpaint text detection
-        self.statDecideFeatureMergeOCR += 1
+        inpaintBoxes, inpaintProb = self.detectTextBoxesAndProbMap(warpedImageInpaint)
+        inpaintProbInt8 = np.clip(inpaintProb * 255, 0, 255).astype(np.uint8)
 
-        ocrMask, _, _, _, _ = self.ocrPass(warpedImageInpaint)
-        ocrIntersectMask = cv.bitwise_and(ocrMask, iouMask)
+        # Build OCR mask from adapter boxes (same logic as ocrPass/detectTextBoxes)
+        self.statDecideFeatureMergeOCR += 1
+        inpaintOcrMask = np.zeros_like(iouMask)
+        for box in inpaintBoxes:
+            inpaintOcrMask[box.y:box.y+box.h, box.x:box.x+box.w] = 255
+
+        ocrIntersectMask = cv.bitwise_and(inpaintOcrMask, iouMask)
         ocrIntersectVal = np.mean(ocrIntersectMask)
         ocrIntersectArea = np.sum(ocrIntersectMask) / 255
         ocrIou = ocrIntersectArea / iouArea if iouArea > 0 else 0.0
         ocrDecision: bool = ocrIntersectVal < self.featureThreshold or ocrIou < self.minOcrIou
-        writeDebugDecision(ocrDecision, 4, "ocr decision", ocrIou=ocrIou, images=[
+
+        # Compute prob metrics for dtdLog
+        postInpaintProbValue = 0.0
+
+        iouMaskF = iouMask.astype(np.float32) / 255.0
+        iouAreaF = np.sum(iouMaskF)
+        if iouAreaF > 0:
+            postInpaintProbValue = float(
+                np.sum((inpaintProb > self.probMapThreshold).astype(np.float32) * iouMaskF) / iouAreaF
+            )
+
+        # Huge-box bug detection: OCR mask extends far beyond iouMask
+        # This detects cases where distant heatmap points cause OCR to create
+        # a huge bounding box that's mostly empty
+        hasOcrHugeBox = False
+        if iouArea > 0:
+            ocrOutside = float(np.sum((inpaintOcrMask > 0) & (iouMask == 0)))
+            ocrBoxOutsideRatio = ocrOutside / iouArea
+            if ocrBoxOutsideRatio > 3.0:
+                hasOcrHugeBox = True
+
+        # Heatmap split override: probHighRate > 0.05 means significant text signal
+        # in iouMask region. Override OCR's merge to split when heatmap sees text.
+        heatmapSplitOverride = False
+        if postInpaintProbValue > 0.05:
+            if ocrDecision:  # OCR says merge, but heatmap sees text
+                heatmapSplitOverride = True
+
+        # Decision priority: huge box fix > heatmap override > OCR
+        if hasOcrHugeBox:
+            finalDecision = True  # merge (correct the false split)
+            decisionReason = f"ocrBoxBug (outside={ocrBoxOutsideRatio:.2f})"
+        elif heatmapSplitOverride:
+            finalDecision = False  # split (correct the false merge)
+            decisionReason = f"heatmap split override (highRate={postInpaintProbValue:.4f})"
+        else:
+            finalDecision = ocrDecision
+            decisionReason = "ocr decision"
+
+        writeDebugDecision(finalDecision, 4, decisionReason, ocrIou=ocrIou, images=[
             ("2oldSobel", oldImageSobelBin),
             ("3newSobel", warpedImageSobelBin),
             ("4unionSobel", unionSobelBinMasked),
@@ -587,10 +641,11 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             ("6diffMask", diffMask),
             ("7inpaintMask", inpaintMask),
             ("8inpaint", warpedImageInpaint),
-            ("9ocrMask", ocrMask),
+            ("9ocrMask", inpaintOcrMask),
             ("10iouMask", iouMask),
+            ("11inpaintProb", inpaintProbInt8),
         ])
-        return ocrDecision
+        return finalDecision
     
     def aggregateFeatures(self, features: typing.List[typing.Any]) -> typing.Any:
         # Return the last feature
@@ -608,33 +663,35 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
 
     def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
-    
-    def detectTextBoxes(self, frame: cv.Mat) -> typing.List[TextBox]:
-        imgH, imgW = frame.shape[:2]
 
+    def detectTextBoxesAndProbMap(self, frame: cv.Mat) -> typing.Tuple[typing.List[DiffTextDetectionStrategy.TextBox], typing.Optional[np.ndarray]]:
+        """Run adapter.detect() with scale-down, returning (boxes, probMap).
+        Boxes are TextBox(x, y, w, h, rawH) in original frame coords.
+        Prob map is resized to original frame size.
+        """
+        imgH, imgW = frame.shape[:2]
         scaleDown = 1
         while imgH // scaleDown > 960 or imgW // scaleDown > 960:
             scaleDown *= 2
 
+        detectFrame = frame
         if scaleDown > 1:
-            frame = cv.resize(frame, (imgW // scaleDown, imgH // scaleDown), interpolation=cv.INTER_LINEAR)
+            detectFrame = cv.resize(frame, (imgW // scaleDown, imgH // scaleDown),
+                                    interpolation=cv.INTER_LINEAR)
 
-        result = self.ocr.predict(frame)
-        result = result[0]
-        dtPolys: typing.List[np.ndarray] = result["dt_polys"]
-        dtScores: typing.List[float] = result["dt_scores"]
-        n = len(dtPolys)
-        assert n == len(dtScores)
-        
-        if n == 0:
-            return []
+        result = self.textDetectionAdapter.detect(detectFrame)
+
+        # Resize prob map back to original frame size
+        if scaleDown > 1:
+            probMap = cv.resize(result.probabilityMap, (imgW, imgH), interpolation=cv.INTER_LINEAR)
+        else:
+            probMap = result.probabilityMap
 
         boxes = []
-        for i in range(n):
-            wordInfo = dtPolys[i]
-            confidence = dtScores[i]
-            wordInfo = np.array(wordInfo, np.int32)
-            wordInfo *= scaleDown
+        for i in range(len(result.boxes)):
+            wordInfo = np.array(result.boxes[i], np.int32).reshape(-1, 2)
+            if scaleDown > 1:
+                wordInfo = wordInfo * scaleDown
             x0, y0 = wordInfo[0]
             x1, y1 = wordInfo[1]
             x2, y2 = wordInfo[2]
@@ -644,16 +701,16 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             angle = (angle0 + angle3) / 2
             if np.abs(angle) > np.pi / 180 * 3:
                 continue
+            bx, by, bw, bh = cv.boundingRect(wordInfo)
+            rawH = bh
+            expand = int(bh * self.boxExpansion)
+            bx = max(0, bx - expand)
+            by = max(0, by - expand)
+            bw = min(imgW, bw + 2 * expand)
+            bh = min(imgH, bh + 2 * expand)
+            boxes.append(DiffTextDetectionStrategy.TextBox(x=bx, y=by, w=bw, h=bh, rawH=rawH))
 
-            x0, y0, w0, h0 = cv.boundingRect(wordInfo)
-            expand = int(h0 * self.boxExpansion)
-            x = max(0, x0 - expand)
-            y = max(0, y0 - expand)
-            w = min(imgW, w0 + 2 * expand)
-            h = min(imgH, h0 + 2 * expand)
-            boxes.append(DiffTextDetectionStrategy.TextBox(x=x, y=y, w=w, h=h, rawH=h0))
-
-        return boxes
+        return boxes, probMap
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
 
@@ -683,13 +740,13 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     def ocrPass(self, frame: cv.Mat) -> typing.Tuple[cv.Mat, float, cv.Mat | None, int, int]:
         # returns mask, dialogVal, debugFrame, maxTextBoxArea, maxTextBoxRawHeight
 
-        boxes = self.detectTextBoxes(frame)
+        boxes, _ = self.detectTextBoxesAndProbMap(frame)
 
         mask: cv.Mat = np.zeros_like(frame[:, :, 0])
         boxes = sorted(boxes, key=lambda box: box.w * box.h, reverse=True)
         maxTextBoxArea = boxes[0].w * boxes[0].h if boxes else 0
         maxTextBoxRawHeight = 0
-        for rank, box in enumerate(boxes):
+        for _, box in enumerate(boxes):
             x, y, w, h = box.x, box.y, box.w, box.h
             if w * h <= self.nonMajorBoxSuppressionMaxRatio * maxTextBoxArea:
                 break
