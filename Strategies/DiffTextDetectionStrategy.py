@@ -690,10 +690,10 @@ def detectTextBoxesAndProbMap(self, frame: cv.Mat) -> typing.Tuple[typing.List[D
             bx, by, bw, bh = cv.boundingRect(wordInfo)
             rawH = bh
             expand = int(bh * self.boxExpansion)
-bx = max(0, bx - expand)
-by = max(0, by - expand)
-bw = max(0, min(imgW - bx, bw + 2 * expand))
-bh = max(0, min(imgH - by, bh + 2 * expand))
+            bx = max(0, bx - expand)
+            by = max(0, by - expand)
+            bw = max(0, min(imgW - bx, bw + 2 * expand))
+            bh = max(0, min(imgH - by, bh + 2 * expand))
             boxes.append(DiffTextDetectionStrategy.TextBox(x=bx, y=by, w=bw, h=bh, rawH=rawH))
 
         return boxes, probMap
