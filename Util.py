@@ -372,8 +372,8 @@ class PaddleTextDetectionAdapter:
         )
 
         return TextDetectionResult(
-            boxes=polys,
-            scores=scores,
+            boxes=polys[0],
+            scores=scores[0],
             probabilityMap=prob_map_resized,
         )
 

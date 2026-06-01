@@ -63,7 +63,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         "unionEdgeBaseArea",
         "commonUnionRemovalGap",
         "postInpaintProbValue",
-        "ocrBoxOutsideRatio",
     ]
 
     class FlagIndex(AbstractFlagIndex):
@@ -262,7 +261,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         unionEdgeBaseArea = 0.0
         maxWarpDist = 0.0
         postInpaintProbValue = 0.0
-        ocrBoxOutsideRatio = 0.0
 
         if self.debugLevel == 1:
             # Save oldImage and newImage to "dtdDebug/<oldTimeStr>.png" and "dtdDebug/<newTimeStr>.png"
@@ -316,7 +314,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 unionEdgeBaseArea,
                 commonUnionRemovalGap,
                 postInpaintProbValue,
-                ocrBoxOutsideRatio,
             ]
             self.log.write(",".join(str(value) for value in values) + "\n")
             saveFrames()
@@ -605,16 +602,6 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
                 np.sum((inpaintProb > self.probMapThreshold).astype(np.float32) * iouMaskF) / iouAreaF
             )
 
-        # Huge-box bug detection: OCR mask extends far beyond iouMask
-        # This detects cases where distant heatmap points cause OCR to create
-        # a huge bounding box that's mostly empty
-        hasOcrHugeBox = False
-        if iouArea > 0:
-            ocrOutside = float(np.sum((inpaintOcrMask > 0) & (iouMask == 0)))
-            ocrBoxOutsideRatio = ocrOutside / iouArea
-            if ocrBoxOutsideRatio > 3.0:
-                hasOcrHugeBox = True
-
         # Heatmap split override: probHighRate > 0.05 means significant text signal
         # in iouMask region. Override OCR's merge to split when heatmap sees text.
         heatmapSplitOverride = False
@@ -622,11 +609,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
             if ocrDecision:  # OCR says merge, but heatmap sees text
                 heatmapSplitOverride = True
 
-        # Decision priority: huge box fix > heatmap override > OCR
-        if hasOcrHugeBox:
-            finalDecision = True  # merge (correct the false split)
-            decisionReason = f"ocrBoxBug (outside={ocrBoxOutsideRatio:.2f})"
-        elif heatmapSplitOverride:
+        # Decision priority: heatmap override > OCR
+        if heatmapSplitOverride:
             finalDecision = False  # split (correct the false merge)
             decisionReason = f"heatmap split override (highRate={postInpaintProbValue:.4f})"
         else:
@@ -690,6 +674,8 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
         boxes = []
         for i in range(len(result.boxes)):
             wordInfo = np.array(result.boxes[i], np.int32).reshape(-1, 2)
+            if len(wordInfo) < 4:
+                continue
             if scaleDown > 1:
                 wordInfo = wordInfo * scaleDown
             x0, y0 = wordInfo[0]
