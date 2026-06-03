@@ -648,7 +648,7 @@ class DiffTextDetectionStrategy(AbstractFramewiseStrategy, AbstractSpeculativeSt
     def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
 
-def detectTextBoxesAndProbMap(self, frame: cv.Mat) -> typing.Tuple[typing.List[DiffTextDetectionStrategy.TextBox], np.ndarray]:
+    def detectTextBoxesAndProbMap(self, frame: cv.Mat) -> typing.Tuple[typing.List[DiffTextDetectionStrategy.TextBox], np.ndarray]:
         """Run adapter.detect() with scale-down, returning (boxes, probMap).
         Boxes are TextBox(x, y, w, h, rawH) in original frame coords.
         Prob map is resized to original frame size.
