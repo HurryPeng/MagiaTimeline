@@ -63,14 +63,17 @@ def initDiskCache(tempDirPath: typing.Optional[str] = None):
     # If not, create a temporary directory that will be cleaned up automatically.
     global _tempLock, _tempDir, _tempDirPath, _diskCache, _threadPool
 
-    if _diskCache is None:
-        @atexit.register
-        def _cleanupCache():
-            _threadPool.shutdown(wait=True)
-            if _diskCache is not None:
-                _diskCache.close()
-            if _tempDir is not None:
-                _tempDir.cleanup()
+    if _diskCache is not None:
+        return
+
+    def _cleanupCache():
+        _threadPool.shutdown(wait=True)
+        if _diskCache is not None:
+            _diskCache.close()
+        if _tempDir is not None:
+            _tempDir.cleanup()
+
+    atexit.register(_cleanupCache)
 
     with _tempLock:
         # Initialize the temporary directory
@@ -136,7 +139,11 @@ def containsLargeNdarray(obj: typing.Any) -> bool:
 
 def formatTimestamp(timeBase: fractions.Fraction, timestamp: int) -> str:
     dTimestamp = datetime.datetime.fromtimestamp(float(timestamp * timeBase), datetime.timezone(datetime.timedelta()))
+<<<<<<< HEAD
     # strftime("%f") produces 6-digit microseconds; [:-3] trims to 3-digit milliseconds; [:-1] drops the trailing "f" artifact
+=======
+    # strftime("%f") produces 6-digit microseconds; [:-3] trims to milliseconds; [:-1] trims to centiseconds for ASS format
+>>>>>>> 1.1-dev-techdebt
     timeStr = dTimestamp.strftime("%H:%M:%S.%f")[:-3]
     return timeStr[:-1]
 
