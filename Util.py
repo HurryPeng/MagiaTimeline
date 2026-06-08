@@ -139,11 +139,7 @@ def containsLargeNdarray(obj: typing.Any) -> bool:
 
 def formatTimestamp(timeBase: fractions.Fraction, timestamp: int) -> str:
     dTimestamp = datetime.datetime.fromtimestamp(float(timestamp * timeBase), datetime.timezone(datetime.timedelta()))
-<<<<<<< HEAD
-    # strftime("%f") produces 6-digit microseconds; [:-3] trims to 3-digit milliseconds; [:-1] drops the trailing "f" artifact
-=======
     # strftime("%f") produces 6-digit microseconds; [:-3] trims to milliseconds; [:-1] trims to centiseconds for ASS format
->>>>>>> 1.1-dev-techdebt
     timeStr = dTimestamp.strftime("%H:%M:%S.%f")[:-3]
     return timeStr[:-1]
 
