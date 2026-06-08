@@ -104,21 +104,7 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
 
-    def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
-        return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
-        return self.cvPasses
-
-    def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
-        return self.fpirPasses
-
-    def getFpirToIirPasses(self) -> collections.OrderedDict[str, FPIRPassBuildIntervals]:
-        return self.fpirToIirPasses
-
-    def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
-        return self.iirPasses
-    
     def cvPassHomeDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialog = self.homeDialogRect.cutRoiToUmat(frame)
         roiDialogGray = cv.cvtColor(roiDialog, cv.COLOR_BGR2GRAY)
@@ -178,7 +164,7 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         framePoint.setFlag(MadodoraStrategy.FlagIndex.WhitescreenText, hasWhitescreenText)
         framePoint.setFlag(MadodoraStrategy.FlagIndex.Whitescreen, hasWhitescreen)
 
-        return hasWhitescreenBg
+        return hasWhitescreen
     
     def cvPassBlackscreen(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiBlackscreen = self.blackscreenRect.cutRoiToUmat(frame)
@@ -186,8 +172,8 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         _, roiBlackscreenBlackBgBin = cv.threshold(roiBlackscreenGray, 10, 255, cv.THRESH_BINARY)
         _, roiBlackscreenDimBgBin = cv.threshold(roiBlackscreenGray, 100, 255, cv.THRESH_BINARY)
         _, roiBlackscreenTextBin = cv.threshold(roiBlackscreenGray, 240, 255, cv.THRESH_BINARY)
-        roiBlackscreenTextBinDialate = cv.morphologyEx(roiBlackscreenTextBin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (9, 9)))
-        roiBlackscreenDimBgBinExcludeText = cv.bitwise_and(roiBlackscreenDimBgBin, cv.bitwise_not(roiBlackscreenTextBinDialate))
+        roiBlackscreenTextBinDilate = cv.morphologyEx(roiBlackscreenTextBin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_RECT, (9, 9)))
+        roiBlackscreenDimBgBinExcludeText = cv.bitwise_and(roiBlackscreenDimBgBin, cv.bitwise_not(roiBlackscreenTextBinDilate))
 
         meanBlackscreenBlackBgBin: float = cv.mean(roiBlackscreenBlackBgBin)[0]
         meanBlackscreenDimBgBin: float = cv.mean(roiBlackscreenDimBgBinExcludeText)[0]
@@ -200,24 +186,25 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         framePoint.setFlag(MadodoraStrategy.FlagIndex.BlackscreenBg, hasBlackscreenBg)
         framePoint.setFlag(MadodoraStrategy.FlagIndex.BlackscreenText, hasBlackscreenText)
         framePoint.setFlag(MadodoraStrategy.FlagIndex.Blackscreen, hasBlackscreen)
+        return hasBlackscreen
 
     def cvPassLeftBubble(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiLeftBubble: cv.UMat = self.leftBubbleRect.cutRoiToUmat(frame)
         # Around (213, 223, 229) +- 10
         roiLeftBubbleBgBin: cv.UMat = cv.inRange(roiLeftBubble, (203, 213, 219), (223, 233, 239))
-        # Find from right to left the index of the first coloumn where over 90% of the pixels are white
+        # Find from right to left the index of the first column where over 90% of the pixels are white
         leftBubbleWidth, leftBubbleHeight = self.leftBubbleRect.getSizeInt()
         roiLeftBubbleBgBinColSum: cv.Mat = cv.reduce(roiLeftBubbleBgBin, 0, cv.REDUCE_SUM, dtype=cv.CV_32S).get()
-        colBouldIdx = 0
-        for i in range(leftBubbleWidth - 1, int(leftBubbleWidth * 0.3), -1): # Less than 30% of the width is cosidered nonexistent
+        colBoundIdx = 0
+        for i in range(leftBubbleWidth - 1, int(leftBubbleWidth * 0.3), -1): # Less than 30% of the width is considered nonexistent
             if roiLeftBubbleBgBinColSum[0][i] >= 255 * leftBubbleHeight * 0.9:
-                colBouldIdx = i
+                colBoundIdx = i
                 break
 
-        if colBouldIdx == 0 or colBouldIdx >= leftBubbleWidth * 0.9:
+        if colBoundIdx == 0 or colBoundIdx >= leftBubbleWidth * 0.9:
             return False
 
-        refinedRect = RatioRectangle(self.leftBubbleRect, 0.0, float(colBouldIdx) / leftBubbleWidth, 0.0, 1.0)
+        refinedRect = RatioRectangle(self.leftBubbleRect, 0.0, float(colBoundIdx) / leftBubbleWidth, 0.0, 1.0)
         roiRefined = refinedRect.cutRoiToUmat(frame)
         roiRefinedGray = cv.cvtColor(roiRefined, cv.COLOR_BGR2GRAY)
         roiRefinedBgBin = cv.inRange(roiRefined, (203, 213, 219), (223, 233, 239))
@@ -239,19 +226,19 @@ class MadodoraStrategy(AbstractFramewiseStrategy):
         roiRightBubble: cv.UMat = self.rightBubbleRect.cutRoiToUmat(frame)
         # Around (213, 223, 229) +- 10
         roiRightBubbleBgBin: cv.UMat = cv.inRange(roiRightBubble, (203, 213, 219), (223, 233, 239))
-        # Find from left to right the index of the first coloumn where over 90% of the pixels are white
+        # Find from left to right the index of the first column where over 90% of the pixels are white
         rightBubbleWidth, rightBubbleHeight = self.rightBubbleRect.getSizeInt()
         roiRightBubbleBgBinColSum: cv.Mat = cv.reduce(roiRightBubbleBgBin, 0, cv.REDUCE_SUM, dtype=cv.CV_32S).get()
-        colBouldIdx = rightBubbleWidth - 1
+        colBoundIdx = rightBubbleWidth - 1
         for i in range(0, int(rightBubbleWidth * 0.7)):
             if roiRightBubbleBgBinColSum[0][i] >= 255 * rightBubbleHeight * 0.9:
-                colBouldIdx = i
+                colBoundIdx = i
                 break
         
-        if colBouldIdx == rightBubbleWidth - 1 or colBouldIdx <= rightBubbleWidth * 0.1:
+        if colBoundIdx == rightBubbleWidth - 1 or colBoundIdx <= rightBubbleWidth * 0.1:
             return False
         
-        refinedRect = RatioRectangle(self.rightBubbleRect, float(colBouldIdx) / rightBubbleWidth, 1.0, 0.0, 1.0)
+        refinedRect = RatioRectangle(self.rightBubbleRect, float(colBoundIdx) / rightBubbleWidth, 1.0, 0.0, 1.0)
         roiRefined = refinedRect.cutRoiToUmat(frame)
         roiRefinedGray = cv.cvtColor(roiRefined, cv.COLOR_BGR2GRAY)
         roiRefinedBgBin = cv.inRange(roiRefined, (203, 213, 219), (223, 233, 239))

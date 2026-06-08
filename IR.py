@@ -6,6 +6,8 @@ import fractions
 from Util import *
 from AbstractFlagIndex import *
 
+ASS_EVENT_TEMPLATE: str = "Dialogue: 0,{},{},{},,0,0,0,,{}"
+
 class FramePoint:
     def __init__(self, flagIndexType: typing.Type[AbstractFlagIndex], timestamp: int, timeBase: fractions.Fraction):
         self.flagIndexType: typing.Type[AbstractFlagIndex] = flagIndexType
@@ -98,19 +100,19 @@ class FPIRPassBooleanRemoveNoise(FPIRPass):
         self.minLength: int = minLength
 
     def apply(self, fpir: FPIR):
-        for id, framePoint in enumerate(fpir.framePoints):
+        for idx, framePoint in enumerate(fpir.framePoints):
             if framePoint.getFlag(self.flag) != self.trueToFalse:
                 continue
-            l = id - self.minLength
-            r = id + self.minLength
+            l = idx - self.minLength
+            r = idx + self.minLength
             if l < 0 or r > len(fpir.framePoints) - 1:
                 continue
             length = 1
-            for i in range(id - 1, l - 1, -1):
+            for i in range(idx - 1, l - 1, -1):
                 if fpir.framePoints[i].getFlag(self.flag) != framePoint.getFlag(self.flag):
                     break
                 length += 1
-            for i in range(id + 1, r + 1):
+            for i in range(idx + 1, r + 1):
                 if fpir.framePoints[i].getFlag(self.flag) != framePoint.getFlag(self.flag):
                     break
                 length += 1
@@ -138,16 +140,16 @@ class FPIRPassDetectFeatureJump(FPIRPass):
 
     def apply(self, fpir: FPIR):
         framePointsExt = fpir.getFramePointsWithVirtualEnd(self.windowSize)
-        for id, framePoint in enumerate(fpir.framePoints):
-            featsToBeMeant = []
-            for i in range(id + 1, id + 1 + self.windowSize):
-                featsToBeMeant.append(framePointsExt[i].getFlag(self.featFlag))
+        for idx, framePoint in enumerate(fpir.framePoints):
+            featsToAverage = []
+            for i in range(idx + 1, idx + 1 + self.windowSize):
+                featsToAverage.append(framePointsExt[i].getFlag(self.featFlag))
 
-            meanFeat = self.featOpMean(featsToBeMeant)
+            meanFeat = self.featOpMean(featsToAverage)
             dist = self.featOpDist(framePoint.getFlag(self.featFlag), meanFeat)
 
             if self.threshStd > 0.0:
-                stdFeat: float = self.featOpStd(featsToBeMeant)
+                stdFeat: float = self.featOpStd(featsToAverage)
                 if stdFeat > self.threshStd:
                     continue
 
@@ -183,7 +185,7 @@ class FPIRPassFramewiseFunctional(FPIRPass):
         self.func = func
 
     def apply(self, fpir: FPIR):
-        for id, framePoint in enumerate(fpir.framePoints):
+        for framePoint in fpir.framePoints:
             self.func(framePoint)
 
 class FPIRPassBuildIntervals(FPIRPass):
@@ -248,13 +250,12 @@ class Interval:
         return isinstance(self.attachments.get(key), DiskCacheHandle)
 
     def assEventStr(self, id: int = -1) -> str:
-        template = "Dialogue: 0,{},{},{},,0,0,0,,{}"
         sBegin = formatTimestamp(self.timeBase, self.begin)
         sEnd = formatTimestamp(self.timeBase, self.end)
         text = self.text
         if text == "":
             text = self.getName(id)
-        return template.format(sBegin, sEnd, self.style, text)
+        return ASS_EVENT_TEMPLATE.format(sBegin, sEnd, self.style, text)
 
     def srtEventStr(self, counter: int) -> str:
         sBegin = formatTimestampSrt(self.timeBase, self.begin)
@@ -329,7 +330,7 @@ class IIR: # Interval Intermediate Representation
     def assEventsStr(self) -> str:
         lines: typing.List[str] = []
         labelCounter: typing.Dict[str, int] = {}
-        for _, interval in enumerate(self.intervals):
+        for interval in self.intervals:
             id = labelCounter.get(interval.label, 0)
             labelCounter[interval.label] = id + 1
             lines.append(interval.assEventStr(id) + "\n")
@@ -344,7 +345,7 @@ class IIR: # Interval Intermediate Representation
     def getMidpoints(self) -> typing.List[typing.Tuple[str, int]]:
         midpoints: typing.List[typing.Tuple[str, int]] = []
         labelCounter: typing.Dict[str, int] = {}
-        for _, interval in enumerate(self.intervals):
+        for interval in self.intervals:
             id = labelCounter.get(interval.label, 0)
             labelCounter[interval.label] = id + 1
             midpoints.append((interval.getName(id), interval.getMidPoint()))
@@ -366,10 +367,10 @@ class IIRPassFillGap(IIRPass):
         self.meetPoint: float = meetPoint
     
     def apply(self, iir: IIR):
-        for id, interval in enumerate(iir.intervals):
+        for idx, interval in enumerate(iir.intervals):
             if interval.label != self.label:
                 continue
-            otherId = id + 1
+            otherId = idx + 1
             while otherId < len(iir.intervals):
                 otherInterval = iir.intervals[otherId]
                 if otherInterval.label != self.label:
@@ -394,17 +395,17 @@ class IIRPassExtend(IIRPass):
 
     def apply(self, iir: IIR):
         # Assert sorted
-        for id, interval in enumerate(iir.intervals):
+        for idx, interval in enumerate(iir.intervals):
             if interval.label != self.label:
                 continue
-            if id == 0:
+            if idx == 0:
                 interval.begin = max(interval.begin - iir.ms2Timestamp(self.front), 0)
             else:
-                interval.begin = max(interval.begin - iir.ms2Timestamp(self.front), iir.intervals[id - 1].end)
-            if id == len(iir.intervals) - 1:
+                interval.begin = max(interval.begin - iir.ms2Timestamp(self.front), iir.intervals[idx - 1].end)
+            if idx == len(iir.intervals) - 1:
                 interval.end += iir.ms2Timestamp(self.back)
             else:
-                interval.end = min(interval.end + iir.ms2Timestamp(self.back), iir.intervals[id + 1].begin)
+                interval.end = min(interval.end + iir.ms2Timestamp(self.back), iir.intervals[idx + 1].begin)
 
 class IIRPassAlign(IIRPass):
     def __init__(self, tgtLabel: str, refLabel: str, maxGap: int = 300):
@@ -414,7 +415,7 @@ class IIRPassAlign(IIRPass):
     
     def apply(self, iir: IIR):
         refPoints: typing.List[int] = []
-        for _, interval in enumerate(iir.intervals):
+        for interval in iir.intervals:
             if interval.label != self.refFlag:
                 continue
             refPoints.append(interval.begin)
@@ -422,38 +423,33 @@ class IIRPassAlign(IIRPass):
         refPoints.sort()
         if len(refPoints) == 0:
             return
+        maxGapTs = iir.ms2Timestamp(self.maxGap)
 
-        for _, interval in enumerate(iir.intervals):
+        for interval in iir.intervals:
             if interval.label != self.tgtFlag:
                 continue
             
-            r = 0
-            while r < len(refPoints) and refPoints[r] < interval.begin:
-                r = r + 1
-            l = max(0, r - 1)
-            r = min(r, len(refPoints) - 1)
-            lDist = refPoints[l] - interval.begin # <= 0
-            rDist = refPoints[r] - interval.begin # >= 0
-            dist = lDist
-            if rDist < -lDist:
-                dist = rDist
-            if abs(dist) <= iir.ms2Timestamp(self.maxGap):
-                interval.begin += dist
-            
-            r = 0
-            while r < len(refPoints) and refPoints[r] < interval.end:
-                r = r + 1
-            l = max(0, r - 1)
-            r = min(r, len(refPoints) - 1)
-            lDist = refPoints[l] - interval.end # <= 0
-            rDist = refPoints[r] - interval.end # >= 0
-            dist = lDist
-            if rDist < -lDist:
-                dist = rDist
-            if abs(dist) <= iir.ms2Timestamp(self.maxGap):
-                interval.end += dist
+            interval.begin = IIRPassAlign.snapToNearest(interval.begin, refPoints, maxGapTs)
+            interval.end = IIRPassAlign.snapToNearest(interval.end, refPoints, maxGapTs)
             
         iir.sort()
+
+    @staticmethod
+    def snapToNearest(value: int, refPoints: typing.List[int], maxGapTs: int) -> int:
+        """Find nearest refPoint to value and snap if within maxGapTs. Returns possibly adjusted value."""
+        r = 0
+        while r < len(refPoints) and refPoints[r] < value:
+            r = r + 1
+        l = max(0, r - 1)
+        r = min(r, len(refPoints) - 1)
+        lDist = refPoints[l] - value  # <= 0
+        rDist = refPoints[r] - value  # >= 0
+        dist = lDist
+        if rDist < -lDist:
+            dist = rDist
+        if abs(dist) <= maxGapTs:
+            return value + dist
+        return value
 
 class IIRPassFunctional(IIRPass):
     def __init__(self, func: typing.Callable[[IIR], typing.Any]):
@@ -467,7 +463,7 @@ class IIRPassIntervalwiseFunctional(IIRPass):
         self.func = func
 
     def apply(self, iir: IIR):
-        for id, interval in enumerate(iir.intervals):
+        for idx, interval in enumerate(iir.intervals):
             self.func(interval)
 
 class IIRPassSetStyles(IIRPass):
@@ -482,7 +478,7 @@ class IIRPassOffset(IIRPass):
         self.offset: int = offset
 
     def apply(self, iir: IIR):
-        for id, interval in enumerate(iir.intervals):
+        for interval in iir.intervals:
             interval.begin += self.offset
             interval.end += self.offset
 

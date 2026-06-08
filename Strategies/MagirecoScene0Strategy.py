@@ -174,21 +174,7 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
 
-    def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
-        return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
-        return self.cvPasses
-
-    def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
-        return self.fpirPasses
-
-    def getFpirToIirPasses(self) -> collections.OrderedDict[str, FPIRPassBuildIntervals]:
-        return self.fpirToIirPasses
-
-    def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
-        return self.iirPasses
-    
     def getStyles(self) -> typing.List[str]:
         return [
             "Style: Shiro,Microsoft YaHei,40,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,2,2,10,10,100,1",
@@ -237,12 +223,12 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
                 cc1AcceptedLabels.append(n)
 
         roiDialogText1Bin = np.isin(cc1Labels, cc1AcceptedLabels) * np.uint8(255)
-        roiDialogText1BinDialate = cv.morphologyEx(roiDialogText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
+        roiDialogText1BinDilate = cv.morphologyEx(roiDialogText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
 
         _, roiDialogShade2BinFix = cv.threshold(roiDialogGray, 40, 255, cv.THRESH_BINARY_INV)
         roiDialogShade2BinAdap = cv.adaptiveThreshold(roiDialogGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 7, 6)
         roiDialogShade2Bin = cv.bitwise_and(roiDialogShade2BinFix, roiDialogShade2BinAdap)
-        roiDialogShade2BinFiltered = cv.bitwise_and(roiDialogShade2Bin, roiDialogText1BinDialate)
+        roiDialogShade2BinFiltered = cv.bitwise_and(roiDialogShade2Bin, roiDialogText1BinDilate)
 
         roiDialogShade2BinFilteredClose = cv.morphologyEx(roiDialogShade2BinFiltered, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (11, 11)))
         
@@ -255,53 +241,49 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
 
         cc2NameNum, cc2NameLabels, cc2NameStats, cc2NameCentroids = cv.connectedComponentsWithStatsWithAlgorithm(roiDialogNameText2Bin, connectivity=4, ltype=cv.CV_16U, ccltype=cv.CCL_SAUF)
 
-        cc2NameLeagalAreaSum: int = 0
+        cc2NameLegalAreaSum: int = 0
         for n in range(cc2NameNum):
             stat = cc2NameStats[n]
             if (stat[4] > 20 and stat[4] < 400 and stat[2] < 30 and stat[3] < 30 and (stat[2] > 3 and stat[4] > 3)):
-                cc2NameLeagalAreaSum += stat[4]
-        cc2NameLeagalAreaRatio: float = cc2NameLeagalAreaSum / self.dialogRect.getArea() * 256
+                cc2NameLegalAreaSum += stat[4]
+        cc2NameLegalAreaRatio: float = cc2NameLegalAreaSum / self.dialogRect.getArea() * 256
 
         cc2ContentNum, cc2ContentLabels, cc2ContentStats, cc2ContentCentroids = cv.connectedComponentsWithStatsWithAlgorithm(roiDialogContentText2Bin, connectivity=4, ltype=cv.CV_16U, ccltype=cv.CCL_SAUF)
 
-        roiDialogContentText3Bin = roiDialogContentText2Bin
-        cc2ContentLeagalAreaSum: int = 0
+        cc2ContentLegalAreaSum: int = 0
         for n in range(cc2ContentNum):
             stat = cc2ContentStats[n]
             if (stat[4] > 20 and stat[4] < 400 and stat[2] < 30 and stat[3] < 30 and (stat[2] > 3 and stat[4] > 3)):
-                cc2ContentLeagalAreaSum += stat[4]
-        cc2ContentLeagalAreaRatio: float = cc2ContentLeagalAreaSum / self.dialogRect.getArea() * 256
+                cc2ContentLegalAreaSum += stat[4]
+        cc2ContentLegalAreaRatio: float = cc2ContentLegalAreaSum / self.dialogRect.getArea() * 256
 
-        hasDialog: bool = cc2NameLeagalAreaRatio > 1.0 or cc2ContentLeagalAreaRatio > 3.0
-        hasDialogStrict: bool = cc2NameLeagalAreaRatio > 1.0 and cc2ContentLeagalAreaRatio > 5.0
+        hasDialog: bool = cc2NameLegalAreaRatio > 1.0 or cc2ContentLegalAreaRatio > 3.0
+        hasDialogStrict: bool = cc2NameLegalAreaRatio > 1.0 and cc2ContentLegalAreaRatio > 5.0
 
         if hasDialog:
             framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.MeanTextColour, meanTextColour)
 
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Dialog, hasDialog)
-        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogNameVal, cc2NameLeagalAreaRatio)
-        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogContentVal, cc2ContentLeagalAreaRatio)
+        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogNameVal, cc2NameLegalAreaRatio)
+        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.DialogContentVal, cc2ContentLegalAreaRatio)
         return hasDialogStrict
 
     def cvPassBalloon(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
-        roiBolloon = self.balloonRect.cutRoi(frame)
-        roiBolloonGray = cv.cvtColor(roiBolloon, cv.COLOR_BGR2GRAY)
+        roiBalloon = self.balloonRect.cutRoi(frame)
+        roiBalloonGray = cv.cvtColor(roiBalloon, cv.COLOR_BGR2GRAY)
 
-        _, roiBolloonShade1BinFix = cv.threshold(roiBolloonGray, 40, 255, cv.THRESH_BINARY_INV)
-        roiBolloonShade1BinAdap = cv.adaptiveThreshold(roiBolloonGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 13, 33)
-        roiBalloonShade1Bin = cv.bitwise_and(roiBolloonShade1BinFix, roiBolloonShade1BinAdap)
+        _, roiBalloonShade1BinFix = cv.threshold(roiBalloonGray, 40, 255, cv.THRESH_BINARY_INV)
+        roiBalloonShade1BinAdap = cv.adaptiveThreshold(roiBalloonGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 13, 33)
+        roiBalloonShade1Bin = cv.bitwise_and(roiBalloonShade1BinFix, roiBalloonShade1BinAdap)
         
         roiBalloonShade1BinClose = cv.morphologyEx(roiBalloonShade1Bin, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (11, 11)))
 
-        _, roiBolloonText1Bin = cv.threshold(roiBolloonGray, 100, 255, cv.THRESH_BINARY)
-        roiBolloonText2Bin = cv.bitwise_and(roiBolloonText1Bin, roiBalloonShade1BinClose)
+        _, roiBalloonText1Bin = cv.threshold(roiBalloonGray, 100, 255, cv.THRESH_BINARY)
+        roiBalloonText2Bin = cv.bitwise_and(roiBalloonText1Bin, roiBalloonShade1BinClose)
 
-        roiBolloonText2BinOpen = cv.morphologyEx(roiBolloonText2Bin, cv.MORPH_OPEN, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
+        roiBalloonText2BinOpen = cv.morphologyEx(roiBalloonText2Bin, cv.MORPH_OPEN, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
 
-        # roiBolloonText1BinDialate = cv.morphologyEx(roiBolloonText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (3, 3)))
-        # roiBalloonShade2Bin = cv.bitwise_and(roiBalloonShade1Bin, roiBolloonText1BinDialate)
-
-        roiBalloonBlur = cv.blur(roiBolloonText2BinOpen, (301, 101))
+        roiBalloonBlur = cv.blur(roiBalloonText2BinOpen, (301, 101))
 
         _, maxBalloonBlur, _, maxBalloonBlurPoint = cv.minMaxLoc(roiBalloonBlur)
 
@@ -310,15 +292,15 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
             framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.BalloonVal, 0)
             return False
 
-        floatBalloonCentralY = maxBalloonBlurPoint[0]
-        floatBalloonCentralX = maxBalloonBlurPoint[1]
+        floatBalloonCentralX = maxBalloonBlurPoint[0]
+        floatBalloonCentralY = maxBalloonBlurPoint[1]
         balloonRectWidth, balloonRectHeight = self.balloonRect.getSizeInt()
-        floatBalloonCentralYRatio = floatBalloonCentralY / balloonRectWidth
-        floatBalloonCentralXRatio = floatBalloonCentralX / balloonRectHeight
-        floatBalloonLeftRatio = max(0, floatBalloonCentralYRatio - 0.2)
-        floatBalloonRightRatio = min(1, floatBalloonCentralYRatio + 0.2)
-        floatBalloonTopRatio = max(0, floatBalloonCentralXRatio - 0.15)
-        floatBalloonBottomRatio = min(1, floatBalloonCentralXRatio + 0.15)
+        floatBalloonCentralXRatio = floatBalloonCentralX / balloonRectWidth
+        floatBalloonCentralYRatio = floatBalloonCentralY / balloonRectHeight
+        floatBalloonLeftRatio = max(0, floatBalloonCentralXRatio - 0.2)
+        floatBalloonRightRatio = min(1, floatBalloonCentralXRatio + 0.2)
+        floatBalloonTopRatio = max(0, floatBalloonCentralYRatio - 0.15)
+        floatBalloonBottomRatio = min(1, floatBalloonCentralYRatio + 0.15)
         
         # Guarantee constant shape in corners
         if floatBalloonLeftRatio == 0:
@@ -350,12 +332,12 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
 
         roiFBText1Bin = np.isin(cc1Labels, cc1AcceptedLabels) * np.uint8(255)
 
-        roiFBText1BinDialate = cv.morphologyEx(roiFBText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
+        roiFBText1BinDilate = cv.morphologyEx(roiFBText1Bin, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5)))
 
         _, roiFBShade2BinFix = cv.threshold(roiFBGray, 40, 255, cv.THRESH_BINARY_INV)
         roiFBShade2BinAdap = cv.adaptiveThreshold(roiFBGray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 7, 6)
         roiFBShade2Bin = cv.bitwise_and(roiFBShade2BinFix, roiFBShade2BinAdap)
-        roiFBShade2BinFiltered = cv.bitwise_and(roiFBShade2Bin, roiFBText1BinDialate)
+        roiFBShade2BinFiltered = cv.bitwise_and(roiFBShade2Bin, roiFBText1BinDilate)
 
         roiFBShade2BinFilteredClose = cv.morphologyEx(roiFBShade2BinFiltered, cv.MORPH_CLOSE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (11, 11)))
         
@@ -365,19 +347,19 @@ class MagirecoScene0Strategy(AbstractFramewiseStrategy):
 
         cc2Num, cc2Labels, cc2Stats, cc2Centroids = cv.connectedComponentsWithStatsWithAlgorithm(roiFBText2Bin, connectivity=4, ltype=cv.CV_16U, ccltype=cv.CCL_SAUF)
         
-        cc2LeagalAreaSum: int = 0
+        cc2LegalAreaSum: int = 0
         for n in range(cc2Num):
             stat = cc2Stats[n]
             if (stat[4] > 20 and stat[4] < 400 and stat[2] < 30 and stat[3] < 30 and (stat[2] > 3 and stat[4] > 3)):
-                cc2LeagalAreaSum += stat[4]
-        cc2LeagalAreaRatio: float = cc2LeagalAreaSum / self.floatingBalloonRect.getArea() * 256
+                cc2LegalAreaSum += stat[4]
+        cc2LegalAreaRatio: float = cc2LegalAreaSum / self.floatingBalloonRect.getArea() * 256
 
-        hasFloatingBalloon = cc2LeagalAreaRatio > 2.5
+        hasFloatingBalloon = cc2LegalAreaRatio > 2.5
 
         if hasFloatingBalloon:
             framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.MeanTextColour, meanTextColour)
 
         framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.Balloon, hasFloatingBalloon)
-        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.BalloonVal, cc2LeagalAreaRatio)
+        framePoint.setFlag(MagirecoScene0Strategy.FlagIndex.BalloonVal, cc2LegalAreaRatio)
 
         return hasFloatingBalloon

@@ -44,20 +44,6 @@ class PokemonEmeraldStrategy(AbstractFramewiseStrategy):
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
 
-    def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
-        return self.rectangles
-
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
-        return self.cvPasses
-
-    def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
-        return self.fpirPasses
-
-    def getFpirToIirPasses(self) -> collections.OrderedDict[str, FPIRPassBuildIntervals]:
-        return self.fpirToIirPasses
-
-    def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
-        return self.iirPasses
 
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
         roiDialogBg = self.dialogBgRect.cutRoiToUmat(frame)

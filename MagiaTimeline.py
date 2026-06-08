@@ -15,21 +15,9 @@ import TouchPaddle # Before anything that imports paddleocr
 from Rectangle import *
 from IR import *
 from Util import *
-from Strategies.MagirecoStrategy import *
-from Strategies.MagirecoScene0Strategy import *
-from Strategies.MadodoraStrategy import *
-from Strategies.LimbusCompanyStrategy import *
-from Strategies.LimbusCompanyMechanicsStrategy import *
-from Strategies.PokemonEmeraldStrategy import *
-from Strategies.ParakoStrategy import *
-from Strategies.BanGDreamStrategy import *
-from Strategies.OutlineStrategy import *
-from Strategies.BoxColourStatStrategy import *
-from Strategies.DiffTextDetectionStrategy import *
-from Engines.SpeculativeEngine import *
-from Engines.FramewiseEngine import *
+from Strategies import *
+from Engines import *
 from ExtraJobs import *
-from Util import *
 
 from Version import VERSION
 
@@ -44,8 +32,10 @@ def cli():
     parser.add_argument("--version", action="version", version=VERSION)
     args = parser.parse_args()
     
-    schema = json.load(open(args.schema, "r", encoding="utf-8"))
-    config = yaml.load(open(args.config, "r", encoding="utf-8").read(), Loader=yaml.FullLoader)
+    with open(args.schema, "r", encoding="utf-8") as f:
+        schema = json.load(f)
+    with open(args.config, "r", encoding="utf-8") as f:
+        config = yaml.load(f.read(), Loader=yaml.FullLoader)
 
     try:
         main(config, schema)
@@ -55,19 +45,18 @@ def cli():
 
 def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
 
-    if True: # config validation
-        jsonschema.validate(config, schema=schema) # raises exception on failure
-        if len(config["source"]) != len(config["destination"]):
-            raise Exception("Source and destination have different length")
-        for src in config["source"]:
-            srcMp4Test = open(src, "rb") # raises exception on failure
-            srcMp4Test.close()
-        if not config["strategy"] in config:
-            raise Exception("No config found for strategy \"" + config["strategy"] + "\"")
-        if not config["preset"] in config[config["strategy"]]:
-            raise Exception("No preset \"" + config["preset"] + "\" found for strategy \"" + config["strategy"] + "\"")
-        if not config["engine"] in config:
-            raise Exception("No config found for engine \"" + config["engine"] + "\"")
+    jsonschema.validate(config, schema=schema) # raises exception on failure
+    if len(config["source"]) != len(config["destination"]):
+        raise Exception("Source and destination have different length")
+    for src in config["source"]:
+        srcMp4Test = open(src, "rb") # raises exception on failure
+        srcMp4Test.close()
+    if not config["strategy"] in config:
+        raise Exception("No config found for strategy \"" + config["strategy"] + "\"")
+    if not config["preset"] in config[config["strategy"]]:
+        raise Exception("No preset \"" + config["preset"] + "\" found for strategy \"" + config["strategy"] + "\"")
+    if not config["engine"] in config:
+        raise Exception("No config found for engine \"" + config["engine"] + "\"")
     strategyConfig = config[config["strategy"]][config["preset"]]
     engineConfig = config[config["engine"]]
 
@@ -111,41 +100,11 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
         strategy: AbstractStrategy | None = None
         print("Strategy:", config["strategy"])
         print("Preset:", config["preset"])
-        if config["strategy"] == "mr":
-            strategy = MagirecoStrategy(strategyConfig, contentRect)
-        elif config["strategy"] == "mr-s0":
-            strategy = MagirecoScene0Strategy(strategyConfig, contentRect)
-        elif config["strategy"] == "md":
-            strategy = MadodoraStrategy(strategyConfig, contentRect)
-        elif config["strategy"] == "lcb":
-            strategy = LimbusCompanyStrategy(strategyConfig, contentRect)
-        elif config["strategy"] == "lcb-mech":
-            strategy = LimbusCompanyMechanicsStrategy(strategyConfig, contentRect)
-        elif config["strategy"] == "pkm":
-            strategy = PokemonEmeraldStrategy(strategyConfig, contentRect)
-        elif config["strategy"] == "prk":
-            strategy = ParakoStrategy(strategyConfig, contentRect)
-        elif config["strategy"] == "bdr":
-            strategy = BanGDreamStrategy(strategyConfig, contentRect)
-        elif config["strategy"] == "otl":
-            strategy = OutlineStrategy(strategyConfig, contentRect)
-        elif config["strategy"] == "bcs":
-            strategy = BoxColourStatStrategy(strategyConfig, contentRect)
-        elif config["strategy"] == "dtd":
-            strategy = DiffTextDetectionStrategy(strategyConfig, contentRect)
-        else:
-            raise Exception("Unknown strategy! ")
-        assert strategy is not None
+        strategy = createStrategy(config["strategy"], strategyConfig, contentRect)
         
         engine: AbstractEngine | None = None
         print("Engine:", config["engine"])
-        if config["engine"] == "speculative":
-            engine = SpeculativeEngine(scaleDown, engineConfig)
-        elif config["engine"] == "framewise":
-            engine = FramewiseEngine(scaleDown, engineConfig)
-        else:
-            raise Exception("Unknown engine! ")
-        assert engine is not None
+        engine = createEngine(config["engine"], scaleDown, engineConfig)
 
         print("==== Running Engine ====")
         iir: IIR = engine.checkAndRun(strategy, srcContainer, srcStream)
@@ -162,19 +121,12 @@ def main(config: dict, schema: dict, tempDirPath: typing.Optional[str] = None):
             elif not isinstance(strategy, AbstractExtraJobStrategy):
                 print("Error: Strategy does not support extra jobs. Skipping all extra jobs.")
             else:
-                if "ocr" in config["extraJobs"]:
-                    if "ocr" not in config:
-                        raise KeyError("extraJobs includes 'ocr' but no 'ocr' section found in config.")
-                    print("==== Extra Job: ocr ====")
-                    iirOcrPass = IIROcrPass(config["ocr"], strategy.getExtraJobFrameKey(), dst)
-                    iirOcrPass.apply(iir)
-
-                if "sty" in config["extraJobs"]:
-                    if "sty" not in config:
-                        raise KeyError("extraJobs includes 'sty' but no 'sty' section found in config.")
-                    print("==== Extra Job: sty ====")
-                    iirStyleClassifyPass = IIRStyleClassifyPass(config["sty"], strategy.getExtraJobFrameKey())
-                    iirStyleClassifyPass.apply(iir)
+                for jobName in config["extraJobs"]:
+                    if jobName not in config:
+                        raise KeyError(f"extraJobs includes '{jobName}' but no '{jobName}' section found in config.")
+                    print(f"==== Extra Job: {jobName} ====")
+                    job = createExtraJob(jobName, config[jobName], strategy.getExtraJobFrameKey(), dst)
+                    job.apply(iir)
 
         print("==== IIR to ASS ====")
         assStr: str = asstStr.format(

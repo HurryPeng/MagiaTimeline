@@ -19,7 +19,7 @@ class AbstractFlagIndex(enum.IntEnum):
         # returns a list of default values corresponding to each flag type
         # valid flags are numbered from 1, and position 0 is reserved for debug information
         flags = cls.getDefaultFlagsImpl()
-        if not len(flags) == cls.getNum():
+        if len(flags) != cls.getNum():
             raise Exception("The length of default values must be equal to the number of flags")
         return [None] + flags
 

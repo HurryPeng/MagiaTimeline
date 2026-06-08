@@ -117,24 +117,7 @@ class BoxColourStatStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrate
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
     
-    def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
-        return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
-        return self.cvPasses
-
-    def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
-        return self.fpirPasses
-
-    def getFpirToIirPasses(self) -> collections.OrderedDict[str, FPIRPassBuildIntervals]:
-        return self.fpirToIirPasses
-
-    def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
-        return self.iirPasses
-    
-    def getSpecIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
-        return self.specIirPasses
-    
     def decideFeatureMerge(self, oldFeatures: typing.List[np.ndarray], newFeatures: typing.List[np.ndarray]) -> bool:
         return bool(np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < self.featureJumpThreshold)
 

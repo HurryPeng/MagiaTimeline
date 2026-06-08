@@ -59,7 +59,7 @@ class RatioRectangle(AbstractRectangle):
 
     def updateRatios(self, leftRatio: float, rightRatio: float, topRatio: float, bottomRatio: float):
         if leftRatio > rightRatio or topRatio > bottomRatio:
-            raise Exception("Invalid ratio rectangle configuration "
+            raise ValueError("Invalid ratio rectangle configuration "
             + str([leftRatio, rightRatio, topRatio, bottomRatio])
             + ". Left/top ratio cannot exceed right/bottom ratio"
         )

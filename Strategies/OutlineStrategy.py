@@ -2,7 +2,6 @@ import typing
 import enum
 import collections
 
-from IR import IIRPass
 from Util import *
 from Strategies.AbstractStrategy import *
 from AbstractFlagIndex import *
@@ -89,24 +88,7 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
     def getFlagIndexType(cls) -> typing.Type[AbstractFlagIndex]:
         return cls.FlagIndex
     
-    def getRectangles(self) -> collections.OrderedDict[str, AbstractRectangle]:
-        return self.rectangles
 
-    def getCvPasses(self) -> typing.List[typing.Callable[[cv.Mat, FramePoint], bool]]:
-        return self.cvPasses
-
-    def getFpirPasses(self) -> collections.OrderedDict[str, FPIRPass]:
-        return self.fpirPasses
-
-    def getFpirToIirPasses(self) -> collections.OrderedDict[str, FPIRPassBuildIntervals]:
-        return self.fpirToIirPasses
-
-    def getIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
-        return self.iirPasses
-    
-    def getSpecIirPasses(self) -> collections.OrderedDict[str, IIRPass]:
-        return self.specIirPasses
-    
     def decideFeatureMerge(self, oldFeatures: typing.List[np.ndarray], newFeatures: typing.List[np.ndarray]) -> bool:
         return np.linalg.norm(np.mean(oldFeatures, axis=0) - np.mean(newFeatures, axis=0)) < self.featureJumpThreshold
 
@@ -122,14 +104,11 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
     def freeFpFeature(self, fp: FramePoint) -> None:
         fp.setFlag(OutlineStrategy.FlagIndex.DialogFeat, None)
 
-    def releaseFeatureOnHook(self) -> bool:
-        return False
-
     def cutExtraJobFrame(self, frame: cv.Mat) -> cv.Mat:
         return self.dialogRect.cutRoi(frame)
     
     def cvPassDialog(self, frame: cv.Mat, framePoint: FramePoint) -> bool:
-        roiDialogText, debugFrame = self.ocrPass(frame, fastMode=False)
+        roiDialogText, debugFrame = self.ocrPass(frame, fastMode=self.fastMode)
 
         framePoint.setDebugFrame(debugFrame)
 
@@ -201,8 +180,8 @@ class OutlineStrategy(AbstractFramewiseStrategy, AbstractSpeculativeStrategy, Ab
 
         if not fastMode and nestingSuppression > 0:
             roiDialogOutlineOrText = cv.bitwise_or(roiDialogOutlineUB, roiDialogTextUB)
-            roiDialogOutlineOrTextDialate = cv.dilate(roiDialogOutlineOrText, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (boundCompensation + 1, boundCompensation + 1)))
-            roiDialogOutlineOrTextErode = cv.erode(roiDialogOutlineOrTextDialate, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (nestingSuppression, nestingSuppression)))
+            roiDialogOutlineOrTextDilate = cv.dilate(roiDialogOutlineOrText, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (boundCompensation + 1, boundCompensation + 1)))
+            roiDialogOutlineOrTextErode = cv.erode(roiDialogOutlineOrTextDilate, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (nestingSuppression, nestingSuppression)))
             roiDialogTextUB = cv.bitwise_and(roiDialogTextUB, roiDialogOutlineOrTextErode)
 
         if not fastMode:
