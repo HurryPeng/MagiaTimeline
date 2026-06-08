@@ -1,14 +1,9 @@
 from __future__ import annotations
-import os
 import pytesseract
-import paddleocr
 import typing
 
 from Util import *
-from AbstractFlagIndex import *
 from IR import *
-from Strategies.AbstractStrategy import *
-from ExtraJobs.StyleClassification import IIRStyleClassificationPass
 
 
 class IIRTextExtractionPass(IIRPass):
