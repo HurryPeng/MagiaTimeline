@@ -186,7 +186,7 @@ class FrameCache:
     # If tgtTimestamp == -1, then proceed until the end of the video
     def proceedTo(self, tgtTimestamp: int) -> None:
         startTime = time.time()
-        if tgtTimestamp <= self.end and not tgtTimestamp == -1:
+        if tgtTimestamp <= self.end and tgtTimestamp != -1:
             return
         try:
             for frame in self.container.decode(self.stream):
@@ -194,7 +194,7 @@ class FrameCache:
                     break
                 self.statDecodedFrames += 1
                 self.cache.append(frame)
-                if frame.pts >= tgtTimestamp and not tgtTimestamp == -1:
+                if frame.pts >= tgtTimestamp and tgtTimestamp != -1:
                     break
         except av.EOFError:
             pass
@@ -326,7 +326,7 @@ class SpeculativeEngine(AbstractEngine):
                         break
                     frameI2 = frameCache.leap()
                     if frameI2 is not None:
-                        print(f"frame {formatTimestamp(frameI2.pts, timeBase)}")
+                        print(f"frame {formatTimestamp(timeBase, frameI2.pts)}")
                 else:
                     # Then end of the grower is not aligned with the next I-frame, there is no need to leap
                     frameI2 = frameCache.cacheNextI

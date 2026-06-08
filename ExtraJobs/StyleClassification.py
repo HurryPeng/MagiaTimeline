@@ -1,7 +1,6 @@
 from __future__ import annotations
 import dataclasses
 import os
-import pytesseract
 import paddleocr
 import typing
 import collections
@@ -11,115 +10,10 @@ import scipy.spatial.distance
 import sklearn.preprocessing
 
 from Util import *
-from AbstractFlagIndex import *
 from IR import *
-from Strategies.AbstractStrategy import *
 
 
-class IIROcrPass(IIRPass):
-    def __init__(self, config: dict, frameKey: type, dest: str):
-        self.config: dict = config
-        self.frameKey: type = frameKey
-        self.dest: str = dest
-        self.standaloneOutput: bool = config["standaloneOutput"]
-        self.standaloneOutputSuffix: str = config["standaloneOutputSuffix"]
-        self.separator: str = config["separator"]
-        self.doPaddle: bool = config["doPaddle"]
-        self.nonMajorBoxSuppressionMaxRatio: float = config["nonMajorBoxSuppressionMaxRatio"]
-        self.nonMajorBoxSuppressionMinRank: int = config["nonMajorBoxSuppressionMinRank"]
-        self.doTeseract: bool = config["doTesseract"]
-        self.tesseractLang: str = config["tesseractLang"]
-
-    def apply(self, iir: IIR):
-        print(f"IIROcrPass: processing {len(iir.intervals)} intervals")
-        file = None
-        if self.standaloneOutput:
-            filename = self.dest + self.standaloneOutputSuffix
-            print(f"Standalone output enabled. Writing to {filename}")
-            file = open(filename, "w", encoding="utf-8")
-        else:
-            print("Standalone output disabled. Writing to ass file.")
-
-        paddle = None
-        if self.doPaddle:
-            suppressPaddleWarnings()
-            paddle = paddleocr.PaddleOCR(
-                text_detection_model_name="PP-OCRv4_mobile_det",
-                text_detection_model_dir="./PaddleOCRModels/official_models/PP-OCRv4_mobile_det",
-                text_recognition_model_name="PP-OCRv5_mobile_rec",
-                text_recognition_model_dir="./PaddleOCRModels/official_models/PP-OCRv5_mobile_rec",
-                use_doc_orientation_classify=False,
-                use_doc_unwarping=False,
-                use_textline_orientation=False,
-                device="cpu",
-                enable_mkldnn=True
-            )
-
-        for i, interval in enumerate(iir.intervals):
-            buff: str = ""
-            name: str = interval.getName(i)
-            image: cv.Mat = interval.getAttachment(self.frameKey)
-
-            if self.doPaddle and paddle is not None and image is not None:
-                result = paddle.predict(image)
-                result = result[0]
-                recTexts: typing.List[str] = result["rec_texts"]
-                recBoxes: np.ndarray = result["rec_boxes"]
-                recPolys: typing.List[np.ndarray] = result["rec_polys"]
-                recBoxSizes = [
-                    (int(b[2]) - int(b[0])) * (int(b[3]) - int(b[1]))
-                    for b in recBoxes
-                ]
-                boxSizeSum = sum(recBoxSizes)
-
-                passesAngle: typing.List[bool] = []
-                for poly in recPolys:
-                    x0, y0 = poly[0]; x1, y1 = poly[1]
-                    x2, y2 = poly[2]; x3, y3 = poly[3]
-                    angle = (np.arctan2(y1 - y0, x1 - x0) + np.arctan2(y2 - y3, x2 - x3)) / 2
-                    passesAngle.append(bool(np.abs(angle) <= np.pi / 180 * 3))
-
-                sortedIdx = sorted(
-                    range(len(recBoxSizes)),
-                    key=lambda j: recBoxSizes[j] if passesAngle[j] else 0,
-                    reverse=True
-                )
-                rankMap = [0] * len(recBoxSizes)
-                for rank, origIdx in enumerate(sortedIdx):
-                    rankMap[origIdx] = rank
-
-                paddleText = ""
-                for j, (line, boxSize) in enumerate(zip(recTexts, recBoxSizes)):
-                    if not passesAngle[j]:
-                        continue
-                    if boxSize > self.nonMajorBoxSuppressionMaxRatio * boxSizeSum \
-                            or rankMap[j] < self.nonMajorBoxSuppressionMinRank:
-                        paddleText += line + " "
-                buff += paddleText.strip()
-
-            if self.doTeseract:
-                if buff != "":
-                    buff += self.separator
-                if image is not None:
-                    tesseractText: str = pytesseract.image_to_string(
-                        ensureMat(image), config=f"-l {self.tesseractLang} --psm 6"
-                    )
-                    buff += tesseractText[:-1].replace("\n", "")
-
-            if file is not None:
-                file.write(f"{name},{buff}\n")
-            else:
-                interval.text = buff
-
-            if i % 10 == 0:
-                print(name)
-
-        if file is not None:
-            file.close()
-            print(f"Output written to {file.name}")
-
-
-class IIRStyleClassifyPass(IIRPass):
+class IIRStyleClassificationPass(IIRPass):
     @dataclasses.dataclass
     class RadialProfile:
         """Per-interval colour profile produced by the radial soft-layer pipeline."""
@@ -298,7 +192,7 @@ class IIRStyleClassifyPass(IIRPass):
         pixels are painted onto it with their original colours from roi.
         If outTopClusterMask is provided (a zeroed uint8 array of the same HxW as roi),
         pixels belonging to the top-ranked cluster are set to 255 in it."""
-        acceptedIds, labels, stats, ccMeans, acceptedArea = IIRStyleClassifyPass.runSobelCcFilter(
+        acceptedIds, labels, stats, ccMeans, acceptedArea = IIRStyleClassificationPass.runSobelCcFilter(
             roi, sobelThreshold, minCcAreaRatio, maxCcAreaRatio, maxCcStddev
         )
 
@@ -470,7 +364,7 @@ class IIRStyleClassifyPass(IIRPass):
         cohesionSigma: float,
         clusterThreshold: float,
         debugRoiOut: typing.Optional[cv.Mat] = None,
-    ) -> typing.Optional[IIRStyleClassifyPass.RadialProfile]:
+    ) -> typing.Optional[IIRStyleClassificationPass.RadialProfile]:
         """Extract radial soft-layer profile from a text box ROI (Stage A of radialSoft algorithm).
 
         Uses extractColourClusters to colour-cluster accepted CCs sorted by nesting score
@@ -484,7 +378,7 @@ class IIRStyleClassifyPass(IIRPass):
         roiH, roiW = roi.shape[:2]
 
         coreMask = np.zeros((roiH, roiW), dtype=np.uint8)
-        clusters = IIRStyleClassifyPass.extractColourClusters(
+        clusters = IIRStyleClassificationPass.extractColourClusters(
             roi, sobelThreshold, minCcAreaRatio, maxCcAreaRatio, maxCcStddev,
             clusterThreshold,
             outTopClusterMask=coreMask,
@@ -557,7 +451,7 @@ class IIRStyleClassifyPass(IIRPass):
         # low cohesion would unjustly block fill colours from rep-colour candidacy.
         cohesions[0] = 1.0
 
-        return IIRStyleClassifyPass.RadialProfile(
+        return IIRStyleClassificationPass.RadialProfile(
             labMeans=labMeans,
             cohesions=cohesions,
             supports=supports,
@@ -566,8 +460,8 @@ class IIRStyleClassifyPass(IIRPass):
 
     @staticmethod
     def mergeBoxProfiles(
-        boxProfiles: typing.List[typing.Tuple[IIRStyleClassifyPass.RadialProfile, float]]
-    ) -> IIRStyleClassifyPass.RadialProfile:
+        boxProfiles: typing.List[typing.Tuple[IIRStyleClassificationPass.RadialProfile, float]]
+    ) -> IIRStyleClassificationPass.RadialProfile:
         """Merge multiple per-box local profiles into a single interval profile by area-weighted averaging."""
         totalArea = sum(a for _, a in boxProfiles)
         def wavg(attr: str) -> np.ndarray:
@@ -575,7 +469,7 @@ class IIRStyleClassifyPass(IIRPass):
             for profile, area in boxProfiles:
                 acc = acc + getattr(profile, attr) * (area / totalArea)
             return acc
-        return IIRStyleClassifyPass.RadialProfile(
+        return IIRStyleClassificationPass.RadialProfile(
             labMeans=wavg("labMeans"),
             cohesions=wavg("cohesions"),
             supports=wavg("supports"),
@@ -584,7 +478,7 @@ class IIRStyleClassifyPass(IIRPass):
 
     @staticmethod
     def applyPeerReinforcement(
-        allProfiles: typing.List[typing.Optional[IIRStyleClassifyPass.RadialProfile]],
+        allProfiles: typing.List[typing.Optional[IIRStyleClassificationPass.RadialProfile]],
         peerSigma: float,
         rareStyleFloor: float,
     ) -> None:
@@ -604,8 +498,8 @@ class IIRStyleClassifyPass(IIRPass):
             return
 
         binCount = 8
-        validProfiles: typing.List[IIRStyleClassifyPass.RadialProfile] = [
-            typing.cast(IIRStyleClassifyPass.RadialProfile, allProfiles[i]) for i in validIndices
+        validProfiles: typing.List[IIRStyleClassificationPass.RadialProfile] = [
+            typing.cast(IIRStyleClassificationPass.RadialProfile, allProfiles[i]) for i in validIndices
         ]
         allLabMeans = np.stack([p.labMeans for p in validProfiles]).astype(np.float32)      # (N, 8, 3)
         allLocalQuality = np.stack([p.localQualities for p in validProfiles]).astype(np.float32)  # (N, 8)
@@ -634,7 +528,7 @@ class IIRStyleClassifyPass(IIRPass):
 
     @staticmethod
     def buildStyleOutputs(
-        profile: IIRStyleClassifyPass.RadialProfile,
+        profile: IIRStyleClassificationPass.RadialProfile,
         weightFeatureScale: float,
     ) -> np.ndarray:
         """Build 32-dim style feature vector from a profile (for agglomerative clustering).
@@ -664,7 +558,7 @@ class IIRStyleClassifyPass(IIRPass):
 
     def selectClusterRepColour(
         self,
-        memberProfiles: typing.List['IIRStyleClassifyPass.RadialProfile'],
+        memberProfiles: typing.List['IIRStyleClassificationPass.RadialProfile'],
         allClusterMeans: np.ndarray,
         thisClusterIdx: int,
         intraSigma: float,
@@ -758,7 +652,7 @@ class IIRStyleClassifyPass(IIRPass):
 
     @staticmethod
     def makeDebugImage(
-        profile: IIRStyleClassifyPass.RadialProfile,
+        profile: IIRStyleClassificationPass.RadialProfile,
         repColoursBgr: typing.List[np.ndarray],
         repWeights: typing.List[float],
     ) -> np.ndarray:
@@ -888,7 +782,7 @@ class IIRStyleClassifyPass(IIRPass):
 
     def computeAllFeatures(self, iir: IIR) -> typing.Tuple[
         typing.List[typing.Optional[np.ndarray]],
-        typing.List[typing.Optional['IIRStyleClassifyPass.RadialProfile']]
+        typing.List[typing.Optional['IIRStyleClassificationPass.RadialProfile']]
     ]:
         """Two-pass feature extraction using the radial soft-layer algorithm.
 
@@ -902,7 +796,7 @@ class IIRStyleClassifyPass(IIRPass):
         Pass 2: buildStyleOutputs converts each profile into a 32-dim feature vector and
                 a list of representative BGR colours."""
         # --- Phase 1: extract local profiles ---
-        allProfiles: typing.List[typing.Optional[IIRStyleClassifyPass.RadialProfile]] = []
+        allProfiles: typing.List[typing.Optional[IIRStyleClassificationPass.RadialProfile]] = []
 
         for i, interval in enumerate(iir.intervals):
             image: cv.Mat = interval.getAttachment(self.frameKey)
@@ -915,7 +809,7 @@ class IIRStyleClassifyPass(IIRPass):
             debugCcImg: typing.Optional[cv.Mat] = \
                 checkerboardBackground(image.shape[1], image.shape[0]) if self.debug else None
 
-            boxProfiles: typing.List[typing.Tuple[IIRStyleClassifyPass.RadialProfile, float]] = []
+            boxProfiles: typing.List[typing.Tuple[IIRStyleClassificationPass.RadialProfile, float]] = []
 
             for bx, by, bw, bh in boxes:
                 crop: cv.Mat = typing.cast(cv.Mat, image[by:by + bh, bx:bx + bw].copy())
@@ -994,17 +888,17 @@ class IIRStyleClassifyPass(IIRPass):
         return rawLabels.tolist()
 
     def apply(self, iir: IIR):
-        print(f"IIRStyleClassifyPass: processing {len(iir.intervals)} intervals")
+        print(f"IIRStyleClassificationPass: processing {len(iir.intervals)} intervals")
 
         # 1. Compute features and per-interval profiles
         features, allProfiles = self.computeAllFeatures(iir)
 
         # 2. Filter intervals with valid features
         validIndices = [i for i, f in enumerate(features) if f is not None]
-        print(f"IIRStyleClassifyPass: {len(validIndices)} intervals have valid colour features")
+        print(f"IIRStyleClassificationPass: {len(validIndices)} intervals have valid colour features")
 
         if len(validIndices) < 2:
-            print("IIRStyleClassifyPass: not enough valid intervals for clustering, skipping")
+            print("IIRStyleClassificationPass: not enough valid intervals for clustering, skipping")
             return
 
         # 3. Agglomerative clustering
@@ -1017,7 +911,7 @@ class IIRStyleClassifyPass(IIRPass):
         clusterAssignments = [remapping[c] for c in clusterAssignments]
 
         nClusters = len(set(clusterAssignments))
-        print(f"IIRStyleClassifyPass: {nClusters} clusters found")
+        print(f"IIRStyleClassificationPass: {nClusters} clusters found")
 
         # 5. Pre-compute support-weighted LAB mean per bin for every cluster.
         #    Used by selectClusterRepColour for both intra-binding and extern-contrast.
@@ -1046,7 +940,7 @@ class IIRStyleClassifyPass(IIRPass):
                 continue
 
             memberProfiles = [
-                typing.cast(IIRStyleClassifyPass.RadialProfile, allProfiles[i])
+                typing.cast(IIRStyleClassificationPass.RadialProfile, allProfiles[i])
                 for i in memberIndices if allProfiles[i] is not None
             ]
             repColour = self.selectClusterRepColour(
@@ -1075,7 +969,7 @@ class IIRStyleClassifyPass(IIRPass):
                     p = allProfiles[i]
                     if p is None:
                         continue
-                    debugFeatImg = IIRStyleClassifyPass.makeDebugImage(p, repColoursBgr, repWeights)
+                    debugFeatImg = IIRStyleClassificationPass.makeDebugImage(p, repColoursBgr, repWeights)
                     timeStr = iir.intervals[i].timeStringBegin().replace(":", "-")
                     cv.imwrite(os.path.join("styDebug", f"{timeStr}_feat.png"), debugFeatImg)
 
@@ -1086,5 +980,5 @@ class IIRStyleClassifyPass(IIRPass):
             if clusterId in clusterStyleNames:
                 iir.intervals[i].style = clusterStyleNames[clusterId]
 
-        print(f"IIRStyleClassifyPass: assigned {len(clusterStyleNames)} styles, "
+        print(f"IIRStyleClassificationPass: assigned {len(clusterStyleNames)} styles, "
               f"declared {len(newStyleLines)} style lines")

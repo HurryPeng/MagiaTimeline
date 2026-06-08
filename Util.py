@@ -19,7 +19,7 @@ import dataclasses
 import paddleocr
 
 class CompressedDisk(diskcache.Disk):
-    """Cache key and value using zlib compression."""
+    """Cache key and value using lz4 compression."""
 
     def __init__(self, directory, compress_level=4, **kwargs):
         self.compress_level = compress_level
@@ -63,13 +63,17 @@ def initDiskCache(tempDirPath: typing.Optional[str] = None):
     # If not, create a temporary directory that will be cleaned up automatically.
     global _tempLock, _tempDir, _tempDirPath, _diskCache, _threadPool
 
-    @atexit.register
+    if _diskCache is not None:
+        return
+
     def _cleanupCache():
         _threadPool.shutdown(wait=True)
         if _diskCache is not None:
             _diskCache.close()
         if _tempDir is not None:
             _tempDir.cleanup()
+
+    atexit.register(_cleanupCache)
 
     with _tempLock:
         # Initialize the temporary directory
@@ -135,6 +139,7 @@ def containsLargeNdarray(obj: typing.Any) -> bool:
 
 def formatTimestamp(timeBase: fractions.Fraction, timestamp: int) -> str:
     dTimestamp = datetime.datetime.fromtimestamp(float(timestamp * timeBase), datetime.timezone(datetime.timedelta()))
+    # strftime("%f") produces 6-digit microseconds; [:-3] trims to milliseconds; [:-1] trims to centiseconds for ASS format
     timeStr = dTimestamp.strftime("%H:%M:%S.%f")[:-3]
     return timeStr[:-1]
 
@@ -219,19 +224,19 @@ def phaseCorrelateMaxRes(
 
 def morphologyWeightUpperBound(image: cv.Mat, erodeWeight: int, dilateWeight: int) -> cv.Mat:
     imageErode = cv.morphologyEx(image, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (erodeWeight, erodeWeight)))
-    imageErodeDialate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWeight, dilateWeight)))
-    imageWeightUpperBound = cv.bitwise_and(image, cv.bitwise_not(imageErodeDialate))
+    imageErodeDilate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWeight, dilateWeight)))
+    imageWeightUpperBound = cv.bitwise_and(image, cv.bitwise_not(imageErodeDilate))
     return imageWeightUpperBound
 
 def morphologyWeightLowerBound(image: cv.Mat, erodeWeight: int, dilateWeight: int) -> cv.Mat:
     imageErode = cv.morphologyEx(image, cv.MORPH_ERODE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (erodeWeight, erodeWeight)))
-    imageErodeDialate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWeight, dilateWeight)))
-    imageWeightLowerBound = cv.bitwise_and(image, imageErodeDialate)
+    imageErodeDilate = cv.morphologyEx(imageErode, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (dilateWeight, dilateWeight)))
+    imageWeightLowerBound = cv.bitwise_and(image, imageErodeDilate)
     return imageWeightLowerBound
 
-def morphologyNear(base: cv.Mat, ref: cv.Mat, Weight: int) -> cv.Mat:
-    refDialate = cv.morphologyEx(ref, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (Weight, Weight)))
-    return cv.bitwise_and(base, refDialate)
+def morphologyNear(base: cv.Mat, ref: cv.Mat, weight: int) -> cv.Mat:
+    refDilate = cv.morphologyEx(ref, cv.MORPH_DILATE, kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE, (weight, weight)))
+    return cv.bitwise_and(base, refDilate)
 
 def avFrame2CvMat(frame: av.frame.Frame, scaleDown: int) -> cv.Mat:
     image = frame.to_ndarray(format='bgr24')
