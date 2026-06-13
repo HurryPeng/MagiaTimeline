@@ -11,4 +11,4 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     paddlex.inference.utils.official_models.official_models["PP-OCRv4_mobile_det"]
-    paddlex.inference.utils.official_models.official_models["PP-OCRv5_mobile_rec"]
+    paddlex.inference.utils.official_models.official_models["PP-OCRv6_small_rec"]
